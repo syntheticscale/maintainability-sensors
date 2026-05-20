@@ -377,12 +377,11 @@ func executeRun(opts RunOptions) {
 
 	isCI_PR := os.Getenv("GITHUB_TOKEN") != "" && (os.Getenv("GITHUB_EVENT_PATH") != "" || os.Getenv("GITHUB_REF") != "")
 	if opts.GithubPR || isCI_PR {
-		scorecard := GenerateMarkdownScorecard(results)
-		fmt.Println("Posting scorecard to GitHub PR...")
-		if err := PostGitHubPRComment(scorecard); err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Failed to post GitHub PR comment: %v\n", err)
+		fmt.Println("Posting inline review to GitHub PR...")
+		if err := PostGitHubReview(results, baseline); err != nil {
+			fmt.Fprintf(os.Stderr, "[ERROR] Failed to post GitHub inline review: %v\n", err)
 		} else {
-			fmt.Println("Successfully posted scorecard comment to GitHub PR!")
+			fmt.Println("Successfully posted inline review to GitHub PR!")
 		}
 	}
 

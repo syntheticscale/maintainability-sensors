@@ -117,8 +117,8 @@ func WriteGitHubStepSummary(scorecard string) error {
 	return nil
 }
 
-// PostGitHubPRComment posts the markdown scorecard as a PR comment.
-func PostGitHubPRComment(scorecard string) error {
+// PostGitHubReview posts inline PR review comments using the GitHub Pull Request Review API.
+func PostGitHubReview(results []sensors.OrchestratorResult, baseline map[string]sensors.MaintainabilityMetrics) error {
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
 		return fmt.Errorf("GITHUB_TOKEN environment variable is not set")
@@ -134,9 +134,83 @@ func PostGitHubPRComment(scorecard string) error {
 		return fmt.Errorf("failed to detect PR number: %w", err)
 	}
 
-	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/issues/%s/comments", repo, prNumber)
-	payload := map[string]string{
-		"body": scorecard,
+	type prComment struct {
+		Path string `json:"path"`
+		Body string `json:"body"`
+		Line int    `json:"line"`
+	}
+	var comments []prComment
+
+	for _, res := range results {
+		if !hasViolations(res, baseline) {
+			continue
+		}
+
+		limitComplexity := sensors.BaselineComplexity
+		limitLength := sensors.BaselineFunctionLength
+		limitArgs := sensors.BaselineArgumentCount
+
+		for _, exc := range res.Exceptions {
+			if exc.RuleName == "Cyclomatic Complexity" {
+				limitComplexity = exc.ConfiguredVal
+			} else if exc.RuleName == "Function Length" {
+				limitLength = exc.ConfiguredVal
+			} else if exc.RuleName == "Argument Count" {
+				limitArgs = exc.ConfiguredVal
+			}
+		}
+
+		if baseline != nil {
+			if bMetrics, ok := baseline[res.FilePath]; ok {
+				if bMetrics.Complexity > limitComplexity {
+					limitComplexity = bMetrics.Complexity
+				}
+				if bMetrics.FunctionLength > limitLength {
+					limitLength = bMetrics.FunctionLength
+				}
+				if bMetrics.ArgumentCount > limitArgs {
+					limitArgs = bMetrics.ArgumentCount
+				}
+			}
+		}
+
+		var filePrompts []string
+		if res.Metrics.Complexity > limitComplexity {
+			filePrompts = append(filePrompts, fmt.Sprintf("Complexity is %d (Max %d). Nudge coding agent to extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, limitComplexity))
+		}
+		if res.Metrics.FunctionLength > limitLength {
+			filePrompts = append(filePrompts, fmt.Sprintf("Function lines is %d (Max %d). Nudge coding agent to modularize this block into separate functional components.", res.Metrics.FunctionLength, limitLength))
+		}
+		if res.Metrics.ArgumentCount > limitArgs {
+			filePrompts = append(filePrompts, fmt.Sprintf("Parameter count is %d (Max %d). Nudge coding agent to bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, limitArgs))
+		}
+
+		if len(filePrompts) > 0 {
+			body := strings.Join(filePrompts, "\n\n")
+			relPath := res.FilePath
+			if filepath.IsAbs(relPath) {
+				wd, _ := os.Getwd()
+				if rel, err := filepath.Rel(wd, relPath); err == nil {
+					relPath = rel
+				}
+			}
+			comments = append(comments, prComment{
+				Path: filepath.ToSlash(relPath),
+				Body: body,
+				Line: 1,
+			})
+		}
+	}
+
+	if len(comments) == 0 {
+		return nil
+	}
+
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/pulls/%s/reviews", repo, prNumber)
+	payload := map[string]interface{}{
+		"body":     "Maintainability Sensors detected architectural decay.",
+		"event":    "COMMENT",
+		"comments": comments,
 	}
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
