@@ -10,6 +10,10 @@ import (
 )
 
 func TestMultiRepoValidation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping multi-repo integration test in short mode")
+	}
+
 	tempDir := t.TempDir()
 	binPath := filepath.Join(tempDir, "maintainability-sensors")
 
