@@ -1,0 +1,73 @@
+name: 📡 Generate Maintainability Reports
+
+on:
+  schedule:
+    # Run every Sunday at midnight
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    # Allows manual trigger from GitHub UI
+
+permissions:
+  contents: write
+
+jobs:
+  analyze:
+    name: Run Validation Pipeline
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🐹 Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 💾 Cache Cloned Target Repositories
+        id: cache-repos
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: ${{ runner.os }}-validation-repos-v1
+          restore-keys: |
+            ${{ runner.os }}-validation-repos-
+
+      - name: 🏗️ Compile CLI Binary
+        run: |
+          mkdir -p bin
+          go build -o bin/maintainability-sensors main.go
+
+      - name: ⚙️ Setup Pipeline Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pylint
+
+      - name: 🚀 Run Verification & Report Generation Pipeline
+        run: |
+          chmod +x scripts/run-pipeline.sh
+          ./scripts/run-pipeline.sh
+
+      - name: 💾 Commit & Push Generated Reports
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # Only add changes inside dist/reports
+          git add dist/reports/
+          
+          if git diff --staged --quiet; then
+            echo "No changes in generated reports. Skipping commit."
+          else
+            git commit -m "docs(reports): update live canonical validation reports [skip ci]"
+            git push origin main
+          fi

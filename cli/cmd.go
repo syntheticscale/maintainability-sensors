@@ -25,6 +25,7 @@ func Execute() {
 		runCmd := flag.NewFlagSet("run", flag.ExitOnError)
 		jsonOut := runCmd.Bool("json", false, "output result in raw JSON format")
 		githubPR := runCmd.Bool("github-pr", false, "post markdown scorecard directly as a GitHub PR comment")
+		markdownOut := runCmd.String("markdown-out", "", "write beautiful markdown scorecard to specified file path")
 		_ = runCmd.Parse(os.Args[2:])
 
 		targetPath := "."
@@ -32,7 +33,7 @@ func Execute() {
 			targetPath = runCmd.Arg(0)
 		}
 
-		executeRun(targetPath, *jsonOut, *githubPR)
+		executeRun(targetPath, *jsonOut, *githubPR, *markdownOut)
 
 	case "bootstrap":
 		bootCmd := flag.NewFlagSet("bootstrap", flag.ExitOnError)
@@ -62,15 +63,17 @@ func printGeneralUsage() {
 	fmt.Printf("  run [path]        Scan a specific file or folder for maintainability warnings.\n")
 	fmt.Printf("                    Optional flag: --json (outputs raw JSON metric payload).\n")
 	fmt.Printf("                    Optional flag: --github-pr (post markdown scorecard directly as a GitHub PR comment).\n")
+	fmt.Printf("                    Optional flag: --markdown-out [file-path] (writes beautiful markdown scorecard to specified file path).\n")
 	fmt.Printf("  bootstrap [path]  Auto-detect repository language and bootstrap pristine, non-overwriting\n")
 	fmt.Printf("                    maintainability configuration files (TS, Python, Go, Java).\n\n")
 	fmt.Printf("Examples:\n")
 	fmt.Printf("  maintainability-sensors run .\n")
+	fmt.Printf("  maintainability-sensors run . --markdown-out=report.md\n")
 	fmt.Printf("  maintainability-sensors run src/api.py --json\n")
 	fmt.Printf("  maintainability-sensors bootstrap /path/to/my/project\n")
 }
 
-func executeRun(targetPath string, jsonOutput bool, githubPR bool) {
+func executeRun(targetPath string, jsonOutput bool, githubPR bool, markdownOut string) {
 	absPath, err := filepath.Abs(targetPath)
 	if err != nil {
 		absPath = targetPath
@@ -196,6 +199,16 @@ func executeRun(targetPath string, jsonOutput bool, githubPR bool) {
 		} else {
 			fmt.Println("Successfully posted scorecard comment to GitHub PR!")
 		}
+	}
+
+	if markdownOut != "" {
+		scorecard := GenerateMarkdownScorecard(results)
+		err := os.WriteFile(markdownOut, []byte(scorecard), 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[ERROR] Failed to write markdown scorecard: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("[SUCCESS] Saved markdown report to %s\n", markdownOut)
 	}
 }
 
