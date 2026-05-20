@@ -52,7 +52,7 @@ func TestSanitizePath_RejectsParentTraversalStart(t *testing.T) {
 	for _, p := range cases {
 		_, err := sanitizePath(p)
 		if err == nil {
-			t.Fatalf("expected error for traversal path %q, got nil", p)
+			t.Errorf("expected error for traversal path %q, got nil", p)
 		}
 	}
 }
