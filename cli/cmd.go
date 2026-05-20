@@ -107,12 +107,12 @@ func executeRun(targetPath string, jsonOutput bool, githubPR bool, markdownOut s
 				return nil
 			}
 			// Skip typical build / dependency folders
-			if strings.Contains(path, "node_modules") || strings.Contains(path, ".git") || strings.Contains(path, "vendor") || strings.Contains(path, "bin") {
+			if strings.Contains(path, "node_modules") || strings.Contains(path, ".git") || strings.Contains(path, "vendor") || strings.Contains(path, "bin") || strings.Contains(path, ".cache") || strings.Contains(path, ".venv") || strings.Contains(path, "venv") || strings.Contains(path, "env") {
 				return nil
 			}
 			// Skip files without recognized extension
 			ext := filepath.Ext(path)
-			if ext != ".ts" && ext != ".tsx" && ext != ".js" && ext != ".jsx" && ext != ".py" && ext != ".go" {
+			if ext != ".ts" && ext != ".tsx" && ext != ".js" && ext != ".jsx" && ext != ".py" && ext != ".go" && ext != ".rb" && ext != ".cs" {
 				return nil
 			}
 

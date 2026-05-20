@@ -80,6 +80,40 @@ linters:
   </module>
 </module>
 `
+
+	rubocopTemplate = `# Pristine RuboCop Maintainability Rules
+Metrics/CyclomaticComplexity:
+  Max: 8
+  Enabled: true
+
+Metrics/MethodLength:
+  Max: 50
+  CountComments: false
+  Enabled: true
+
+Metrics/ParameterLists:
+  Max: 4
+  Enabled: true
+
+Metrics/ModuleLength:
+  Max: 300
+  Enabled: true
+`
+
+	editorconfigTemplate = `# Pristine Microsoft .editorconfig Maintainability Rules
+root = true
+
+[*.cs]
+# Roslyn CA1502: Avoid excessive cyclomatic complexity (Limit: 8)
+dotnet_diagnostic.CA1502.severity = warning
+dotnet_code_quality.CA1502.maximum_cyclomatic_complexity = 8
+
+# Roslyn CA1506: Avoid excessive class coupling
+dotnet_diagnostic.CA1506.severity = warning
+
+# Enforce standard method length / formatting rules
+dotnet_sort_system_directives_first = true
+`
 )
 
 // BootstrapRepo detects the primary language/framework of a repository
@@ -171,6 +205,35 @@ func BootstrapRepo(repoPath string) error {
 			fmt.Printf("- [CREATED] checkstyle.xml (Pristine Java Checkstyle Complexity Rules)\n\n")
 		}
 		printInstallerInstructions("java")
+
+	case "ruby":
+		ruboPath := filepath.Join(absPath, ".rubocop.yml")
+		if _, err := os.Stat(ruboPath); err == nil {
+			printExistingConfigBanner(".rubocop.yml", `
+- Metrics/CyclomaticComplexity: { Max: 8 }
+- Metrics/MethodLength: { Max: 50 }
+- Metrics/ParameterLists: { Max: 4 }`)
+		} else {
+			if err := os.WriteFile(ruboPath, []byte(rubocopTemplate), 0644); err != nil {
+				return fmt.Errorf("failed to write .rubocop.yml: %w", err)
+			}
+			fmt.Printf("- [CREATED] .rubocop.yml (Pristine Ruby RuboCop Complexity Rules)\n\n")
+		}
+		printInstallerInstructions("ruby")
+
+	case "csharp":
+		editorPath := filepath.Join(absPath, ".editorconfig")
+		if _, err := os.Stat(editorPath); err == nil {
+			printExistingConfigBanner(".editorconfig", `
+- dotnet_code_quality.CA1502.maximum_cyclomatic_complexity = 8
+- dotnet_diagnostic.CA1502.severity = warning`)
+		} else {
+			if err := os.WriteFile(editorPath, []byte(editorconfigTemplate), 0644); err != nil {
+				return fmt.Errorf("failed to write .editorconfig: %w", err)
+			}
+			fmt.Printf("- [CREATED] .editorconfig (Pristine Microsoft C# EditorConfig Analyzers)\n\n")
+		}
+		printInstallerInstructions("csharp")
 	}
 
 	return nil
@@ -182,6 +245,8 @@ func detectPrimaryLanguage(dirPath string) string {
 		"python": 0,
 		"go":     0,
 		"java":   0,
+		"ruby":   0,
+		"csharp": 0,
 	}
 
 	_ = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
@@ -202,6 +267,10 @@ func detectPrimaryLanguage(dirPath string) string {
 			counts["go"]++
 		case ".java":
 			counts["java"]++
+		case ".rb":
+			counts["ruby"]++
+		case ".cs":
+			counts["csharp"]++
 		}
 		return nil
 	})
@@ -231,6 +300,10 @@ func getFriendlyLangName(lang string) string {
 		return "Go (Standard modules)"
 	case "java":
 		return "Java (Spring Boot, Spring framework)"
+	case "ruby":
+		return "Ruby (Ruby on Rails, Sinatra)"
+	case "csharp":
+		return "C# (.NET Core, ASP.NET)"
 	}
 	return "Unknown"
 }
@@ -272,6 +345,18 @@ func printInstallerInstructions(lang string) {
 		fmt.Printf("      <configLocation>checkstyle.xml</configLocation>\n")
 		fmt.Printf("    </configuration>\n")
 		fmt.Printf("  </plugin>\n")
+	case "ruby":
+		fmt.Printf("Execute this command to install the RuboCop engine:\n")
+		fmt.Printf("  gem install rubocop\n\n")
+		fmt.Printf("To run checks natively:\n")
+		fmt.Printf("  rubocop --format json your_code_directory/\n")
+	case "csharp":
+		fmt.Printf("Microsoft C# Analyzers are built natively into the .NET SDK.\n")
+		fmt.Printf("To verify code formatting and analyzer rules, run standard .NET commands:\n\n")
+		fmt.Printf("Run static code analysis:\n")
+		fmt.Printf("  dotnet build /p:TreatWarningsAsErrors=true\n\n")
+		fmt.Printf("Or run automatic formatting verification:\n")
+		fmt.Printf("  dotnet format --verify-no-changes\n")
 	}
 	fmt.Printf("\nOnce installed, run maintainability-sensors again to activate precise Level 1+ analysis!\n")
 }

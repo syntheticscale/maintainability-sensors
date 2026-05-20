@@ -80,3 +80,43 @@ func TestOrchestratedScan_WorkingBlindFallback(t *testing.T) {
 		t.Errorf("expected metrics to be zero in fallback mode, got %+v", res.Metrics)
 	}
 }
+
+func TestParseCSharp_ValidFile(t *testing.T) {
+	tempDir := t.TempDir()
+	csFile := filepath.Join(tempDir, "sample.cs")
+
+	content := `using System;
+
+namespace Sample {
+    public class Processor {
+        public void ProcessData(int x, string name, bool flag, double score) {
+            int result = 0;
+            if (x > 10 && flag) {
+                result = 1;
+            } else if (score < 5.0 || name == "skip") {
+                result = 2;
+            }
+            Console.WriteLine(result);
+        }
+    }
+}
+`
+	if err := os.WriteFile(csFile, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test C# file: %v", err)
+	}
+
+	metrics, err := sensors.ParseCSharp(csFile)
+	if err != nil {
+		t.Fatalf("ParseCSharp failed: %v", err)
+	}
+
+	// Verify maximum argument count (ProcessData has 4 parameters)
+	if metrics.ArgumentCount != 4 {
+		t.Errorf("expected max ArgumentCount to be 4, got %d", metrics.ArgumentCount)
+	}
+
+	// Verify maximum cyclomatic complexity (1 base + 1 if + 1 && + 1 else if + 1 || = 5)
+	if metrics.Complexity != 5 {
+		t.Errorf("expected max Complexity to be 5, got %d", metrics.Complexity)
+	}
+}

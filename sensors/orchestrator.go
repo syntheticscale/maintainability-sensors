@@ -65,6 +65,25 @@ func OrchestratedScan(filePath string) (OrchestratorResult, error) {
 		return result, nil
 	}
 
+	// 1b. If C# (csharp), run native high-assurance parsing instantly
+	if result.Language == "csharp" {
+		metrics, err := ParseCSharp(filePath)
+		if err != nil {
+			return result, fmt.Errorf("native C# parse error: %w", err)
+		}
+		result.ToolingDetected = true
+		result.Metrics = MaintainabilityMetrics{
+			Complexity:     metrics.Complexity,
+			FunctionLength: metrics.FunctionLength,
+			ArgumentCount:  metrics.ArgumentCount,
+		}
+		configAnchor := detectConfig(filePath, "csharp")
+		if configAnchor != "" {
+			result.Exceptions = detectRelaxedLimits(configAnchor, "csharp")
+		}
+		return result, nil
+	}
+
 	// 2. Walk up directory tree to search for config file anchors
 	configAnchor := detectConfig(filePath, result.Language)
 	if configAnchor == "" {
@@ -94,6 +113,13 @@ func OrchestratedScan(filePath string) (OrchestratorResult, error) {
 		} else {
 			result.Metrics = metrics
 		}
+	case "ruby":
+		metrics, err := runRuboCop(filePath)
+		if err != nil {
+			result.Message = fmt.Sprintf("Orchestration error (RuboCop): %v. (Verify rubocop is installed)", err)
+		} else {
+			result.Metrics = metrics
+		}
 	}
 
 	return result, nil
@@ -110,6 +136,10 @@ func detectLanguage(path string) string {
 		return "python"
 	case ".go":
 		return "go"
+	case ".rb":
+		return "ruby"
+	case ".cs":
+		return "csharp"
 	}
 	return ""
 }
@@ -129,6 +159,10 @@ func detectConfig(filePath string, lang string) string {
 		anchors = []string{"pyproject.toml", ".pylintrc", "setup.cfg", "tox.ini"}
 	case "go":
 		anchors = []string{".golangci.yml", "golangci.yml"}
+	case "ruby":
+		anchors = []string{".rubocop.yml", "Gemfile"}
+	case "csharp":
+		anchors = []string{".editorconfig"}
 	}
 
 	for {
@@ -249,6 +283,58 @@ func runPyLint(filePath string) (MaintainabilityMetrics, error) {
 	return metrics, nil
 }
 
+func runRuboCop(filePath string) (MaintainabilityMetrics, error) {
+	var metrics MaintainabilityMetrics
+
+	// Run rubocop --format json <file>
+	cmd := exec.Command("rubocop", "--format", "json", filePath)
+	output, _ := cmd.CombinedOutput()
+
+	var result struct {
+		Files []struct {
+			Offenses []struct {
+				CopName string `json:"cop_name"`
+				Message string `json:"message"`
+			} `json:"offenses"`
+		} `json:"files"`
+	}
+
+	if err := json.Unmarshal(output, &result); err != nil || len(result.Files) == 0 {
+		return metrics, fmt.Errorf("failed to parse RuboCop JSON output: %w", err)
+	}
+
+	reVal := regexp.MustCompile(`\[(\d+)/`)
+
+	for _, file := range result.Files {
+		for _, off := range file.Offenses {
+			var val int
+			if matches := reVal.FindStringSubmatch(off.Message); matches != nil {
+				fmt.Sscanf(matches[1], "%d", &val)
+			}
+			if val == 0 {
+				continue
+			}
+
+			switch off.CopName {
+			case "Metrics/CyclomaticComplexity":
+				if val > metrics.Complexity {
+					metrics.Complexity = val
+				}
+			case "Metrics/MethodLength":
+				if val > metrics.FunctionLength {
+					metrics.FunctionLength = val
+				}
+			case "Metrics/ParameterLists":
+				if val > metrics.ArgumentCount {
+					metrics.ArgumentCount = val
+				}
+			}
+		}
+	}
+
+	return metrics, nil
+}
+
 func detectRelaxedLimits(configPath string, lang string) []RelaxedLimit {
 	var exceptions []RelaxedLimit
 	if configPath == "" {
@@ -277,6 +363,18 @@ func detectRelaxedLimits(configPath string, lang string) []RelaxedLimit {
 		}
 	} else if lang == "go" {
 		vals := findAllConfigVals(content, "min-complexity")
+		if len(vals) > 0 {
+			complexityVal = maxOf(vals)
+			foundComplexity = true
+		}
+	} else if lang == "ruby" {
+		vals := findAllConfigVals(content, "CyclomaticComplexity")
+		if len(vals) > 0 {
+			complexityVal = maxOf(vals)
+			foundComplexity = true
+		}
+	} else if lang == "csharp" {
+		vals := findAllConfigVals(content, "maximum_cyclomatic_complexity")
 		if len(vals) > 0 {
 			complexityVal = maxOf(vals)
 			foundComplexity = true
@@ -311,6 +409,12 @@ func detectRelaxedLimits(configPath string, lang string) []RelaxedLimit {
 			funcLenVal = maxOf(vals)
 			foundFuncLen = true
 		}
+	} else if lang == "ruby" {
+		vals := findAllConfigVals(content, "MethodLength")
+		if len(vals) > 0 {
+			funcLenVal = maxOf(vals)
+			foundFuncLen = true
+		}
 	}
 	if foundFuncLen && funcLenVal > 50 {
 		exceptions = append(exceptions, RelaxedLimit{
@@ -335,6 +439,12 @@ func detectRelaxedLimits(configPath string, lang string) []RelaxedLimit {
 			argCountVal = maxOf(vals)
 			foundArgCount = true
 		}
+	} else if lang == "ruby" {
+		vals := findAllConfigVals(content, "ParameterLists")
+		if len(vals) > 0 {
+			argCountVal = maxOf(vals)
+			foundArgCount = true
+		}
 	}
 	if foundArgCount && argCountVal > 4 {
 		exceptions = append(exceptions, RelaxedLimit{
@@ -355,6 +465,12 @@ func detectRelaxedLimits(configPath string, lang string) []RelaxedLimit {
 		}
 	} else if lang == "python" {
 		vals := findAllConfigVals(content, "max-module-lines")
+		if len(vals) > 0 {
+			fileLenVal = maxOf(vals)
+			foundFileLen = true
+		}
+	} else if lang == "ruby" {
+		vals := findAllConfigVals(content, "ModuleLength")
 		if len(vals) > 0 {
 			fileLenVal = maxOf(vals)
 			foundFileLen = true
