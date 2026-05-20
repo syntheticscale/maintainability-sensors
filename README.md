@@ -49,9 +49,23 @@ maintainability-sensors run src/components/MyComponent.tsx
 
 # Scan the entire repository
 maintainability-sensors run .
+
+# Output JSON payload to stdout
+maintainability-sensors run . --json
+
+# Write reports to files
+maintainability-sensors run . --markdown-out=report.md --html-out=report.html --json-out=report.json
 ```
 
-### 2. `bootstrap` (Environment-Hardening)
+### 2. `generate` (Reconstruct Reports from JSON)
+Reconstruct beautiful Markdown and HTML scorecards from a previously saved JSON payload. This is useful for CI pipelines that archive raw metrics and later publish visual reports.
+
+```bash
+# Generate HTML and Markdown reports from a saved JSON scorecard
+maintainability-sensors generate report.json --html-out=report.html --markdown-out=report.md
+```
+
+### 3. `bootstrap` (Environment-Hardening)
 Auto-detects the primary codebase language and writes pristine, ready-to-use maintainability configurations enforcing strict thresholds:
 * **File Length:** max 300 lines
 * **Function Length:** max 50 lines
@@ -68,6 +82,8 @@ Supported Blueprints:
 * **Python:** Generates `.pylintrc` (McCabe complexity, method limits) and outputs the `pip` packages.
 * **Go:** Generates `.golangci.yml` (configuring `gocognit`, `funlen`, `gocyclo`, `lll`) and outputs the installation curl command.
 * **Java:** Generates a standard Checkstyle configuration `checkstyle.xml` (method length, complexity, parameter limits) and provides Maven/Gradle integration instructions.
+* **Ruby:** Generates `.rubocop.yml` (cyclomatic complexity, method length, parameter limits) and outputs the `gem install` command.
+* **C#:** Generates `.editorconfig` (Roslyn analyzer rules for complexity) and outputs .NET build integration instructions.
 
 ---
 

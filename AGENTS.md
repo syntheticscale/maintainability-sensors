@@ -14,21 +14,34 @@ This tool is designed to be a lightweight, zero-dependency, ultra-fast Go CLI ut
 /
 ├── main.go               # CLI entrypoint
 ├── cli/
-│   └── cmd.go            # Subcommands (run, bootstrap) & GitHub integrations
+│   ├── cmd.go            # Subcommands (run, generate, bootstrap) & flag parsing
+│   ├── html.go           # HTML scorecard generator (embeds report.html template)
+│   └── github.go         # GitHub Actions step summary & PR comment poster
 ├── sensors/
 │   ├── orchestrator.go   # Subprocess executor and linter JSON parser
 │   ├── go_ast.go         # Native, zero-dependency Go AST metric collector
-│   └── bootstrap.go      # Pristine config file template generator
-└── tests/
-    ├── orchestrator_test.go  # Go AST & Level 0 fallback unit tests
-    └── bootstrap_test.go     # Bootstrap template and overwrite guardrail tests
+│   ├── bootstrap.go      # Pristine config file template generator
+│   ├── constants.go      # Baseline threshold constants (complexity, length, params)
+│   └── csharp_parser.go  # Stub for C# metrics (external tooling required)
+├── cli/templates/
+│   └── report.html       # Dark-themed HTML scorecard template
+├── tests/
+│   ├── orchestrator_test.go   # Go AST & Level 0 fallback unit tests
+│   ├── bootstrap_test.go      # Bootstrap template and overwrite guardrail tests
+│   ├── relaxed_limits_test.go # Relaxed limit detection tests
+│   ├── golden_test.go         # Golden snapshot tests for real-world repos
+│   └── multi_repo_test.go     # End-to-end CLI integration tests
+└── docs/
+    ├── GITHUB_ACTIONS_GUIDE.md    # CI/CD integration guide
+    ├── AI_AGENT_FEEDBACK_LOOP.md  # Agent self-correction loop guide
+    └── CASE_STUDIES.md            # Real-world code decay analysis
 ```
 
 ---
 
 ## 🧩 Architectural Constraints (ADR Rules)
 
-1. **Zero External Dependencies:** No external third-party Go dependencies. Only use Go's standard library (`go/*`, `os`, `exec`, `encoding/json`, `regexp`). This keeps the binary compilation instant and ensures frictionless Day 0 CI integration.
+1. **Zero External Dependencies:** No external third-party Go dependencies. Only use Go's standard library (`go/*`, `go/ast`, `go/parser`, `go/token`, `os`, `os/exec`, `encoding/json`, `regexp`, `html/template`, `embed`, `net/http`, `bytes`, `strings`, `path/filepath`). This keeps the binary compilation instant and ensures frictionless Day 0 CI integration.
 2. **Stateless Execution:** The CLI must remain completely stateless. It reads local files and writes to stdout or stderr. No database dependencies, no filesystem caches, and no remote telemetry.
 3. **Safety Guardrails:** The `bootstrap` command must **never** destructive-overwrite existing custom configuration files. If an existing config is found, skip writing, alert the user, and output recommended addition snippets.
 4. **Agent-Facing Output:** All warnings and errors must output clear, actionable, and structured **Refactoring Prompts** specifically optimized for LLM coding agents to ingest and act on.
