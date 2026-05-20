@@ -52,9 +52,9 @@ func ComplexFunc(a, b int, name string, flag bool) int {
 		t.Errorf("expected max FunctionLength to be around 10, got %d", metrics.FunctionLength)
 	}
 
-	// Verify maximum cyclomatic complexity (ComplexFunc has 1 (base) + 1 (for) + 1 (if) + 1 (else-if) = 4)
-	if metrics.Complexity != 4 {
-		t.Errorf("expected max Complexity to be 4, got %d", metrics.Complexity)
+	// Verify maximum cyclomatic complexity (ComplexFunc has 1 (base) + 1 (for) + 1 (if) + 1 (&&) + 1 (else-if) + 1 (||) = 6)
+	if metrics.Complexity != 6 {
+		t.Errorf("expected max Complexity to be 6, got %d", metrics.Complexity)
 	}
 }
 

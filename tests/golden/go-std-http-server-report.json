@@ -3,7 +3,7 @@
   "language": "go",
   "tooling_detected": true,
   "metrics": {
-    "complexity": 45,
+    "complexity": 73,
     "function_length": 267,
     "argument_count": 4
   }

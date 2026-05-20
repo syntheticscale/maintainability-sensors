@@ -8,7 +8,7 @@ Every AI assistant or developer working on this codebase must respect these rule
 
 ## 🏛️ Repository Architecture
 
-This tool is designed to be a lightweight, zero-dependency, ultra-fast Go CLI utility (<15ms execution time) that orchestrates local static analysis and parses ASTs natively.
+This tool is designed to be a lightweight, ultra-fast Go CLI utility (<15ms execution time) that orchestrates local static analysis and parses ASTs natively.
 
 ```
 /
@@ -16,15 +16,24 @@ This tool is designed to be a lightweight, zero-dependency, ultra-fast Go CLI ut
 ├── cli/
 │   ├── cmd.go            # Subcommands (run, generate, bootstrap) & flag parsing
 │   ├── html.go           # HTML scorecard generator (embeds report.html template)
-│   └── github.go         # GitHub Actions step summary & PR comment poster
+│   ├── github.go         # GitHub Actions step summary & PR comment poster
+│   ├── cli_test.go       # Unit tests for CLI commands (44 tests)
+│   └── templates/
+│       └── report.html   # Dark-themed HTML scorecard template
 ├── sensors/
 │   ├── orchestrator.go   # Subprocess executor and linter JSON parser
-│   ├── go_ast.go         # Native, zero-dependency Go AST metric collector
+│   ├── config_parsers.go # ConfigParser interface + shared utilities
+│   ├── eslint_parser.go  # ESLint config parser
+│   ├── pylint_parser.go  # PyLint config parser
+│   ├── golangci_parser.go # golangci-lint config parser
+│   ├── rubocop_parser.go # RuboCop config parser
+│   ├── go_ast.go         # Native Go AST metric collector
 │   ├── bootstrap.go      # Pristine config file template generator
 │   ├── constants.go      # Baseline threshold constants (complexity, length, params)
-│   └── csharp_parser.go  # Stub for C# metrics (external tooling required)
-├── cli/templates/
-│   └── report.html       # Dark-themed HTML scorecard template
+│   ├── csharp_parser.go  # Stub for C# metrics (external tooling required)
+│   ├── parsers_test.go   # Unit tests for config parsers (30+ tests)
+│   ├── sanitize_test.go  # Unit tests for path sanitization
+│   └── subprocess_test.go # Unit tests for subprocess error branches
 ├── tests/
 │   ├── orchestrator_test.go   # Go AST & Level 0 fallback unit tests
 │   ├── bootstrap_test.go      # Bootstrap template and overwrite guardrail tests
@@ -41,10 +50,9 @@ This tool is designed to be a lightweight, zero-dependency, ultra-fast Go CLI ut
 
 ## 🧩 Architectural Constraints (ADR Rules)
 
-1. **Zero External Dependencies:** No external third-party Go dependencies. Only use Go's standard library (`go/*`, `go/ast`, `go/parser`, `go/token`, `os`, `os/exec`, `encoding/json`, `regexp`, `html/template`, `embed`, `net/http`, `bytes`, `strings`, `path/filepath`). This keeps the binary compilation instant and ensures frictionless Day 0 CI integration.
-2. **Stateless Execution:** The CLI must remain completely stateless. It reads local files and writes to stdout or stderr. No database dependencies, no filesystem caches, and no remote telemetry.
-3. **Safety Guardrails:** The `bootstrap` command must **never** destructive-overwrite existing custom configuration files. If an existing config is found, skip writing, alert the user, and output recommended addition snippets.
-4. **Agent-Facing Output:** All warnings and errors must output clear, actionable, and structured **Refactoring Prompts** specifically optimized for LLM coding agents to ingest and act on.
+1. **Stateless Execution:** The CLI must remain completely stateless. It reads local files and writes to stdout or stderr. No database dependencies, no filesystem caches, and no remote telemetry.
+2. **Safety Guardrails:** The `bootstrap` command must **never** destructive-overwrite existing custom configuration files. If an existing config is found, skip writing, alert the user, and output recommended addition snippets.
+3. **Agent-Facing Output:** All warnings and errors must output clear, actionable, and structured **Refactoring Prompts** specifically optimized for LLM coding agents to ingest and act on.
 
 ---
 

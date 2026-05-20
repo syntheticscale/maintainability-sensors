@@ -116,7 +116,7 @@ dotnet_sort_system_directives_first = true
 `
 )
 
-// BootstrapRepo detects the primary language/framework of a repository
+// BootstrapRepo detects the languages/frameworks of a repository
 // and boots up pristine, non-overwriting configs with maintainability thresholds.
 func BootstrapRepo(repoPath string) error {
 	absPath, err := filepath.Abs(repoPath)
@@ -132,114 +132,147 @@ func BootstrapRepo(repoPath string) error {
 		return fmt.Errorf("target path is not a directory: %s", absPath)
 	}
 
-	// 1. Detect primary codebase language by counting file extensions
-	lang := detectPrimaryLanguage(absPath)
-	if lang == "" {
+	// 1. Detect codebase languages by counting file extensions
+	langs := detectLanguages(absPath)
+	if len(langs) == 0 {
 		return fmt.Errorf("no supported codebase language detected (TS/JS, Python, Go, Java) in directory: %s", absPath)
 	}
 
-	fmt.Printf("=========================================\n")
-	fmt.Printf(" Orchestrating Bootstrap for %s...\n", getFriendlyLangName(lang))
-	fmt.Printf("=========================================\n\n")
+	for _, lang := range langs {
+		fmt.Printf("=========================================\n")
+		fmt.Printf(" Orchestrating Bootstrap for %s...\n", getFriendlyLangName(lang))
+		fmt.Printf("=========================================\n\n")
 
-	// 2. Based on detected language, check config, write template, or output instructions
-	switch lang {
-	case "tsjs":
-		eslintPath := filepath.Join(absPath, ".eslintrc.json")
-		if _, err := os.Stat(eslintPath); err == nil {
-			printExistingConfigBanner(".eslintrc.json", fmt.Sprintf(`
-- "complexity": ["error", %d]
-- "max-params": ["error", %d]
-- "max-lines-per-function": ["error", { "max": %d }]
-- "max-lines": ["error", { "max": %d }]`, BaselineComplexity, BaselineArgumentCount, BaselineFunctionLength, BaselineFileLength))
-		} else {
-			if err := os.WriteFile(eslintPath, []byte(fmt.Sprintf(eslintTemplate, BaselineComplexity, BaselineArgumentCount, BaselineFunctionLength, BaselineFileLength)), 0644); err != nil {
-				return fmt.Errorf("failed to write .eslintrc.json: %w", err)
-			}
-			fmt.Printf("- [CREATED] .eslintrc.json (Pristine Maintainability Rule Suite)\n\n")
+		if err := bootstrapLanguage(lang, absPath); err != nil {
+			return err
 		}
-		printInstallerInstructions("tsjs")
-
-	case "python":
-		pylintPath := filepath.Join(absPath, ".pylintrc")
-		if _, err := os.Stat(pylintPath); err == nil {
-			printExistingConfigBanner(".pylintrc", fmt.Sprintf(`
-- [DESIGN]
-  max-args=%d
-  max-statements=%d
-  max-complexity=%d`, BaselineArgumentCount, BaselineFunctionLength, BaselineComplexity))
-		} else {
-			if err := os.WriteFile(pylintPath, []byte(fmt.Sprintf(pylintTemplate, BaselineArgumentCount, BaselineFunctionLength, BaselineComplexity, BaselineFileLength)), 0644); err != nil {
-				return fmt.Errorf("failed to write .pylintrc: %w", err)
-			}
-			fmt.Printf("- [CREATED] .pylintrc (Pristine McCabe / PyLint Complexity Rules)\n\n")
-		}
-		printInstallerInstructions("python")
-
-	case "go":
-		gociPath := filepath.Join(absPath, ".golangci.yml")
-		if _, err := os.Stat(gociPath); err == nil {
-			printExistingConfigBanner(".golangci.yml", fmt.Sprintf(`
-- gocognit: { min-complexity: %d }
-- funlen: { lines: %d }
-- gocyclo: { min-complexity: %d }`, BaselineComplexity, BaselineFunctionLength, BaselineComplexity))
-		} else {
-			if err := os.WriteFile(gociPath, []byte(fmt.Sprintf(golangciTemplate, BaselineComplexity, BaselineFunctionLength, BaselineComplexity)), 0644); err != nil {
-				return fmt.Errorf("failed to write .golangci.yml: %w", err)
-			}
-			fmt.Printf("- [CREATED] .golangci.yml (Pristine Go Vet / Gocognit Complexity Rules)\n\n")
-		}
-		printInstallerInstructions("go")
-
-	case "java":
-		checkPath := filepath.Join(absPath, "checkstyle.xml")
-		if _, err := os.Stat(checkPath); err == nil {
-			printExistingConfigBanner("checkstyle.xml", fmt.Sprintf(`
-- <module name="CyclomaticComplexity"> <property name="max" value="%d"/> </module>
-- <module name="ParameterNumber"> <property name="max" value="%d"/> </module>
-- <module name="MethodLength"> <property name="max" value="%d"/> </module>`, BaselineComplexity, BaselineArgumentCount, BaselineFunctionLength))
-		} else {
-			if err := os.WriteFile(checkPath, []byte(fmt.Sprintf(checkstyleTemplate, BaselineComplexity, BaselineComplexity, BaselineArgumentCount, BaselineArgumentCount, BaselineFunctionLength, BaselineFunctionLength, BaselineFileLength, BaselineFileLength)), 0644); err != nil {
-				return fmt.Errorf("failed to write checkstyle.xml: %w", err)
-			}
-			fmt.Printf("- [CREATED] checkstyle.xml (Pristine Java Checkstyle Complexity Rules)\n\n")
-		}
-		printInstallerInstructions("java")
-
-	case "ruby":
-		ruboPath := filepath.Join(absPath, ".rubocop.yml")
-		if _, err := os.Stat(ruboPath); err == nil {
-			printExistingConfigBanner(".rubocop.yml", fmt.Sprintf(`
-- Metrics/CyclomaticComplexity: { Max: %d }
-- Metrics/MethodLength: { Max: %d }
-- Metrics/ParameterLists: { Max: %d }`, BaselineComplexity, BaselineFunctionLength, BaselineArgumentCount))
-		} else {
-			if err := os.WriteFile(ruboPath, []byte(fmt.Sprintf(rubocopTemplate, BaselineComplexity, BaselineFunctionLength, BaselineArgumentCount, BaselineFileLength)), 0644); err != nil {
-				return fmt.Errorf("failed to write .rubocop.yml: %w", err)
-			}
-			fmt.Printf("- [CREATED] .rubocop.yml (Pristine Ruby RuboCop Complexity Rules)\n\n")
-		}
-		printInstallerInstructions("ruby")
-
-	case "csharp":
-		editorPath := filepath.Join(absPath, ".editorconfig")
-		if _, err := os.Stat(editorPath); err == nil {
-			printExistingConfigBanner(".editorconfig", fmt.Sprintf(`
-- dotnet_code_quality.CA1502.maximum_cyclomatic_complexity = %d
-- dotnet_diagnostic.CA1502.severity = warning`, BaselineComplexity))
-		} else {
-			if err := os.WriteFile(editorPath, []byte(fmt.Sprintf(editorconfigTemplate, BaselineComplexity, BaselineComplexity)), 0644); err != nil {
-				return fmt.Errorf("failed to write .editorconfig: %w", err)
-			}
-			fmt.Printf("- [CREATED] .editorconfig (Pristine Microsoft C# EditorConfig Analyzers)\n\n")
-		}
-		printInstallerInstructions("csharp")
 	}
 
 	return nil
 }
 
-func detectPrimaryLanguage(dirPath string) string {
+func bootstrapLanguage(lang, absPath string) error {
+	switch lang {
+	case "tsjs":
+		return bootstrapTSJS(absPath)
+	case "python":
+		return bootstrapPython(absPath)
+	case "go":
+		return bootstrapGo(absPath)
+	case "java":
+		return bootstrapJava(absPath)
+	case "ruby":
+		return bootstrapRuby(absPath)
+	case "csharp":
+		return bootstrapCSharp(absPath)
+	}
+	return nil
+}
+
+func bootstrapTSJS(absPath string) error {
+	eslintPath := filepath.Join(absPath, ".eslintrc.json")
+	if _, err := os.Stat(eslintPath); err == nil {
+		printExistingConfigBanner(".eslintrc.json", fmt.Sprintf(`
+- "complexity": ["error", %d]
+- "max-params": ["error", %d]
+- "max-lines-per-function": ["error", { "max": %d }]
+- "max-lines": ["error", { "max": %d }]`, BaselineComplexity, BaselineArgumentCount, BaselineFunctionLength, BaselineFileLength))
+	} else {
+		if err := os.WriteFile(eslintPath, []byte(fmt.Sprintf(eslintTemplate, BaselineComplexity, BaselineArgumentCount, BaselineFunctionLength, BaselineFileLength)), 0644); err != nil {
+			return fmt.Errorf("failed to write .eslintrc.json: %w", err)
+		}
+		fmt.Printf("- [CREATED] .eslintrc.json (Pristine Maintainability Rule Suite)\n\n")
+	}
+	printInstallerInstructions("tsjs")
+	return nil
+}
+
+func bootstrapPython(absPath string) error {
+	pylintPath := filepath.Join(absPath, ".pylintrc")
+	if _, err := os.Stat(pylintPath); err == nil {
+		printExistingConfigBanner(".pylintrc", fmt.Sprintf(`
+- [DESIGN]
+  max-args=%d
+  max-statements=%d
+  max-complexity=%d`, BaselineArgumentCount, BaselineFunctionLength, BaselineComplexity))
+	} else {
+		if err := os.WriteFile(pylintPath, []byte(fmt.Sprintf(pylintTemplate, BaselineArgumentCount, BaselineFunctionLength, BaselineComplexity, BaselineFileLength)), 0644); err != nil {
+			return fmt.Errorf("failed to write .pylintrc: %w", err)
+		}
+		fmt.Printf("- [CREATED] .pylintrc (Pristine McCabe / PyLint Complexity Rules)\n\n")
+	}
+	printInstallerInstructions("python")
+	return nil
+}
+
+func bootstrapGo(absPath string) error {
+	gociPath := filepath.Join(absPath, ".golangci.yml")
+	if _, err := os.Stat(gociPath); err == nil {
+		printExistingConfigBanner(".golangci.yml", fmt.Sprintf(`
+- gocognit: { min-complexity: %d }
+- funlen: { lines: %d }
+- gocyclo: { min-complexity: %d }`, BaselineComplexity, BaselineFunctionLength, BaselineComplexity))
+	} else {
+		if err := os.WriteFile(gociPath, []byte(fmt.Sprintf(golangciTemplate, BaselineComplexity, BaselineFunctionLength, BaselineComplexity)), 0644); err != nil {
+			return fmt.Errorf("failed to write .golangci.yml: %w", err)
+		}
+		fmt.Printf("- [CREATED] .golangci.yml (Pristine Go Vet / Gocognit Complexity Rules)\n\n")
+	}
+	printInstallerInstructions("go")
+	return nil
+}
+
+func bootstrapJava(absPath string) error {
+	checkPath := filepath.Join(absPath, "checkstyle.xml")
+	if _, err := os.Stat(checkPath); err == nil {
+		printExistingConfigBanner("checkstyle.xml", fmt.Sprintf(`
+- <module name="CyclomaticComplexity"> <property name="max" value="%d"/> </module>
+- <module name="ParameterNumber"> <property name="max" value="%d"/> </module>
+- <module name="MethodLength"> <property name="max" value="%d"/> </module>`, BaselineComplexity, BaselineArgumentCount, BaselineFunctionLength))
+	} else {
+		if err := os.WriteFile(checkPath, []byte(fmt.Sprintf(checkstyleTemplate, BaselineComplexity, BaselineComplexity, BaselineArgumentCount, BaselineArgumentCount, BaselineFunctionLength, BaselineFunctionLength, BaselineFileLength, BaselineFileLength)), 0644); err != nil {
+			return fmt.Errorf("failed to write checkstyle.xml: %w", err)
+		}
+		fmt.Printf("- [CREATED] checkstyle.xml (Pristine Java Checkstyle Complexity Rules)\n\n")
+	}
+	printInstallerInstructions("java")
+	return nil
+}
+
+func bootstrapRuby(absPath string) error {
+	ruboPath := filepath.Join(absPath, ".rubocop.yml")
+	if _, err := os.Stat(ruboPath); err == nil {
+		printExistingConfigBanner(".rubocop.yml", fmt.Sprintf(`
+- Metrics/CyclomaticComplexity: { Max: %d }
+- Metrics/MethodLength: { Max: %d }
+- Metrics/ParameterLists: { Max: %d }`, BaselineComplexity, BaselineFunctionLength, BaselineArgumentCount))
+	} else {
+		if err := os.WriteFile(ruboPath, []byte(fmt.Sprintf(rubocopTemplate, BaselineComplexity, BaselineFunctionLength, BaselineArgumentCount, BaselineFileLength)), 0644); err != nil {
+			return fmt.Errorf("failed to write .rubocop.yml: %w", err)
+		}
+		fmt.Printf("- [CREATED] .rubocop.yml (Pristine Ruby RuboCop Complexity Rules)\n\n")
+	}
+	printInstallerInstructions("ruby")
+	return nil
+}
+
+func bootstrapCSharp(absPath string) error {
+	editorPath := filepath.Join(absPath, ".editorconfig")
+	if _, err := os.Stat(editorPath); err == nil {
+		printExistingConfigBanner(".editorconfig", fmt.Sprintf(`
+- dotnet_code_quality.CA1502.maximum_cyclomatic_complexity = %d
+- dotnet_diagnostic.CA1502.severity = warning`, BaselineComplexity))
+	} else {
+		if err := os.WriteFile(editorPath, []byte(fmt.Sprintf(editorconfigTemplate, BaselineComplexity, BaselineComplexity)), 0644); err != nil {
+			return fmt.Errorf("failed to write .editorconfig: %w", err)
+		}
+		fmt.Printf("- [CREATED] .editorconfig (Pristine Microsoft C# EditorConfig Analyzers)\n\n")
+	}
+	printInstallerInstructions("csharp")
+	return nil
+}
+
+func detectLanguages(dirPath string) []string {
 	counts := map[string]int{
 		"tsjs":   0,
 		"python": 0,
@@ -275,19 +308,14 @@ func detectPrimaryLanguage(dirPath string) string {
 		return nil
 	})
 
-	maxCount := 0
-	lang := ""
+	var langs []string
 	for k, v := range counts {
-		if v > maxCount {
-			maxCount = v
-			lang = k
+		if v >= 1 {
+			langs = append(langs, k)
 		}
 	}
 
-	if maxCount > 0 {
-		return lang
-	}
-	return ""
+	return langs
 }
 
 func getFriendlyLangName(lang string) string {

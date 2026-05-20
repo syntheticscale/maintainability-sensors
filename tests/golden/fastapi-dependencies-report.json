@@ -3,7 +3,7 @@
   "language": "python",
   "tooling_detected": true,
   "metrics": {
-    "complexity": 0,
+    "complexity": 20,
     "function_length": 64,
     "argument_count": 8
   }

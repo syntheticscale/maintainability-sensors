@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -92,14 +93,23 @@ func TestGoldenSnapshots(t *testing.T) {
 			}
 
 			// 3. Scan the target file
-			filePath := filepath.Join(repoRoot, tc.scanPath)
+			filePath := tc.scanPath
+			origWD, _ := os.Getwd()
+			os.Chdir(repoRoot)
 			result, err := sensors.OrchestratedScan(filePath)
+			os.Chdir(origWD)
 			if err != nil {
 				t.Fatalf("OrchestratedScan failed for %s: %v", filePath, err)
 			}
 
 			// Clean absolute paths in result to make it reproducible across environments
 			result.FilePath = tc.scanPath
+
+			// Sanitize dynamic Node.js process IDs in error messages (e.g. "(node:12345)") to make snapshots deterministic
+			if strings.Contains(result.Message, "(node:") {
+				reNodePID := regexp.MustCompile(`\(node:\d+\)`)
+				result.Message = reNodePID.ReplaceAllString(result.Message, "(node:PID)")
+			}
 
 			// Convert current result to JSON
 			currentJSON, err := json.MarshalIndent(result, "", "  ")

@@ -35,7 +35,14 @@ func Execute() {
 			targetPath = runCmd.Arg(0)
 		}
 
-		executeRun(targetPath, *jsonOut, *githubPR, *markdownOut, *jsonOutFile, *htmlOut)
+		executeRun(RunOptions{
+			TargetPath:  targetPath,
+			JSONOutput:  *jsonOut,
+			GithubPR:    *githubPR,
+			MarkdownOut: *markdownOut,
+			JSONOutFile: *jsonOutFile,
+			HTMLOut:     *htmlOut,
+		})
 
 	case "generate":
 		genCmd := flag.NewFlagSet("generate", flag.ExitOnError)
@@ -94,126 +101,214 @@ func printGeneralUsage() {
 	fmt.Printf("  maintainability-sensors bootstrap /path/to/my/project\n")
 }
 
-func executeRun(targetPath string, jsonOutput bool, githubPR bool, markdownOut string, jsonOutFile string, htmlOut string) {
-	absPath, err := filepath.Abs(targetPath)
+func FindFiles(targetPath string) ([]string, bool, error) {
+	cleanPath := filepath.Clean(targetPath)
+
+	info, err := os.Stat(cleanPath)
 	if err != nil {
-		absPath = targetPath
+		return nil, false, fmt.Errorf("[ERROR] Path does not exist: %s", targetPath)
 	}
 
-	info, err := os.Stat(absPath)
+	var files []string
+	isDir := info.IsDir()
+
+	if !isDir {
+		files = append(files, cleanPath)
+		return files, false, nil
+	}
+
+	err = filepath.Walk(cleanPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[WARNING] Cannot access %s: %v\n", path, err)
+			return nil
+		}
+		if info.IsDir() {
+			dirName := info.Name()
+			if dirName == "node_modules" || dirName == ".git" || dirName == "vendor" || dirName == "bin" || dirName == ".cache" || dirName == ".venv" || dirName == "venv" || dirName == "env" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		// Skip files without recognized extension
+		ext := filepath.Ext(path)
+		if ext != ".ts" && ext != ".tsx" && ext != ".js" && ext != ".jsx" && ext != ".py" && ext != ".go" && ext != ".rb" && ext != ".cs" {
+			return nil
+		}
+		files = append(files, path)
+		return nil
+	})
+
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Path does not exist: %s\n", targetPath)
+		return nil, true, fmt.Errorf("[ERROR] Directory scan failed: %v", err)
+	}
+
+	return files, true, nil
+}
+
+func ScanFiles(filePaths []string, isDir bool) ([]sensors.OrchestratorResult, error) {
+	var results []sensors.OrchestratorResult
+	for _, path := range filePaths {
+		res, err := sensors.OrchestratedScan(path)
+		if err != nil {
+			if !isDir {
+				return nil, fmt.Errorf("Scan failed: %v", err)
+			}
+			fmt.Fprintf(os.Stderr, "[WARNING] Scan failed for %s: %v\n", path, err)
+			continue
+		}
+		results = append(results, res)
+	}
+	return results, nil
+}
+
+type RunOptions struct {
+	TargetPath  string
+	JSONOutput  bool
+	GithubPR    bool
+	MarkdownOut string
+	JSONOutFile string
+	HTMLOut     string
+}
+
+type ReportOptions struct {
+	MarkdownOut string
+	JSONOut     string
+	HTMLOut     string
+	ActionVerb  string
+}
+
+func hasViolations(res sensors.OrchestratorResult) bool {
+	if !res.ToolingDetected {
+		return false
+	}
+	limitComplexity := sensors.BaselineComplexity
+	limitLength := sensors.BaselineFunctionLength
+	limitArgs := sensors.BaselineArgumentCount
+
+	for _, exc := range res.Exceptions {
+		if exc.RuleName == "Cyclomatic Complexity" {
+			limitComplexity = exc.ConfiguredVal
+		} else if exc.RuleName == "Function Length" {
+			limitLength = exc.ConfiguredVal
+		} else if exc.RuleName == "Argument Count" {
+			limitArgs = exc.ConfiguredVal
+		}
+	}
+
+	return res.Metrics.Complexity > limitComplexity ||
+		res.Metrics.FunctionLength > limitLength ||
+		res.Metrics.ArgumentCount > limitArgs
+}
+
+func FormatResultsCLI(results []sensors.OrchestratorResult, jsonOutput bool, isDir bool) bool {
+	hasV := false
+	for _, res := range results {
+		if hasViolations(res) {
+			hasV = true
+			break
+		}
+	}
+
+	if !isDir {
+		if len(results) > 0 {
+			printScanResult(results[0], jsonOutput)
+		}
+		return hasV
+	}
+
+	if jsonOutput {
+		printJSONResults(results)
+		return hasV
+	}
+
+	printSummaryTable(results)
+	printExceptionsList(results)
+	return hasV
+}
+
+func printJSONResults(results []sensors.OrchestratorResult) {
+	data, err := json.MarshalIndent(results, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed to marshal JSON: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println(string(data))
+}
+
+func printSummaryTable(results []sensors.OrchestratorResult) {
+	fmt.Printf("\n=========================================\n")
+	fmt.Printf(" Maintainability Sensors Report Summary\n")
+	fmt.Printf("=========================================\n\n")
+	fmt.Printf("%-35s %-12s %-10s %-10s %-10s\n", "File", "Lang", "Complexity", "FuncLines", "MaxParams")
+	fmt.Printf("%-35s %-12s %-10s %-10s %-10s\n", "----", "----", "----------", "---------", "---------")
+
+	blindCount := 0
+	for _, res := range results {
+		fileBase := filepath.Base(res.FilePath)
+		if !res.ToolingDetected {
+			blindCount++
+			fmt.Printf("%-35s %-12s %-10s %-10s %-10s\n", fileBase, res.Language, "BLIND (L0)", "BLIND (L0)", "BLIND (L0)")
+		} else {
+			fmt.Printf("%-35s %-12s %-10d %-10d %-10d\n", fileBase, res.Language, res.Metrics.Complexity, res.Metrics.FunctionLength, res.Metrics.ArgumentCount)
+		}
+	}
+
+	if blindCount > 0 {
+		fmt.Printf("\n>>> NOTICE: %d files are running BLIND (Level 0) with no static analysis configs.\n", blindCount)
+		fmt.Printf("    Run 'maintainability-sensors bootstrap' to automatically establish their guardrails!\n")
+	}
+}
+
+func printExceptionsList(results []sensors.OrchestratorResult) {
+	var allExceptions []string
+	for _, res := range results {
+		if len(res.Exceptions) > 0 {
+			var details []string
+			for _, exc := range res.Exceptions {
+				details = append(details, fmt.Sprintf("%s (%d vs baseline %d)", exc.RuleName, exc.ConfiguredVal, exc.BaselineVal))
+			}
+			allExceptions = append(allExceptions, fmt.Sprintf("  * %s: %s", filepath.Base(res.FilePath), strings.Join(details, ", ")))
+		}
+	}
+
+	if len(allExceptions) > 0 {
+		fmt.Printf("\n=========================================\n")
+		fmt.Printf(" Exceptions Created by AI (Relaxed Constraints)\n")
+		fmt.Printf("=========================================\n")
+		fmt.Printf("⚠️  The following files have relaxed rules configured in their linters:\n\n")
+		for _, excStr := range allExceptions {
+			fmt.Println(excStr)
+		}
+		fmt.Printf("\nNOTE: These relaxed thresholds must be manually verified by a human during code review.\n")
+		fmt.Printf("(\"Looking at the exceptions AI created was a good point to start my code review.\")\n")
+	}
+}
+
+func executeRun(opts RunOptions) {
+	files, isDir, err := FindFiles(opts.TargetPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	var results []sensors.OrchestratorResult
-
-	if !info.IsDir() {
-		// Single File Scan
-		res, err := sensors.OrchestratedScan(absPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Scan failed: %v\n", err)
-			os.Exit(1)
-		}
-		results = append(results, res)
-		printScanResult(res, jsonOutput)
-	} else {
-		// Directory Scan
-		err = filepath.Walk(absPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "[WARNING] Cannot access %s: %v\n", path, err)
-				return nil
-			}
-			if info.IsDir() {
-				dirName := info.Name()
-				if dirName == "node_modules" || dirName == ".git" || dirName == "vendor" || dirName == "bin" || dirName == ".cache" || dirName == ".venv" || dirName == "venv" || dirName == "env" {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			// Skip files without recognized extension
-			ext := filepath.Ext(path)
-			if ext != ".ts" && ext != ".tsx" && ext != ".js" && ext != ".jsx" && ext != ".py" && ext != ".go" && ext != ".rb" && ext != ".cs" {
-				return nil
-			}
-
-			res, err := sensors.OrchestratedScan(path)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "[WARNING] Scan failed for %s: %v\n", path, err)
-				return nil
-			}
-			results = append(results, res)
-			return nil
-		})
-
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Directory scan failed: %v\n", err)
-			os.Exit(1)
-		}
-
-		if len(results) == 0 {
-			fmt.Println("No supported source files (TS/JS, Python, Go) found in target directory.")
-			return
-		}
-
-		if jsonOutput {
-			data, err := json.MarshalIndent(results, "", "  ")
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "[ERROR] Failed to marshal JSON: %v\n", err)
-				os.Exit(1)
-			}
-			fmt.Println(string(data))
-		} else {
-			// Pretty print summary table
-			fmt.Printf("\n=========================================\n")
-			fmt.Printf(" Maintainability Sensors Report Summary\n")
-			fmt.Printf("=========================================\n\n")
-			fmt.Printf("%-35s %-12s %-10s %-10s %-10s\n", "File", "Lang", "Complexity", "FuncLines", "MaxParams")
-			fmt.Printf("%-35s %-12s %-10s %-10s %-10s\n", "----", "----", "----------", "---------", "---------")
-
-			blindCount := 0
-			for _, res := range results {
-				fileBase := filepath.Base(res.FilePath)
-				if !res.ToolingDetected {
-					blindCount++
-					fmt.Printf("%-35s %-12s %-10s %-10s %-10s\n", fileBase, res.Language, "BLIND (L0)", "BLIND (L0)", "BLIND (L0)")
-				} else {
-					fmt.Printf("%-35s %-12s %-10d %-10d %-10d\n", fileBase, res.Language, res.Metrics.Complexity, res.Metrics.FunctionLength, res.Metrics.ArgumentCount)
-				}
-			}
-
-			if blindCount > 0 {
-				fmt.Printf("\n>>> NOTICE: %d files are running BLIND (Level 0) with no static analysis configs.\n", blindCount)
-				fmt.Printf("    Run 'maintainability-sensors bootstrap' to automatically establish their guardrails!\n")
-			}
-
-			// Display directory scan exceptions!
-			var allExceptions []string
-			for _, res := range results {
-				if len(res.Exceptions) > 0 {
-					var details []string
-					for _, exc := range res.Exceptions {
-						details = append(details, fmt.Sprintf("%s (%d vs baseline %d)", exc.RuleName, exc.ConfiguredVal, exc.BaselineVal))
-					}
-					allExceptions = append(allExceptions, fmt.Sprintf("  * %s: %s", filepath.Base(res.FilePath), strings.Join(details, ", ")))
-				}
-			}
-
-			if len(allExceptions) > 0 {
-				fmt.Printf("\n=========================================\n")
-				fmt.Printf(" Exceptions Created by AI (Relaxed Constraints)\n")
-				fmt.Printf("=========================================\n")
-				fmt.Printf("⚠️  The following files have relaxed rules configured in their linters:\n\n")
-				for _, excStr := range allExceptions {
-					fmt.Println(excStr)
-				}
-				fmt.Printf("\nNOTE: These relaxed thresholds must be manually verified by a human during code review.\n")
-				fmt.Printf("(\"Looking at the exceptions AI created was a good point to start my code review.\")\n")
-			}
-		}
+	if isDir && len(files) == 0 {
+		fmt.Println("No supported source files (TS/JS, Python, Go) found in target directory.")
+		return
 	}
 
-	// Post results/summary to GitHub if active/triggered
+	results, err := ScanFiles(files, isDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+		os.Exit(1)
+	}
+
+	if isDir && len(results) == 0 {
+		fmt.Println("No supported source files (TS/JS, Python, Go) found in target directory.")
+		return
+	}
+
+	hasV := FormatResultsCLI(results, opts.JSONOutput, isDir)
+
 	if os.Getenv("GITHUB_ACTIONS") == "true" {
 		scorecard := GenerateMarkdownScorecard(results)
 		if err := WriteGitHubStepSummary(scorecard); err != nil {
@@ -222,7 +317,7 @@ func executeRun(targetPath string, jsonOutput bool, githubPR bool, markdownOut s
 	}
 
 	isCI_PR := os.Getenv("GITHUB_TOKEN") != "" && (os.Getenv("GITHUB_EVENT_PATH") != "" || os.Getenv("GITHUB_REF") != "")
-	if githubPR || isCI_PR {
+	if opts.GithubPR || isCI_PR {
 		scorecard := GenerateMarkdownScorecard(results)
 		fmt.Println("Posting scorecard to GitHub PR...")
 		if err := PostGitHubPRComment(scorecard); err != nil {
@@ -232,8 +327,18 @@ func executeRun(targetPath string, jsonOutput bool, githubPR bool, markdownOut s
 		}
 	}
 
-	if err := writeReports(results, markdownOut, jsonOutFile, htmlOut, "Saved"); err != nil {
+	err = writeReports(results, ReportOptions{
+		MarkdownOut: opts.MarkdownOut,
+		JSONOut:     opts.JSONOutFile,
+		HTMLOut:     opts.HTMLOut,
+		ActionVerb:  "Saved",
+	})
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+		os.Exit(1)
+	}
+
+	if hasV {
 		os.Exit(1)
 	}
 }
@@ -246,30 +351,30 @@ func executeBootstrap(targetPath string) {
 	}
 }
 
-func writeReports(results []sensors.OrchestratorResult, markdownOut, jsonOut, htmlOut, actionVerb string) error {
-	if markdownOut != "" {
+func writeReports(results []sensors.OrchestratorResult, opts ReportOptions) error {
+	if opts.MarkdownOut != "" {
 		scorecard := GenerateMarkdownScorecard(results)
-		if err := os.WriteFile(markdownOut, []byte(scorecard), 0644); err != nil {
+		if err := os.WriteFile(opts.MarkdownOut, []byte(scorecard), 0644); err != nil {
 			return fmt.Errorf("failed to write markdown scorecard: %w", err)
 		}
-		fmt.Printf("[%s] %s markdown report to %s\n", strings.ToUpper(actionVerb), actionVerb, markdownOut)
+		fmt.Printf("[%s] %s markdown report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.MarkdownOut)
 	}
-	if jsonOut != "" {
+	if opts.JSONOut != "" {
 		data, err := json.MarshalIndent(results, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal JSON: %w", err)
 		}
-		if err := os.WriteFile(jsonOut, data, 0644); err != nil {
+		if err := os.WriteFile(opts.JSONOut, data, 0644); err != nil {
 			return fmt.Errorf("failed to write JSON scorecard: %w", err)
 		}
-		fmt.Printf("[%s] %s JSON report to %s\n", strings.ToUpper(actionVerb), actionVerb, jsonOut)
+		fmt.Printf("[%s] %s JSON report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.JSONOut)
 	}
-	if htmlOut != "" {
+	if opts.HTMLOut != "" {
 		htmlScorecard := GenerateHTMLScorecard(results)
-		if err := os.WriteFile(htmlOut, []byte(htmlScorecard), 0644); err != nil {
+		if err := os.WriteFile(opts.HTMLOut, []byte(htmlScorecard), 0644); err != nil {
 			return fmt.Errorf("failed to write HTML scorecard: %w", err)
 		}
-		fmt.Printf("[%s] %s HTML report to %s\n", strings.ToUpper(actionVerb), actionVerb, htmlOut)
+		fmt.Printf("[%s] %s HTML report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.HTMLOut)
 	}
 	return nil
 }
@@ -287,8 +392,35 @@ func executeGenerate(jsonIn string, markdownOut string, htmlOut string) {
 		os.Exit(1)
 	}
 
-	if err := writeReports(results, markdownOut, "", htmlOut, "Generated"); err != nil {
+	for i, res := range results {
+		if res.FilePath == "" {
+			fmt.Fprintf(os.Stderr, "[ERROR] Validation failed: Missing 'file_path' in result at index %d\n", i)
+			os.Exit(1)
+		}
+		if res.Language == "" {
+			fmt.Fprintf(os.Stderr, "[ERROR] Validation failed: Missing 'language' in result at index %d\n", i)
+			os.Exit(1)
+		}
+	}
+
+	hasV := false
+	for _, res := range results {
+		if hasViolations(res) {
+			hasV = true
+			break
+		}
+	}
+
+	if err := writeReports(results, ReportOptions{
+		MarkdownOut: markdownOut,
+		HTMLOut:     htmlOut,
+		ActionVerb:  "Generated",
+	}); err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+		os.Exit(1)
+	}
+
+	if hasV {
 		os.Exit(1)
 	}
 }
@@ -343,17 +475,31 @@ func printSelfCorrectionGuidance(res sensors.OrchestratorResult) {
 	hasViolation := false
 	var guidance []string
 
-	if res.Metrics.Complexity > sensors.BaselineComplexity {
-		hasViolation = true
-		guidance = append(guidance, fmt.Sprintf("  * Complexity is %d (Max %d). Nudge coding agent to extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, sensors.BaselineComplexity))
+	limitComplexity := sensors.BaselineComplexity
+	limitLength := sensors.BaselineFunctionLength
+	limitArgs := sensors.BaselineArgumentCount
+
+	for _, exc := range res.Exceptions {
+		if exc.RuleName == "Cyclomatic Complexity" {
+			limitComplexity = exc.ConfiguredVal
+		} else if exc.RuleName == "Function Length" {
+			limitLength = exc.ConfiguredVal
+		} else if exc.RuleName == "Argument Count" {
+			limitArgs = exc.ConfiguredVal
+		}
 	}
-	if res.Metrics.FunctionLength > sensors.BaselineFunctionLength {
+
+	if res.Metrics.Complexity > limitComplexity {
 		hasViolation = true
-		guidance = append(guidance, fmt.Sprintf("  * Function lines is %d (Max %d). Nudge coding agent to modularize this block into separate functional components.", res.Metrics.FunctionLength, sensors.BaselineFunctionLength))
+		guidance = append(guidance, fmt.Sprintf("  * Complexity is %d (Max %d). Nudge coding agent to extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, limitComplexity))
 	}
-	if res.Metrics.ArgumentCount > sensors.BaselineArgumentCount {
+	if res.Metrics.FunctionLength > limitLength {
 		hasViolation = true
-		guidance = append(guidance, fmt.Sprintf("  * Parameter count is %d (Max %d). Nudge coding agent to bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, sensors.BaselineArgumentCount))
+		guidance = append(guidance, fmt.Sprintf("  * Function lines is %d (Max %d). Nudge coding agent to modularize this block into separate functional components.", res.Metrics.FunctionLength, limitLength))
+	}
+	if res.Metrics.ArgumentCount > limitArgs {
+		hasViolation = true
+		guidance = append(guidance, fmt.Sprintf("  * Parameter count is %d (Max %d). Nudge coding agent to bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, limitArgs))
 	}
 
 	if hasViolation {

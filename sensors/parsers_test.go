@@ -306,6 +306,61 @@ func TestFindAllConfigVals_NonJSON(t *testing.T) {
 	}
 }
 
+func TestFindAllConfigVals_FlatConfig(t *testing.T) {
+	cases := []struct {
+		name     string
+		content  string
+		key      string
+		ext      string
+		expected []int
+	}{
+		{
+			name:     "JS format with array",
+			content:  `export default [ { rules: { "complexity": ["error", 20] } } ];`,
+			key:      "complexity",
+			ext:      ".js",
+			expected: []int{20},
+		},
+		{
+			name:     "JS format with unquoted key and primitive value",
+			content:  `export default [ { rules: { complexity: 15 } } ];`,
+			key:      "complexity",
+			ext:      ".mjs",
+			expected: []int{15},
+		},
+		{
+			name:     "JS format with single quotes",
+			content:  `export default [ { rules: { 'max-params': ['warn', 5] } } ];`,
+			key:      "max-params",
+			ext:      ".js",
+			expected: []int{5},
+		},
+		{
+			name:     "JS format multiple occurrences",
+			content:  `"complexity": ["error", 10] and later complexity: 30`,
+			key:      "complexity",
+			ext:      ".js",
+			expected: []int{10, 30},
+		},
+		{
+			name:     "missing key returns empty",
+			content:  `export default [];`,
+			key:      "complexity",
+			ext:      ".js",
+			expected: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := findAllConfigVals(tc.content, tc.key, tc.ext)
+			if !reflect.DeepEqual(got, tc.expected) {
+				t.Errorf("findAllConfigVals(%q, %q, %q) = %v, want %v", tc.content, tc.key, tc.ext, got, tc.expected)
+			}
+		})
+	}
+}
+
 func TestFindAllConfigVals_EdgeCases(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -512,5 +567,90 @@ func TestDetectRelaxedLimits_EmptyPath(t *testing.T) {
 	got := detectRelaxedLimits("", "javascript")
 	if len(got) != 0 {
 		t.Errorf("expected empty slice for empty config path, got %d: %+v", len(got), got)
+	}
+}
+
+func TestDetectRelaxedLimits_RuboCopYAML(t *testing.T) {
+	tempDir := t.TempDir()
+
+	content := `Metrics/CyclomaticComplexity:
+  Max: 15
+  Enabled: true
+
+Metrics/MethodLength:
+  Max: 60
+  CountComments: false
+  Enabled: true
+`
+
+	configPath := filepath.Join(tempDir, ".rubocop.yml")
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	got := detectRelaxedLimits(configPath, "ruby")
+
+	if len(got) != 2 {
+		t.Fatalf("expected 2 relaxed limits, got %d: %+v", len(got), got)
+	}
+
+	expectedMap := map[string]int{
+		"Cyclomatic Complexity": 15,
+		"Function Length":       60,
+	}
+
+	for _, exc := range got {
+		wantVal, ok := expectedMap[exc.RuleName]
+		if !ok {
+			t.Errorf("unexpected rule name: %s", exc.RuleName)
+			continue
+		}
+		if exc.ConfiguredVal != wantVal {
+			t.Errorf("%s: ConfiguredVal = %d, want %d", exc.RuleName, exc.ConfiguredVal, wantVal)
+		}
+	}
+}
+
+func TestDetectRelaxedLimits_GoYAML(t *testing.T) {
+	tempDir := t.TempDir()
+
+	content := `run:
+  timeout: 5m
+
+linters-settings:
+  gocognit:
+    min-complexity: 12
+  funlen:
+    lines: 70
+    statements: 40
+  gocyclo:
+    min-complexity: 10
+`
+
+	configPath := filepath.Join(tempDir, ".golangci.yml")
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	got := detectRelaxedLimits(configPath, "go")
+
+	if len(got) != 2 {
+		t.Fatalf("expected 2 relaxed limits, got %d: %+v", len(got), got)
+	}
+
+	expectedMap := map[string]int{
+		"Cyclomatic Complexity": 12, // Because 12 > 10 (maxOf used)
+		"Function Length":       70,
+	}
+
+	for _, exc := range got {
+		wantVal, ok := expectedMap[exc.RuleName]
+		if !ok {
+			t.Errorf("unexpected rule name: %s", exc.RuleName)
+			continue
+		}
+		if exc.ConfiguredVal != wantVal {
+			t.Errorf("%s: ConfiguredVal = %d, want %d", exc.RuleName, exc.ConfiguredVal, wantVal)
+		}
 	}
 }
