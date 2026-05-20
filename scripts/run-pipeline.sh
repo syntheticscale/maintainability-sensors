@@ -11,8 +11,8 @@
 
 set -euo pipefail
 
-# Ensure user local bin folders are in PATH (for newly installed pip tools like pylint)
-export PATH="$HOME/.local/bin:$HOME/.hermes/home/.local/bin:/usr/local/bin:$PATH"
+# Ensure user local bin folders and local venv are in PATH (for isolated pip tools like pylint)
+export PATH="./.venv/bin:$HOME/.local/bin:$HOME/.hermes/home/.local/bin:/usr/local/bin:$PATH"
 
 # Configuration
 CACHE_DIR=".cache"
@@ -94,12 +94,14 @@ analyze_repo() {
     log_info "Bootstrapping maintainability configurations inside '$name'..."
     $BINARY_PATH bootstrap "$repo_root"
 
-    # Execute linter setup if required for orchestrated analysis
-    # For Python (requests, fastapi): we install pylint if not available
+    # For Python (requests, fastapi): ensure pylint is available via a local venv
     if [[ "$name" == "requests" || "$name" == "fastapi" ]]; then
         if ! command -v pylint &>/dev/null; then
-            log_warn "pylint not detected. Installing via pip to enable Level 1+ orchestrated analysis..."
-            pip install --quiet pylint --break-system-packages || pip install --quiet pylint || log_warn "Failed to install pylint. Run will fall back to Level 0."
+            log_warn "pylint not detected. Installing into a local virtual environment to enable Level 1+ orchestrated analysis..."
+            if [ ! -d ".venv" ]; then
+                python3 -m venv .venv
+            fi
+            .venv/bin/pip install --quiet pylint || log_warn "Failed to install pylint. Run will fall back to Level 0."
         fi
     fi
 

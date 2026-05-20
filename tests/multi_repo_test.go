@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -17,10 +18,13 @@ func TestMultiRepoValidation(t *testing.T) {
 	tempDir := t.TempDir()
 	binPath := filepath.Join(tempDir, "maintainability-sensors")
 
+	_, filename, _, _ := runtime.Caller(0)
+	repoRoot := filepath.Dir(filepath.Dir(filename))
+
 	// 1. Compile the CLI
 	t.Logf("Compiling CLI to %s...", binPath)
 	cmdBuild := exec.Command("go", "build", "-o", binPath, "main.go")
-	cmdBuild.Dir = "/home/paulo/code/maintainability-sensors"
+	cmdBuild.Dir = repoRoot
 	var buildErr bytes.Buffer
 	cmdBuild.Stderr = &buildErr
 	if err := cmdBuild.Run(); err != nil {
@@ -33,15 +37,7 @@ func TestMultiRepoValidation(t *testing.T) {
 	}{
 		{
 			name: "maintainability-sensors (itself)",
-			path: "/home/paulo/code/maintainability-sensors",
-		},
-		{
-			name: "roastmytests-cli (Go)",
-			path: "/home/paulo/code/roastmytests-cli",
-		},
-		{
-			name: "ai-clinical-guardrails (Python)",
-			path: "/home/paulo/code/personal/demo/ai-clinical-guardrails",
+			path: repoRoot,
 		},
 	}
 

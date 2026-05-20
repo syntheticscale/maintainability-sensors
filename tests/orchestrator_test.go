@@ -81,7 +81,7 @@ func TestOrchestratedScan_WorkingBlindFallback(t *testing.T) {
 	}
 }
 
-func TestParseCSharp_ValidFile(t *testing.T) {
+func TestParseCSharp_ReturnsError(t *testing.T) {
 	tempDir := t.TempDir()
 	csFile := filepath.Join(tempDir, "sample.cs")
 
@@ -105,18 +105,9 @@ namespace Sample {
 		t.Fatalf("failed to write test C# file: %v", err)
 	}
 
-	metrics, err := sensors.ParseCSharp(csFile)
-	if err != nil {
-		t.Fatalf("ParseCSharp failed: %v", err)
-	}
-
-	// Verify maximum argument count (ProcessData has 4 parameters)
-	if metrics.ArgumentCount != 4 {
-		t.Errorf("expected max ArgumentCount to be 4, got %d", metrics.ArgumentCount)
-	}
-
-	// Verify maximum cyclomatic complexity (1 base + 1 if + 1 && + 1 else if + 1 || = 5)
-	if metrics.Complexity != 5 {
-		t.Errorf("expected max Complexity to be 5, got %d", metrics.Complexity)
+	// C# native parsing is not supported and should always return an error.
+	_, err := sensors.ParseCSharp(csFile)
+	if err == nil {
+		t.Fatalf("expected ParseCSharp to return an error, got nil")
 	}
 }

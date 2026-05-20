@@ -94,8 +94,3 @@ func calculateGoComplexity(fn *ast.FuncDecl) int {
 
 	return complexity
 }
-
-// IsGoFile returns true if the path points to a Go source file.
-func IsGoFile(path string) bool {
-	return len(path) > 3 && path[len(path)-3:] == ".go"
-}

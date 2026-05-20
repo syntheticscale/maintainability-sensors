@@ -121,6 +121,7 @@ func executeRun(targetPath string, jsonOutput bool, githubPR bool, markdownOut s
 		// Directory Scan
 		err = filepath.Walk(absPath, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
+				fmt.Fprintf(os.Stderr, "[WARNING] Cannot access %s: %v\n", path, err)
 				return nil
 			}
 			if info.IsDir() {
@@ -137,9 +138,11 @@ func executeRun(targetPath string, jsonOutput bool, githubPR bool, markdownOut s
 			}
 
 			res, err := sensors.OrchestratedScan(path)
-			if err == nil {
-				results = append(results, res)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "[WARNING] Scan failed for %s: %v\n", path, err)
+				return nil
 			}
+			results = append(results, res)
 			return nil
 		})
 
@@ -154,7 +157,11 @@ func executeRun(targetPath string, jsonOutput bool, githubPR bool, markdownOut s
 		}
 
 		if jsonOutput {
-			data, _ := json.MarshalIndent(results, "", "  ")
+			data, err := json.MarshalIndent(results, "", "  ")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "[ERROR] Failed to marshal JSON: %v\n", err)
+				os.Exit(1)
+			}
 			fmt.Println(string(data))
 		} else {
 			// Pretty print summary table
@@ -225,38 +232,9 @@ func executeRun(targetPath string, jsonOutput bool, githubPR bool, markdownOut s
 		}
 	}
 
-	if markdownOut != "" {
-		scorecard := GenerateMarkdownScorecard(results)
-		err := os.WriteFile(markdownOut, []byte(scorecard), 0644)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Failed to write markdown scorecard: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("[SUCCESS] Saved markdown report to %s\n", markdownOut)
-	}
-
-	if jsonOutFile != "" {
-		data, err := json.MarshalIndent(results, "", "  ")
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Failed to marshal JSON: %v\n", err)
-			os.Exit(1)
-		}
-		err = os.WriteFile(jsonOutFile, data, 0644)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Failed to write JSON scorecard: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("[SUCCESS] Saved JSON report to %s\n", jsonOutFile)
-	}
-
-	if htmlOut != "" {
-		htmlScorecard := GenerateHTMLScorecard(results)
-		err := os.WriteFile(htmlOut, []byte(htmlScorecard), 0644)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Failed to write HTML scorecard: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("[SUCCESS] Saved HTML report to %s\n", htmlOut)
+	if err := writeReports(results, markdownOut, jsonOutFile, htmlOut, "Saved"); err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+		os.Exit(1)
 	}
 }
 
@@ -266,6 +244,34 @@ func executeBootstrap(targetPath string) {
 		fmt.Fprintf(os.Stderr, "[ERROR] Bootstrap failed: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func writeReports(results []sensors.OrchestratorResult, markdownOut, jsonOut, htmlOut, actionVerb string) error {
+	if markdownOut != "" {
+		scorecard := GenerateMarkdownScorecard(results)
+		if err := os.WriteFile(markdownOut, []byte(scorecard), 0644); err != nil {
+			return fmt.Errorf("failed to write markdown scorecard: %w", err)
+		}
+		fmt.Printf("[%s] %s markdown report to %s\n", strings.ToUpper(actionVerb), actionVerb, markdownOut)
+	}
+	if jsonOut != "" {
+		data, err := json.MarshalIndent(results, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal JSON: %w", err)
+		}
+		if err := os.WriteFile(jsonOut, data, 0644); err != nil {
+			return fmt.Errorf("failed to write JSON scorecard: %w", err)
+		}
+		fmt.Printf("[%s] %s JSON report to %s\n", strings.ToUpper(actionVerb), actionVerb, jsonOut)
+	}
+	if htmlOut != "" {
+		htmlScorecard := GenerateHTMLScorecard(results)
+		if err := os.WriteFile(htmlOut, []byte(htmlScorecard), 0644); err != nil {
+			return fmt.Errorf("failed to write HTML scorecard: %w", err)
+		}
+		fmt.Printf("[%s] %s HTML report to %s\n", strings.ToUpper(actionVerb), actionVerb, htmlOut)
+	}
+	return nil
 }
 
 func executeGenerate(jsonIn string, markdownOut string, htmlOut string) {
@@ -281,30 +287,19 @@ func executeGenerate(jsonIn string, markdownOut string, htmlOut string) {
 		os.Exit(1)
 	}
 
-	if markdownOut != "" {
-		scorecard := GenerateMarkdownScorecard(results)
-		err := os.WriteFile(markdownOut, []byte(scorecard), 0644)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Failed to write markdown scorecard: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("[SUCCESS] Generated markdown report from JSON at %s\n", markdownOut)
-	}
-
-	if htmlOut != "" {
-		htmlScorecard := GenerateHTMLScorecard(results)
-		err := os.WriteFile(htmlOut, []byte(htmlScorecard), 0644)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Failed to write HTML scorecard: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Printf("[SUCCESS] Generated HTML report from JSON at %s\n", htmlOut)
+	if err := writeReports(results, markdownOut, "", htmlOut, "Generated"); err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+		os.Exit(1)
 	}
 }
 
 func printScanResult(res sensors.OrchestratorResult, jsonOutput bool) {
 	if jsonOutput {
-		data, _ := json.MarshalIndent(res, "", "  ")
+		data, err := json.MarshalIndent(res, "", "  ")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[ERROR] Failed to marshal JSON: %v\n", err)
+			return
+		}
 		fmt.Println(string(data))
 		return
 	}
@@ -323,9 +318,9 @@ func printScanResult(res sensors.OrchestratorResult, jsonOutput bool) {
 
 	fmt.Printf("Status:     ORCHESTRATED (Level 1+) ✅\n\n")
 	fmt.Printf("Maintainability Telemetry:\n")
-	fmt.Printf("- Max Cyclomatic Complexity:    %d (Limit: 8)\n", res.Metrics.Complexity)
-	fmt.Printf("- Max Function Line Count:      %d (Limit: 50)\n", res.Metrics.FunctionLength)
-	fmt.Printf("- Max Function Parameter Count: %d (Limit: 4)\n", res.Metrics.ArgumentCount)
+	fmt.Printf("- Max Cyclomatic Complexity:    %d (Limit: %d)\n", res.Metrics.Complexity, sensors.BaselineComplexity)
+	fmt.Printf("- Max Function Line Count:      %d (Limit: %d)\n", res.Metrics.FunctionLength, sensors.BaselineFunctionLength)
+	fmt.Printf("- Max Function Parameter Count: %d (Limit: %d)\n", res.Metrics.ArgumentCount, sensors.BaselineArgumentCount)
 
 	// Output specific self-correction guidance blocks (Fowler article style)
 	printSelfCorrectionGuidance(res)
@@ -348,17 +343,17 @@ func printSelfCorrectionGuidance(res sensors.OrchestratorResult) {
 	hasViolation := false
 	var guidance []string
 
-	if res.Metrics.Complexity > 8 {
+	if res.Metrics.Complexity > sensors.BaselineComplexity {
 		hasViolation = true
-		guidance = append(guidance, fmt.Sprintf("  * Complexity is %d (Max 8). Nudge coding agent to extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity))
+		guidance = append(guidance, fmt.Sprintf("  * Complexity is %d (Max %d). Nudge coding agent to extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, sensors.BaselineComplexity))
 	}
-	if res.Metrics.FunctionLength > 50 {
+	if res.Metrics.FunctionLength > sensors.BaselineFunctionLength {
 		hasViolation = true
-		guidance = append(guidance, fmt.Sprintf("  * Function lines is %d (Max 50). Nudge coding agent to modularize this block into separate functional components.", res.Metrics.FunctionLength))
+		guidance = append(guidance, fmt.Sprintf("  * Function lines is %d (Max %d). Nudge coding agent to modularize this block into separate functional components.", res.Metrics.FunctionLength, sensors.BaselineFunctionLength))
 	}
-	if res.Metrics.ArgumentCount > 4 {
+	if res.Metrics.ArgumentCount > sensors.BaselineArgumentCount {
 		hasViolation = true
-		guidance = append(guidance, fmt.Sprintf("  * Parameter count is %d (Max 4). Nudge coding agent to bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount))
+		guidance = append(guidance, fmt.Sprintf("  * Parameter count is %d (Max %d). Nudge coding agent to bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, sensors.BaselineArgumentCount))
 	}
 
 	if hasViolation {

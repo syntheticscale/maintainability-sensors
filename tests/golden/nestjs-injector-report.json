@@ -7,5 +7,5 @@
     "function_length": 0,
     "argument_count": 0
   },
-  "message": "Orchestration error (ESLint): failed to parse ESLint JSON output: unexpected end of JSON input. (Verify dependencies are installed)"
+  "message": "Orchestration error (ESLint): failed to parse ESLint JSON output: invalid character 'O' looking for beginning of value. (Verify dependencies are installed)"
 }

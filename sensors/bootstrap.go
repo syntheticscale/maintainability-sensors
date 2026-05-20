@@ -12,10 +12,10 @@ const (
   "parser": "@typescript-eslint/parser",
   "plugins": ["@typescript-eslint"],
   "rules": {
-    "complexity": ["error", 8],
-    "max-params": ["error", 4],
-    "max-lines-per-function": ["error", { "max": 50, "skipBlankLines": true, "skipComments": true }],
-    "max-lines": ["error", { "max": 300, "skipBlankLines": true, "skipComments": true }],
+    "complexity": ["error", %d],
+    "max-params": ["error", %d],
+    "max-lines-per-function": ["error", { "max": %d, "skipBlankLines": true, "skipComments": true }],
+    "max-lines": ["error", { "max": %d, "skipBlankLines": true, "skipComments": true }],
     "@typescript-eslint/no-explicit-any": "warn"
   }
 }
@@ -25,10 +25,10 @@ const (
 load-plugins=pylint.extensions.mccabe
 
 [DESIGN]
-max-args=4
-max-statements=50
-max-complexity=8
-max-module-lines=300
+max-args=%d
+max-statements=%d
+max-complexity=%d
+max-module-lines=%d
 `
 
 	golangciTemplate = `run:
@@ -36,12 +36,12 @@ max-module-lines=300
 
 linters-settings:
   gocognit:
-    min-complexity: 8
+    min-complexity: %d
   funlen:
-    lines: 50
+    lines: %d
     statements: 40
   gocyclo:
-    min-complexity: 8
+    min-complexity: %d
   lll:
     line-length: 120
 
@@ -60,22 +60,22 @@ linters:
 <module name="Checker">
   <property name="severity" value="warning"/>
   <module name="TreeWalker">
-    <!-- Cyclomatic Complexity Limit: max 8 -->
+    <!-- Cyclomatic Complexity Limit: max %d -->
     <module name="CyclomaticComplexity">
-      <property name="max" value="8"/>
+      <property name="max" value="%d"/>
     </module>
-    <!-- Method Parameter (Argument) Count Limit: max 4 -->
+    <!-- Method Parameter (Argument) Count Limit: max %d -->
     <module name="ParameterNumber">
-      <property name="max" value="4"/>
+      <property name="max" value="%d"/>
     </module>
-    <!-- Method Length (Function Length) Limit: max 50 lines -->
+    <!-- Method Length (Function Length) Limit: max %d lines -->
     <module name="MethodLength">
-      <property name="max" value="50"/>
+      <property name="max" value="%d"/>
       <property name="countEmpty" value="false"/>
     </module>
-    <!-- File Length Limit: max 300 lines -->
+    <!-- File Length Limit: max %d lines -->
     <module name="FileLength">
-      <property name="max" value="300"/>
+      <property name="max" value="%d"/>
     </module>
   </module>
 </module>
@@ -83,20 +83,20 @@ linters:
 
 	rubocopTemplate = `# Pristine RuboCop Maintainability Rules
 Metrics/CyclomaticComplexity:
-  Max: 8
+  Max: %d
   Enabled: true
 
 Metrics/MethodLength:
-  Max: 50
+  Max: %d
   CountComments: false
   Enabled: true
 
 Metrics/ParameterLists:
-  Max: 4
+  Max: %d
   Enabled: true
 
 Metrics/ModuleLength:
-  Max: 300
+  Max: %d
   Enabled: true
 `
 
@@ -104,9 +104,9 @@ Metrics/ModuleLength:
 root = true
 
 [*.cs]
-# Roslyn CA1502: Avoid excessive cyclomatic complexity (Limit: 8)
+# Roslyn CA1502: Avoid excessive cyclomatic complexity (Limit: %d)
 dotnet_diagnostic.CA1502.severity = warning
-dotnet_code_quality.CA1502.maximum_cyclomatic_complexity = 8
+dotnet_code_quality.CA1502.maximum_cyclomatic_complexity = %d
 
 # Roslyn CA1506: Avoid excessive class coupling
 dotnet_diagnostic.CA1506.severity = warning
@@ -147,13 +147,13 @@ func BootstrapRepo(repoPath string) error {
 	case "tsjs":
 		eslintPath := filepath.Join(absPath, ".eslintrc.json")
 		if _, err := os.Stat(eslintPath); err == nil {
-			printExistingConfigBanner(".eslintrc.json", `
-- "complexity": ["error", 8]
-- "max-params": ["error", 4]
-- "max-lines-per-function": ["error", { "max": 50 }]
-- "max-lines": ["error", { "max": 300 }]`)
+			printExistingConfigBanner(".eslintrc.json", fmt.Sprintf(`
+- "complexity": ["error", %d]
+- "max-params": ["error", %d]
+- "max-lines-per-function": ["error", { "max": %d }]
+- "max-lines": ["error", { "max": %d }]`, BaselineComplexity, BaselineArgumentCount, BaselineFunctionLength, BaselineFileLength))
 		} else {
-			if err := os.WriteFile(eslintPath, []byte(eslintTemplate), 0644); err != nil {
+			if err := os.WriteFile(eslintPath, []byte(fmt.Sprintf(eslintTemplate, BaselineComplexity, BaselineArgumentCount, BaselineFunctionLength, BaselineFileLength)), 0644); err != nil {
 				return fmt.Errorf("failed to write .eslintrc.json: %w", err)
 			}
 			fmt.Printf("- [CREATED] .eslintrc.json (Pristine Maintainability Rule Suite)\n\n")
@@ -163,13 +163,13 @@ func BootstrapRepo(repoPath string) error {
 	case "python":
 		pylintPath := filepath.Join(absPath, ".pylintrc")
 		if _, err := os.Stat(pylintPath); err == nil {
-			printExistingConfigBanner(".pylintrc", `
+			printExistingConfigBanner(".pylintrc", fmt.Sprintf(`
 - [DESIGN]
-  max-args=4
-  max-statements=50
-  max-complexity=8`)
+  max-args=%d
+  max-statements=%d
+  max-complexity=%d`, BaselineArgumentCount, BaselineFunctionLength, BaselineComplexity))
 		} else {
-			if err := os.WriteFile(pylintPath, []byte(pylintTemplate), 0644); err != nil {
+			if err := os.WriteFile(pylintPath, []byte(fmt.Sprintf(pylintTemplate, BaselineArgumentCount, BaselineFunctionLength, BaselineComplexity, BaselineFileLength)), 0644); err != nil {
 				return fmt.Errorf("failed to write .pylintrc: %w", err)
 			}
 			fmt.Printf("- [CREATED] .pylintrc (Pristine McCabe / PyLint Complexity Rules)\n\n")
@@ -179,12 +179,12 @@ func BootstrapRepo(repoPath string) error {
 	case "go":
 		gociPath := filepath.Join(absPath, ".golangci.yml")
 		if _, err := os.Stat(gociPath); err == nil {
-			printExistingConfigBanner(".golangci.yml", `
-- gocognit: { min-complexity: 8 }
-- funlen: { lines: 50 }
-- gocyclo: { min-complexity: 8 }`)
+			printExistingConfigBanner(".golangci.yml", fmt.Sprintf(`
+- gocognit: { min-complexity: %d }
+- funlen: { lines: %d }
+- gocyclo: { min-complexity: %d }`, BaselineComplexity, BaselineFunctionLength, BaselineComplexity))
 		} else {
-			if err := os.WriteFile(gociPath, []byte(golangciTemplate), 0644); err != nil {
+			if err := os.WriteFile(gociPath, []byte(fmt.Sprintf(golangciTemplate, BaselineComplexity, BaselineFunctionLength, BaselineComplexity)), 0644); err != nil {
 				return fmt.Errorf("failed to write .golangci.yml: %w", err)
 			}
 			fmt.Printf("- [CREATED] .golangci.yml (Pristine Go Vet / Gocognit Complexity Rules)\n\n")
@@ -194,12 +194,12 @@ func BootstrapRepo(repoPath string) error {
 	case "java":
 		checkPath := filepath.Join(absPath, "checkstyle.xml")
 		if _, err := os.Stat(checkPath); err == nil {
-			printExistingConfigBanner("checkstyle.xml", `
-- <module name="CyclomaticComplexity"> <property name="max" value="8"/> </module>
-- <module name="ParameterNumber"> <property name="max" value="4"/> </module>
-- <module name="MethodLength"> <property name="max" value="50"/> </module>`)
+			printExistingConfigBanner("checkstyle.xml", fmt.Sprintf(`
+- <module name="CyclomaticComplexity"> <property name="max" value="%d"/> </module>
+- <module name="ParameterNumber"> <property name="max" value="%d"/> </module>
+- <module name="MethodLength"> <property name="max" value="%d"/> </module>`, BaselineComplexity, BaselineArgumentCount, BaselineFunctionLength))
 		} else {
-			if err := os.WriteFile(checkPath, []byte(checkstyleTemplate), 0644); err != nil {
+			if err := os.WriteFile(checkPath, []byte(fmt.Sprintf(checkstyleTemplate, BaselineComplexity, BaselineComplexity, BaselineArgumentCount, BaselineArgumentCount, BaselineFunctionLength, BaselineFunctionLength, BaselineFileLength, BaselineFileLength)), 0644); err != nil {
 				return fmt.Errorf("failed to write checkstyle.xml: %w", err)
 			}
 			fmt.Printf("- [CREATED] checkstyle.xml (Pristine Java Checkstyle Complexity Rules)\n\n")
@@ -209,12 +209,12 @@ func BootstrapRepo(repoPath string) error {
 	case "ruby":
 		ruboPath := filepath.Join(absPath, ".rubocop.yml")
 		if _, err := os.Stat(ruboPath); err == nil {
-			printExistingConfigBanner(".rubocop.yml", `
-- Metrics/CyclomaticComplexity: { Max: 8 }
-- Metrics/MethodLength: { Max: 50 }
-- Metrics/ParameterLists: { Max: 4 }`)
+			printExistingConfigBanner(".rubocop.yml", fmt.Sprintf(`
+- Metrics/CyclomaticComplexity: { Max: %d }
+- Metrics/MethodLength: { Max: %d }
+- Metrics/ParameterLists: { Max: %d }`, BaselineComplexity, BaselineFunctionLength, BaselineArgumentCount))
 		} else {
-			if err := os.WriteFile(ruboPath, []byte(rubocopTemplate), 0644); err != nil {
+			if err := os.WriteFile(ruboPath, []byte(fmt.Sprintf(rubocopTemplate, BaselineComplexity, BaselineFunctionLength, BaselineArgumentCount, BaselineFileLength)), 0644); err != nil {
 				return fmt.Errorf("failed to write .rubocop.yml: %w", err)
 			}
 			fmt.Printf("- [CREATED] .rubocop.yml (Pristine Ruby RuboCop Complexity Rules)\n\n")
@@ -224,11 +224,11 @@ func BootstrapRepo(repoPath string) error {
 	case "csharp":
 		editorPath := filepath.Join(absPath, ".editorconfig")
 		if _, err := os.Stat(editorPath); err == nil {
-			printExistingConfigBanner(".editorconfig", `
-- dotnet_code_quality.CA1502.maximum_cyclomatic_complexity = 8
-- dotnet_diagnostic.CA1502.severity = warning`)
+			printExistingConfigBanner(".editorconfig", fmt.Sprintf(`
+- dotnet_code_quality.CA1502.maximum_cyclomatic_complexity = %d
+- dotnet_diagnostic.CA1502.severity = warning`, BaselineComplexity))
 		} else {
-			if err := os.WriteFile(editorPath, []byte(editorconfigTemplate), 0644); err != nil {
+			if err := os.WriteFile(editorPath, []byte(fmt.Sprintf(editorconfigTemplate, BaselineComplexity, BaselineComplexity)), 0644); err != nil {
 				return fmt.Errorf("failed to write .editorconfig: %w", err)
 			}
 			fmt.Printf("- [CREATED] .editorconfig (Pristine Microsoft C# EditorConfig Analyzers)\n\n")

@@ -65,22 +65,19 @@ func OrchestratedScan(filePath string) (OrchestratorResult, error) {
 		return result, nil
 	}
 
-	// 1b. If C# (csharp), run native high-assurance parsing instantly
+	// 1b. C# requires external tooling (.NET analyzers). Native parsing is not supported.
 	if result.Language == "csharp" {
-		metrics, err := ParseCSharp(filePath)
-		if err != nil {
-			return result, fmt.Errorf("native C# parse error: %w", err)
-		}
-		result.ToolingDetected = true
-		result.Metrics = MaintainabilityMetrics{
-			Complexity:     metrics.Complexity,
-			FunctionLength: metrics.FunctionLength,
-			ArgumentCount:  metrics.ArgumentCount,
-		}
-		configAnchor := detectConfig(filePath, "csharp")
-		if configAnchor != "" {
-			result.Exceptions = detectRelaxedLimits(configAnchor, "csharp")
-		}
+		result.ToolingDetected = false
+		result.Message = fmt.Sprintf("[WARNING] C# analysis requires external tooling (e.g., dotnet build with Roslyn analyzers or IDE analyzers). Native parsing is not supported for '%s'.", filepath.Base(filePath))
+		fmt.Fprintln(os.Stderr, result.Message)
+		return result, nil
+	}
+
+	// 1c. Java requires external tooling (Checkstyle/Maven/Gradle). Native parsing is not supported.
+	if result.Language == "java" {
+		result.ToolingDetected = false
+		result.Message = fmt.Sprintf("[WARNING] Java analysis requires external tooling (e.g., Checkstyle via Maven/Gradle). Native parsing is not supported for '%s'.", filepath.Base(filePath))
+		fmt.Fprintln(os.Stderr, result.Message)
 		return result, nil
 	}
 
@@ -138,6 +135,8 @@ func detectLanguage(path string) string {
 		return "go"
 	case ".rb":
 		return "ruby"
+	case ".java":
+		return "java"
 	case ".cs":
 		return "csharp"
 	}
@@ -161,8 +160,6 @@ func detectConfig(filePath string, lang string) string {
 		anchors = []string{".golangci.yml", "golangci.yml"}
 	case "ruby":
 		anchors = []string{".rubocop.yml", "Gemfile"}
-	case "csharp":
-		anchors = []string{".editorconfig"}
 	}
 
 	for {
@@ -345,46 +342,41 @@ func detectRelaxedLimits(configPath string, lang string) []RelaxedLimit {
 		return exceptions
 	}
 	content := string(data)
+	ext := filepath.Ext(configPath)
 
 	// 1. Cyclomatic Complexity (baseline: 8)
 	var complexityVal int
 	var foundComplexity bool
 	if lang == "typescript" || lang == "javascript" {
-		vals := findAllConfigVals(content, "complexity")
+		vals := findAllConfigVals(content, "complexity", ext)
 		if len(vals) > 0 {
 			complexityVal = maxOf(vals)
 			foundComplexity = true
 		}
 	} else if lang == "python" {
-		vals := findAllConfigVals(content, "max-complexity")
+		vals := findAllConfigVals(content, "max-complexity", ext)
 		if len(vals) > 0 {
 			complexityVal = maxOf(vals)
 			foundComplexity = true
 		}
 	} else if lang == "go" {
-		vals := findAllConfigVals(content, "min-complexity")
+		vals := findAllConfigVals(content, "min-complexity", ext)
 		if len(vals) > 0 {
 			complexityVal = maxOf(vals)
 			foundComplexity = true
 		}
 	} else if lang == "ruby" {
-		vals := findAllConfigVals(content, "CyclomaticComplexity")
-		if len(vals) > 0 {
-			complexityVal = maxOf(vals)
-			foundComplexity = true
-		}
-	} else if lang == "csharp" {
-		vals := findAllConfigVals(content, "maximum_cyclomatic_complexity")
+		vals := findAllConfigVals(content, "CyclomaticComplexity", ext)
 		if len(vals) > 0 {
 			complexityVal = maxOf(vals)
 			foundComplexity = true
 		}
 	}
-	if foundComplexity && complexityVal > 8 {
+	if foundComplexity && complexityVal > BaselineComplexity {
 		exceptions = append(exceptions, RelaxedLimit{
 			RuleName:      "Cyclomatic Complexity",
 			ConfiguredVal: complexityVal,
-			BaselineVal:   8,
+			BaselineVal:   BaselineComplexity,
 		})
 	}
 
@@ -392,35 +384,35 @@ func detectRelaxedLimits(configPath string, lang string) []RelaxedLimit {
 	var funcLenVal int
 	var foundFuncLen bool
 	if lang == "typescript" || lang == "javascript" {
-		vals := findAllConfigVals(content, "max-lines-per-function")
+		vals := findAllConfigVals(content, "max-lines-per-function", ext)
 		if len(vals) > 0 {
 			funcLenVal = maxOf(vals)
 			foundFuncLen = true
 		}
 	} else if lang == "python" {
-		vals := findAllConfigVals(content, "max-statements")
+		vals := findAllConfigVals(content, "max-statements", ext)
 		if len(vals) > 0 {
 			funcLenVal = maxOf(vals)
 			foundFuncLen = true
 		}
 	} else if lang == "go" {
-		vals := findAllConfigVals(content, "lines")
+		vals := findAllConfigVals(content, "lines", ext)
 		if len(vals) > 0 {
 			funcLenVal = maxOf(vals)
 			foundFuncLen = true
 		}
 	} else if lang == "ruby" {
-		vals := findAllConfigVals(content, "MethodLength")
+		vals := findAllConfigVals(content, "MethodLength", ext)
 		if len(vals) > 0 {
 			funcLenVal = maxOf(vals)
 			foundFuncLen = true
 		}
 	}
-	if foundFuncLen && funcLenVal > 50 {
+	if foundFuncLen && funcLenVal > BaselineFunctionLength {
 		exceptions = append(exceptions, RelaxedLimit{
 			RuleName:      "Function Length",
 			ConfiguredVal: funcLenVal,
-			BaselineVal:   50,
+			BaselineVal:   BaselineFunctionLength,
 		})
 	}
 
@@ -428,29 +420,29 @@ func detectRelaxedLimits(configPath string, lang string) []RelaxedLimit {
 	var argCountVal int
 	var foundArgCount bool
 	if lang == "typescript" || lang == "javascript" {
-		vals := findAllConfigVals(content, "max-params")
+		vals := findAllConfigVals(content, "max-params", ext)
 		if len(vals) > 0 {
 			argCountVal = maxOf(vals)
 			foundArgCount = true
 		}
 	} else if lang == "python" {
-		vals := findAllConfigVals(content, "max-args")
+		vals := findAllConfigVals(content, "max-args", ext)
 		if len(vals) > 0 {
 			argCountVal = maxOf(vals)
 			foundArgCount = true
 		}
 	} else if lang == "ruby" {
-		vals := findAllConfigVals(content, "ParameterLists")
+		vals := findAllConfigVals(content, "ParameterLists", ext)
 		if len(vals) > 0 {
 			argCountVal = maxOf(vals)
 			foundArgCount = true
 		}
 	}
-	if foundArgCount && argCountVal > 4 {
+	if foundArgCount && argCountVal > BaselineArgumentCount {
 		exceptions = append(exceptions, RelaxedLimit{
 			RuleName:      "Argument Count",
 			ConfiguredVal: argCountVal,
-			BaselineVal:   4,
+			BaselineVal:   BaselineArgumentCount,
 		})
 	}
 
@@ -458,52 +450,95 @@ func detectRelaxedLimits(configPath string, lang string) []RelaxedLimit {
 	var fileLenVal int
 	var foundFileLen bool
 	if lang == "typescript" || lang == "javascript" {
-		vals := findAllConfigVals(content, "max-lines")
+		vals := findAllConfigVals(content, "max-lines", ext)
 		if len(vals) > 0 {
 			fileLenVal = maxOf(vals)
 			foundFileLen = true
 		}
 	} else if lang == "python" {
-		vals := findAllConfigVals(content, "max-module-lines")
+		vals := findAllConfigVals(content, "max-module-lines", ext)
 		if len(vals) > 0 {
 			fileLenVal = maxOf(vals)
 			foundFileLen = true
 		}
 	} else if lang == "ruby" {
-		vals := findAllConfigVals(content, "ModuleLength")
+		vals := findAllConfigVals(content, "ModuleLength", ext)
 		if len(vals) > 0 {
 			fileLenVal = maxOf(vals)
 			foundFileLen = true
 		}
 	}
-	if foundFileLen && fileLenVal > 300 {
+	if foundFileLen && fileLenVal > BaselineFileLength {
 		exceptions = append(exceptions, RelaxedLimit{
 			RuleName:      "File Length",
 			ConfiguredVal: fileLenVal,
-			BaselineVal:   300,
+			BaselineVal:   BaselineFileLength,
 		})
 	}
 
 	return exceptions
 }
 
-func findAllConfigVals(content string, key string) []int {
-	var pattern string
-	if key == "max-lines" {
-		pattern = `\bmax-lines\b[^-][^\d]{0,100}?(\d+)`
-	} else {
-		pattern = `\b` + regexp.QuoteMeta(key) + `\b[^\d]{0,100}?(\d+)`
+func findAllConfigVals(content string, key string, ext string) []int {
+	if ext == ".json" {
+		return findAllConfigValsJSON(content, key)
 	}
-	re := regexp.MustCompile(pattern)
-	matches := re.FindAllStringSubmatch(content, -1)
+
+	// Line-oriented approach for INI/YAML-style files
 	var vals []int
-	for _, m := range matches {
-		if len(m) > 1 {
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
+			continue
+		}
+		if !strings.Contains(line, key) {
+			continue
+		}
+		// Require the key to be a whole word and not followed immediately by a hyphen
+		pattern := `\b` + regexp.QuoteMeta(key) + `\b[^-\d]*?(\d+)`
+		re := regexp.MustCompile(pattern)
+		if matches := re.FindStringSubmatch(line); len(matches) > 1 {
 			var val int
-			if _, err := fmt.Sscanf(m[1], "%d", &val); err == nil {
+			if _, err := fmt.Sscanf(matches[1], "%d", &val); err == nil {
 				vals = append(vals, val)
 			}
 		}
+	}
+	return vals
+}
+
+func findAllConfigValsJSON(content string, key string) []int {
+	var vals []int
+	var walk func(interface{})
+	walk = func(v interface{}) {
+		switch val := v.(type) {
+		case map[string]interface{}:
+			for k, vv := range val {
+				if k == key {
+					switch actual := vv.(type) {
+					case float64:
+						vals = append(vals, int(actual))
+					case []interface{}:
+						for _, item := range actual {
+							if f, ok := item.(float64); ok {
+								vals = append(vals, int(f))
+							}
+						}
+					}
+				}
+				walk(vv)
+			}
+		case []interface{}:
+			for _, item := range val {
+				walk(item)
+			}
+		}
+	}
+
+	var data interface{}
+	if err := json.Unmarshal([]byte(content), &data); err == nil {
+		walk(data)
 	}
 	return vals
 }

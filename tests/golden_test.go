@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -30,8 +31,10 @@ func TestGoldenSnapshots(t *testing.T) {
 		t.Skip("skipping golden snapshots test in short mode")
 	}
 
-	cacheDir := "/home/paulo/code/maintainability-sensors/.cache"
-	goldenDir := "/home/paulo/code/maintainability-sensors/tests/golden"
+	_, filename, _, _ := runtime.Caller(0)
+	repoRoot := filepath.Dir(filepath.Dir(filename))
+	cacheDir := filepath.Join(repoRoot, ".cache")
+	goldenDir := filepath.Join(repoRoot, "tests", "golden")
 
 	// Ensure directories exist
 	_ = os.MkdirAll(cacheDir, 0755)

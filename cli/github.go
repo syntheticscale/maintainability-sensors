@@ -47,14 +47,14 @@ func GenerateMarkdownScorecard(results []sensors.OrchestratorResult) string {
 			continue
 		}
 		var filePrompts []string
-		if res.Metrics.Complexity > 8 {
-			filePrompts = append(filePrompts, fmt.Sprintf("  * Complexity is %d (Max 8). Nudge coding agent to extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity))
+		if res.Metrics.Complexity > sensors.BaselineComplexity {
+			filePrompts = append(filePrompts, fmt.Sprintf("  * Complexity is %d (Max %d). Nudge coding agent to extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, sensors.BaselineComplexity))
 		}
-		if res.Metrics.FunctionLength > 50 {
-			filePrompts = append(filePrompts, fmt.Sprintf("  * Function lines is %d (Max 50). Nudge coding agent to modularize this block into separate functional components.", res.Metrics.FunctionLength))
+		if res.Metrics.FunctionLength > sensors.BaselineFunctionLength {
+			filePrompts = append(filePrompts, fmt.Sprintf("  * Function lines is %d (Max %d). Nudge coding agent to modularize this block into separate functional components.", res.Metrics.FunctionLength, sensors.BaselineFunctionLength))
 		}
-		if res.Metrics.ArgumentCount > 4 {
-			filePrompts = append(filePrompts, fmt.Sprintf("  * Parameter count is %d (Max 4). Nudge coding agent to bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount))
+		if res.Metrics.ArgumentCount > sensors.BaselineArgumentCount {
+			filePrompts = append(filePrompts, fmt.Sprintf("  * Parameter count is %d (Max %d). Nudge coding agent to bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, sensors.BaselineArgumentCount))
 		}
 
 		if len(filePrompts) > 0 {
@@ -148,7 +148,7 @@ func PostGitHubPRComment(scorecard string) error {
 
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version: 2022-11-28", "")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 	req.Header.Set("User-Agent", "Maintainability-Sensors-CLI")
 	req.Header.Set("Content-Type", "application/json")
 
