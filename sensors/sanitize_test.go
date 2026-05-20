@@ -82,23 +82,4 @@ func TestOrchestratedScan_RejectTraversalPath(t *testing.T) {
 	}
 }
 
-func TestRunESLint_RejectBadPath(t *testing.T) {
-	_, err := runESLint("../etc/passwd")
-	if err == nil {
-		t.Fatal("expected runESLint to reject traversal path")
-	}
-}
 
-func TestRunPyLint_RejectBadPath(t *testing.T) {
-	_, err := runPyLint("../etc/passwd")
-	if err == nil {
-		t.Fatal("expected runPyLint to reject traversal path")
-	}
-}
-
-func TestRunRuboCop_RejectBadPath(t *testing.T) {
-	_, err := runRuboCop("../etc/passwd")
-	if err == nil {
-		t.Fatal("expected runRuboCop to reject traversal path")
-	}
-}

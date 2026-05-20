@@ -25,7 +25,7 @@ BASENAME=$(basename "$FILE")
 case "$BASENAME" in
   *exit0*) exit 0 ;;
   *exit1_valid*)
-    echo '[{"messages":[{"ruleId":"complexity","message":"complexity of 15 (max 10)","line":1,"severity":2},{"ruleId":"max-params","message":"Function has 7 parameters","line":1,"severity":2},{"ruleId":"max-lines-per-function","message":"exceeds 80 lines","line":1,"severity":2}]}]'
+    echo '[{"filePath":"'"$FILE"'","messages":[{"ruleId":"complexity","message":"complexity of 15 (max 10)","line":1,"severity":2},{"ruleId":"max-params","message":"Function has 7 parameters","line":1,"severity":2},{"ruleId":"max-lines-per-function","message":"exceeds 80 lines","line":1,"severity":2}]}]'
     exit 1 ;;
   *exit1_invalid*)
     echo "ESLint internal error: Cannot read config file"
@@ -40,7 +40,7 @@ BASENAME=$(basename "$FILE")
 case "$BASENAME" in
   *exit0*) exit 0 ;;
   *exit1_valid*)
-    echo '[{"message":"Too many statements (72/50)","symbol":"too-many-statements","line":1},{"message":"McCabe rating is 12","symbol":"too-complex","line":1},{"message":"Too many arguments (8/5)","symbol":"too-many-arguments","line":1}]'
+    echo '[{"path":"'"$FILE"'","message":"Too many statements (72/50)","symbol":"too-many-statements","line":1},{"path":"'"$FILE"'","message":"McCabe rating is 12","symbol":"too-complex","line":1},{"path":"'"$FILE"'","message":"Too many arguments (8/5)","symbol":"too-many-arguments","line":1}]'
     exit 1 ;;
   *exit1_invalid*)
     echo "pylint crashed: invalid config"
@@ -55,7 +55,7 @@ BASENAME=$(basename "$FILE")
 case "$BASENAME" in
   *exit0*) exit 0 ;;
   *exit1_valid*)
-    echo '{"files":[{"path":"test.rb","offenses":[{"cop_name":"Metrics/CyclomaticComplexity","message":"Cyclomatic complexity is too high: [15/10]"},{"cop_name":"Metrics/MethodLength","message":"Method is too long: [100/50]"},{"cop_name":"Metrics/ParameterLists","message":"Parameter list is too long: [8/5]"}]}]}'
+    echo '{"files":[{"path":"'"$FILE"'","offenses":[{"cop_name":"Metrics/CyclomaticComplexity","message":"Cyclomatic complexity is too high: [15/10]"},{"cop_name":"Metrics/MethodLength","message":"Method is too long: [100/50]"},{"cop_name":"Metrics/ParameterLists","message":"Parameter list is too long: [8/5]"}]}]}'
     exit 1 ;;
   *exit1_invalid*)
     echo "rubocop config error"
@@ -91,7 +91,8 @@ func TestRunESLint_Subprocess(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			metrics, err := runESLint(tc.filePath)
+			metricsMap, err := runESLintBatch([]string{tc.filePath})
+			metrics := metricsMap[tc.filePath]
 			if tc.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -122,7 +123,7 @@ func TestRunESLint_Subprocess(t *testing.T) {
 		os.Setenv("PATH", emptyDir)
 		defer os.Setenv("PATH", origPath)
 
-		_, err := runESLint("test.ts")
+		_, err := runESLintBatch([]string{"test.ts"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -154,7 +155,8 @@ func TestRunPyLint_Subprocess(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			metrics, err := runPyLint(tc.filePath)
+			metricsMap, err := runPyLintBatch([]string{tc.filePath})
+			metrics := metricsMap[tc.filePath]
 			if tc.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -185,7 +187,7 @@ func TestRunPyLint_Subprocess(t *testing.T) {
 		os.Setenv("PATH", emptyDir)
 		defer os.Setenv("PATH", origPath)
 
-		_, err := runPyLint("test.py")
+		_, err := runPyLintBatch([]string{"test.py"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -217,7 +219,8 @@ func TestRunRuboCop_Subprocess(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			metrics, err := runRuboCop(tc.filePath)
+			metricsMap, err := runRuboCopBatch([]string{tc.filePath})
+			metrics := metricsMap[tc.filePath]
 			if tc.wantErr {
 				if err == nil {
 					t.Fatal("expected error, got nil")
@@ -248,7 +251,7 @@ func TestRunRuboCop_Subprocess(t *testing.T) {
 		os.Setenv("PATH", emptyDir)
 		defer os.Setenv("PATH", origPath)
 
-		_, err := runRuboCop("test.rb")
+		_, err := runRuboCopBatch([]string{"test.rb"})
 		if err == nil {
 			t.Fatal("expected error")
 		}

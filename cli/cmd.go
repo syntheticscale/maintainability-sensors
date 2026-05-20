@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/paulolai/maintainability-sensors/sensors"
+	"sync"
+	"golang.org/x/sync/errgroup"
 )
 
 // Execute runs the main CLI command-line parser.
@@ -146,19 +148,50 @@ func FindFiles(targetPath string) ([]string, bool, error) {
 }
 
 func ScanFiles(filePaths []string, isDir bool) ([]sensors.OrchestratorResult, error) {
-	var results []sensors.OrchestratorResult
-	for _, path := range filePaths {
-		res, err := sensors.OrchestratedScan(path)
-		if err != nil {
-			if !isDir {
-				return nil, fmt.Errorf("Scan failed: %v", err)
-			}
-			fmt.Fprintf(os.Stderr, "[WARNING] Scan failed for %s: %v\n", path, err)
-			continue
-		}
-		results = append(results, res)
+	groups := make(map[string][]string)
+	for _, p := range filePaths {
+		lang := sensors.DetectLanguage(p)
+		groups[lang] = append(groups[lang], p)
 	}
-	return results, nil
+
+	var allResults []sensors.OrchestratorResult
+	var mu sync.Mutex
+	var g errgroup.Group
+
+	for lang, files := range groups {
+		lang, files := lang, files
+		g.Go(func() error {
+			if lang == "" {
+				for _, f := range files {
+					if !isDir {
+						return fmt.Errorf("unsupported or unrecognized language file: %s", f)
+					}
+					fmt.Fprintf(os.Stderr, "[WARNING] Scan failed for %s: unsupported or unrecognized language file: %s\n", f, f)
+				}
+				return nil
+			}
+
+			res, err := sensors.OrchestratedScanBatch(files, lang)
+			if err != nil {
+				if !isDir {
+					return fmt.Errorf("Scan failed: %v", err)
+				}
+				fmt.Fprintf(os.Stderr, "[WARNING] Scan failed for language %s: %v\n", lang, err)
+				return nil
+			}
+
+			mu.Lock()
+			allResults = append(allResults, res...)
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	return allResults, nil
 }
 
 type RunOptions struct {

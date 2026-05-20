@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
+
+	"golang.org/x/sync/errgroup"
 )
 
 // MaintainabilityMetrics holds precise maintainability scores.
@@ -36,45 +39,90 @@ type OrchestratorResult struct {
 }
 
 func sanitizePath(path string) (string, error) {
-	// Reject null bytes outright
 	if strings.Contains(path, "\x00") {
 		return "", fmt.Errorf("invalid path: contains null byte")
 	}
-
 	clean := filepath.Clean(path)
-
-	// Reject paths that traverse above the root after cleaning.
-	// filepath.Clean("../foo") stays "../foo". We reject if it starts with "..".
 	if strings.HasPrefix(clean, "..") {
 		return "", fmt.Errorf("invalid path: traversal outside current directory denied")
 	}
-
 	return clean, nil
 }
 
-// OrchestratedScan scans a specific file. It auto-detects configuration and runs local tooling
-// (ESLint/PyLint/Go AST) or falls back to Level 0 ("Working Blind").
+// OrchestratedScan scans a specific file. It is a convenience wrapper over OrchestratedScanBatch.
 func OrchestratedScan(filePath string) (OrchestratorResult, error) {
-	filePath, err := sanitizePath(filePath)
-	if err != nil {
-		return OrchestratorResult{}, err
-	}
-
-	lang := detectLanguage(filePath)
+	lang := DetectLanguage(filePath)
 	if lang == "" {
 		return OrchestratorResult{FilePath: filePath}, fmt.Errorf("unsupported or unrecognized language file: %s", filePath)
 	}
+	results, err := OrchestratedScanBatch([]string{filePath}, lang)
+	if err != nil {
+		return OrchestratorResult{FilePath: filePath, Language: lang}, err
+	}
+	if len(results) > 0 {
+		return results[0], nil
+	}
+	return OrchestratorResult{FilePath: filePath, Language: lang}, nil
+}
 
-	result := OrchestratorResult{FilePath: filePath, Language: lang}
+// OrchestratedScanBatch scans a batch of files for a specific language concurrently.
+func OrchestratedScanBatch(filePaths []string, lang string) ([]OrchestratorResult, error) {
+	if len(filePaths) == 0 {
+		return nil, nil
+	}
+
+	validPaths := make([]string, 0, len(filePaths))
+	originalPaths := make(map[string]string)
+
+	for _, p := range filePaths {
+		clean, err := sanitizePath(p)
+		if err != nil {
+			return nil, err
+		}
+		abs, err := filepath.Abs(clean)
+		if err == nil {
+			originalPaths[abs] = p
+		}
+		originalPaths[clean] = p
+		validPaths = append(validPaths, clean)
+	}
 
 	if lang == "go" {
-		return scanGoFile(result, filePath)
-	}
-	if isExternalToolingRequired(lang) {
-		return handleExternalToolingOnly(result, filePath, lang)
+		var mu sync.Mutex
+		var g errgroup.Group
+		results := make([]OrchestratorResult, 0, len(validPaths))
+
+		for _, cleanPath := range validPaths {
+			cleanPath := cleanPath
+			g.Go(func() error {
+				res := OrchestratorResult{FilePath: originalPaths[cleanPath], Language: lang}
+				res, err := scanGoFile(res, cleanPath)
+				if err != nil {
+					return err
+				}
+				mu.Lock()
+				results = append(results, res)
+				mu.Unlock()
+				return nil
+			})
+		}
+		if err := g.Wait(); err != nil {
+			return nil, err
+		}
+		return results, nil
 	}
 
-	return scanWithLocalAnalyzers(result, filePath, lang)
+	if isExternalToolingRequired(lang) {
+		var results []OrchestratorResult
+		for _, cleanPath := range validPaths {
+			res := OrchestratorResult{FilePath: originalPaths[cleanPath], Language: lang}
+			res, _ = handleExternalToolingOnly(res, cleanPath, lang)
+			results = append(results, res)
+		}
+		return results, nil
+	}
+
+	return scanWithLocalAnalyzersBatch(validPaths, originalPaths, lang)
 }
 
 func scanGoFile(result OrchestratorResult, filePath string) (OrchestratorResult, error) {
@@ -109,46 +157,98 @@ func handleExternalToolingOnly(result OrchestratorResult, filePath, lang string)
 	return result, nil
 }
 
-func scanWithLocalAnalyzers(result OrchestratorResult, filePath, lang string) (OrchestratorResult, error) {
-	configAnchor := detectConfig(filePath, lang)
-	if configAnchor == "" {
-		result.ToolingDetected = false
-		result.Message = fmt.Sprintf("[WARNING] RUNNING BLIND (Level 0) on '%s'. No local %s static analysis config detected. Run 'bootstrap' command to fix.", filepath.Base(filePath), strings.ToUpper(lang))
-		fmt.Fprintln(os.Stderr, result.Message)
-		return result, nil
+func scanWithLocalAnalyzersBatch(validPaths []string, originalPaths map[string]string, lang string) ([]OrchestratorResult, error) {
+	var results []OrchestratorResult
+
+	var configuredPaths []string
+	var blindPaths []string
+	configAnchors := make(map[string]string)
+
+	for _, cleanPath := range validPaths {
+		anchor := detectConfig(cleanPath, lang)
+		if anchor == "" {
+			blindPaths = append(blindPaths, cleanPath)
+		} else {
+			configuredPaths = append(configuredPaths, cleanPath)
+			configAnchors[cleanPath] = anchor
+		}
 	}
 
-	result.ToolingDetected = true
-	result.Exceptions = detectRelaxedLimits(configAnchor, lang)
+	for _, cleanPath := range blindPaths {
+		orig := originalPaths[cleanPath]
+		res := OrchestratorResult{
+			FilePath:        orig,
+			Language:        lang,
+			ToolingDetected: false,
+			Message:         fmt.Sprintf("[WARNING] RUNNING BLIND (Level 0) on '%s'. No local %s static analysis config detected. Run 'bootstrap' command to fix.", filepath.Base(cleanPath), strings.ToUpper(lang)),
+		}
+		fmt.Fprintln(os.Stderr, res.Message)
+		results = append(results, res)
+	}
 
-	var metrics MaintainabilityMetrics
+	if len(configuredPaths) == 0 {
+		return results, nil
+	}
+
+	var metricsMap map[string]MaintainabilityMetrics
 	var err error
+	var batchErrorMsg string
 
 	switch lang {
 	case "typescript", "javascript":
-		metrics, err = runESLint(filePath)
+		metricsMap, err = runESLintBatch(configuredPaths)
 		if err != nil {
-			result.Message = fmt.Sprintf("Orchestration error (ESLint): %v. (Verify dependencies are installed)", err)
+			batchErrorMsg = fmt.Sprintf("Orchestration error (ESLint): %v. (Verify dependencies are installed)", err)
 		}
 	case "python":
-		metrics, err = runPyLint(filePath)
+		metricsMap, err = runPyLintBatch(configuredPaths)
 		if err != nil {
-			result.Message = fmt.Sprintf("Orchestration error (PyLint): %v. (Verify pylint is installed)", err)
+			batchErrorMsg = fmt.Sprintf("Orchestration error (PyLint): %v. (Verify pylint is installed)", err)
 		}
 	case "ruby":
-		metrics, err = runRuboCop(filePath)
+		metricsMap, err = runRuboCopBatch(configuredPaths)
 		if err != nil {
-			result.Message = fmt.Sprintf("Orchestration error (RuboCop): %v. (Verify rubocop is installed)", err)
+			batchErrorMsg = fmt.Sprintf("Orchestration error (RuboCop): %v. (Verify rubocop is installed)", err)
 		}
 	}
 
-	if err == nil {
-		result.Metrics = metrics
+	for _, cleanPath := range configuredPaths {
+		orig := originalPaths[cleanPath]
+		res := OrchestratorResult{
+			FilePath:        orig,
+			Language:        lang,
+			ToolingDetected: true,
+		}
+
+		res.Exceptions = detectRelaxedLimits(configAnchors[cleanPath], lang)
+
+		if batchErrorMsg != "" {
+			res.Message = batchErrorMsg
+		} else {
+			var m MaintainabilityMetrics
+			found := false
+
+			absClean, _ := filepath.Abs(cleanPath)
+
+			for outPath, outMetrics := range metricsMap {
+				outAbs, _ := filepath.Abs(outPath)
+				if outAbs == absClean || outPath == cleanPath || strings.HasSuffix(outAbs, cleanPath) {
+					m = outMetrics
+					found = true
+					break
+				}
+			}
+			if found {
+				res.Metrics = m
+			}
+		}
+		results = append(results, res)
 	}
-	return result, nil
+
+	return results, nil
 }
 
-func detectLanguage(path string) string {
+func DetectLanguage(path string) string {
 	ext := filepath.Ext(path)
 	switch ext {
 	case ".ts", ".tsx":
@@ -169,7 +269,6 @@ func detectLanguage(path string) string {
 	return ""
 }
 
-// parserRegistry maps a language string to its ConfigParser implementation.
 func getParserForLang(lang string) ConfigParser {
 	switch lang {
 	case "typescript", "javascript":
@@ -240,35 +339,34 @@ func updateMetric(metric *int, valStr string) {
 	}
 }
 
-func runESLint(filePath string) (MaintainabilityMetrics, error) {
-	var metrics MaintainabilityMetrics
-
-	filePath, err := sanitizePath(filePath)
-	if err != nil {
-		return metrics, err
-	}
-
-	output, exitCode, err := runLintCommand("npx", "eslint", "-f", "json", filePath)
+func runESLintBatch(filePaths []string) (map[string]MaintainabilityMetrics, error) {
+	args := []string{"eslint", "-f", "json"}
+	args = append(args, filePaths...)
+	output, exitCode, err := runLintCommand("npx", args...)
 	if err != nil && exitCode == 0 {
-		return metrics, fmt.Errorf("ESLint error: %w", err)
+		return nil, fmt.Errorf("ESLint error: %w", err)
 	}
 
-	if exitCode == 0 {
-		return metrics, nil
-	}
-
-	if exitCode == 1 {
-		if parseErr := parseESLintOutput(output, &metrics); parseErr == nil {
-			return metrics, nil
+	if exitCode == 0 || exitCode == 1 {
+		var metricsMap map[string]MaintainabilityMetrics
+		if len(output) > 0 {
+			metricsMap, err = parseESLintOutputBatch(output)
+			if err != nil && exitCode == 1 {
+				return nil, fmt.Errorf("ESLint crashed or encountered a configuration error (exit code 1): %s", strings.TrimSpace(string(output)))
+			}
 		}
-		return metrics, fmt.Errorf("ESLint crashed or encountered a configuration error (exit code 1): %s", strings.TrimSpace(string(output)))
+		if metricsMap == nil {
+			metricsMap = make(map[string]MaintainabilityMetrics)
+		}
+		return metricsMap, nil
 	}
 
-	return metrics, fmt.Errorf("ESLint exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
+	return nil, fmt.Errorf("ESLint exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 }
 
-func parseESLintOutput(output []byte, metrics *MaintainabilityMetrics) error {
+func parseESLintOutputBatch(output []byte) (map[string]MaintainabilityMetrics, error) {
 	var list []struct {
+		FilePath string `json:"filePath"`
 		Messages []struct {
 			RuleID   string `json:"ruleId"`
 			Message  string `json:"message"`
@@ -276,15 +374,17 @@ func parseESLintOutput(output []byte, metrics *MaintainabilityMetrics) error {
 			Severity int    `json:"severity"`
 		} `json:"messages"`
 	}
-	if err := json.Unmarshal(output, &list); err != nil || len(list) == 0 {
-		return fmt.Errorf("invalid json or empty")
+	if err := json.Unmarshal(output, &list); err != nil {
+		return nil, err
 	}
 
+	metricsMap := make(map[string]MaintainabilityMetrics)
 	reComplexity := regexp.MustCompile(`complexity of (\d+)`)
 	reParams := regexp.MustCompile(`has (\d+) parameters`)
 	reLines := regexp.MustCompile(`exceeds (\d+) lines`)
 
 	for _, result := range list {
+		var metrics MaintainabilityMetrics
 		for _, msg := range result.Messages {
 			if matches := reComplexity.FindStringSubmatch(msg.Message); matches != nil {
 				updateMetric(&metrics.Complexity, matches[1])
@@ -296,56 +396,62 @@ func parseESLintOutput(output []byte, metrics *MaintainabilityMetrics) error {
 				updateMetric(&metrics.FunctionLength, matches[1])
 			}
 		}
+		metricsMap[result.FilePath] = metrics
 	}
-	return nil
+	return metricsMap, nil
 }
 
-func runPyLint(filePath string) (MaintainabilityMetrics, error) {
-	var metrics MaintainabilityMetrics
-
-	filePath, err := sanitizePath(filePath)
-	if err != nil {
-		return metrics, err
-	}
-
-	output, exitCode, err := runLintCommand("pylint", "--output-format=json", filePath)
+func runPyLintBatch(filePaths []string) (map[string]MaintainabilityMetrics, error) {
+	args := []string{"--output-format=json"}
+	args = append(args, filePaths...)
+	output, exitCode, err := runLintCommand("pylint", args...)
 	if err != nil && exitCode == 0 {
-		return metrics, fmt.Errorf("pylint error: %w", err)
+		return nil, fmt.Errorf("pylint error: %w", err)
 	}
 
-	if exitCode == 0 {
-		return metrics, nil
-	}
-
-	if exitCode >= 1 {
-		if parseErr := parsePyLintOutput(output, &metrics); parseErr == nil {
-			return metrics, nil
+	if exitCode >= 0 {
+		var metricsMap map[string]MaintainabilityMetrics
+		if len(output) > 0 {
+			metricsMap, _ = parsePyLintOutputBatch(output)
 		}
-		return metrics, fmt.Errorf("pylint crashed or encountered a configuration error (exit code %d): %s", exitCode, strings.TrimSpace(string(output)))
+		if metricsMap == nil {
+			metricsMap = make(map[string]MaintainabilityMetrics)
+		}
+		if exitCode > 0 && len(metricsMap) == 0 {
+			if parseErr := json.Unmarshal(output, &[]interface{}{}); parseErr != nil {
+				return nil, fmt.Errorf("pylint crashed or encountered a configuration error (exit code %d): %s", exitCode, strings.TrimSpace(string(output)))
+			}
+		}
+		return metricsMap, nil
 	}
 
-	return metrics, fmt.Errorf("pylint exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
+	return nil, fmt.Errorf("pylint exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 }
 
-func parsePyLintOutput(output []byte, metrics *MaintainabilityMetrics) error {
+func parsePyLintOutputBatch(output []byte) (map[string]MaintainabilityMetrics, error) {
 	var list []struct {
+		Path    string `json:"path"`
 		Message string `json:"message"`
 		Symbol  string `json:"symbol"`
-		Line    int    `json:"line"`
 	}
 	if err := json.Unmarshal(output, &list); err != nil {
-		return err
+		return nil, err
 	}
 
+	metricsMap := make(map[string]MaintainabilityMetrics)
 	reComplexity := regexp.MustCompile(`McCabe rating is (\d+)`)
 	reParams := regexp.MustCompile(`Too many arguments \((\d+)/`)
+	reStatements := regexp.MustCompile(`Too many statements \((\d+)/`)
 
 	for _, msg := range list {
+		metrics := metricsMap[msg.Path]
 		if msg.Symbol == "too-many-statements" {
 			var val int
-			fmt.Sscanf(msg.Message, "Too many statements (%d/50)", &val)
-			if val > metrics.FunctionLength {
-				metrics.FunctionLength = val
+			if matches := reStatements.FindStringSubmatch(msg.Message); matches != nil {
+				fmt.Sscanf(matches[1], "%d", &val)
+				if val > metrics.FunctionLength {
+					metrics.FunctionLength = val
+				}
 			}
 		}
 		if matches := reComplexity.FindStringSubmatch(msg.Message); matches != nil {
@@ -354,53 +460,55 @@ func parsePyLintOutput(output []byte, metrics *MaintainabilityMetrics) error {
 		if matches := reParams.FindStringSubmatch(msg.Message); matches != nil {
 			updateMetric(&metrics.ArgumentCount, matches[1])
 		}
+		metricsMap[msg.Path] = metrics
 	}
-	return nil
+	return metricsMap, nil
 }
 
-func runRuboCop(filePath string) (MaintainabilityMetrics, error) {
-	var metrics MaintainabilityMetrics
-
-	filePath, err := sanitizePath(filePath)
-	if err != nil {
-		return metrics, err
-	}
-
-	output, exitCode, err := runLintCommand("rubocop", "--format", "json", filePath)
+func runRuboCopBatch(filePaths []string) (map[string]MaintainabilityMetrics, error) {
+	args := []string{"--format", "json"}
+	args = append(args, filePaths...)
+	output, exitCode, err := runLintCommand("rubocop", args...)
 	if err != nil && exitCode == 0 {
-		return metrics, fmt.Errorf("rubocop error: %w", err)
+		return nil, fmt.Errorf("rubocop error: %w", err)
 	}
 
-	if exitCode == 0 {
-		return metrics, nil
-	}
-
-	if exitCode == 1 {
-		if parseErr := parseRuboCopOutput(output, &metrics); parseErr == nil {
-			return metrics, nil
+	if exitCode == 0 || exitCode == 1 {
+		var metricsMap map[string]MaintainabilityMetrics
+		if len(output) > 0 {
+			metricsMap, err = parseRuboCopOutputBatch(output)
+			if err != nil && exitCode == 1 {
+				return nil, fmt.Errorf("rubocop crashed or encountered a configuration error (exit code 1): %s", strings.TrimSpace(string(output)))
+			}
 		}
-		return metrics, fmt.Errorf("rubocop crashed or encountered a configuration error (exit code 1): %s", strings.TrimSpace(string(output)))
+		if metricsMap == nil {
+			metricsMap = make(map[string]MaintainabilityMetrics)
+		}
+		return metricsMap, nil
 	}
 
-	return metrics, fmt.Errorf("rubocop exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
+	return nil, fmt.Errorf("rubocop exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 }
 
-func parseRuboCopOutput(output []byte, metrics *MaintainabilityMetrics) error {
+func parseRuboCopOutputBatch(output []byte) (map[string]MaintainabilityMetrics, error) {
 	var result struct {
 		Files []struct {
+			Path     string `json:"path"`
 			Offenses []struct {
 				CopName string `json:"cop_name"`
 				Message string `json:"message"`
 			} `json:"offenses"`
 		} `json:"files"`
 	}
-	if err := json.Unmarshal(output, &result); err != nil || len(result.Files) == 0 {
-		return fmt.Errorf("invalid json")
+	if err := json.Unmarshal(output, &result); err != nil {
+		return nil, err
 	}
 
+	metricsMap := make(map[string]MaintainabilityMetrics)
 	reVal := regexp.MustCompile(`\[(\d+)/`)
 
 	for _, file := range result.Files {
+		var metrics MaintainabilityMetrics
 		for _, off := range file.Offenses {
 			var val int
 			if matches := reVal.FindStringSubmatch(off.Message); matches != nil {
@@ -425,8 +533,9 @@ func parseRuboCopOutput(output []byte, metrics *MaintainabilityMetrics) error {
 				}
 			}
 		}
+		metricsMap[file.Path] = metrics
 	}
-	return nil
+	return metricsMap, nil
 }
 
 func findMaxConfigVal(content string, ext string, keys []string) (int, bool) {
