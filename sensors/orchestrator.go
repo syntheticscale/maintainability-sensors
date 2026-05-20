@@ -2,6 +2,7 @@ package sensors
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -34,9 +35,31 @@ type OrchestratorResult struct {
 	Exceptions      []RelaxedLimit         `json:"exceptions,omitempty"`
 }
 
+func sanitizePath(path string) (string, error) {
+	// Reject null bytes outright
+	if strings.Contains(path, "\x00") {
+		return "", fmt.Errorf("invalid path: contains null byte")
+	}
+
+	clean := filepath.Clean(path)
+
+	// Reject paths that traverse above the root after cleaning.
+	// filepath.Clean("../foo") stays "../foo". We reject if it starts with "..".
+	if strings.HasPrefix(clean, "..") {
+		return "", fmt.Errorf("invalid path: traversal outside current directory denied")
+	}
+
+	return clean, nil
+}
+
 // OrchestratedScan scans a specific file. It auto-detects configuration and runs local tooling
 // (ESLint/PyLint/Go AST) or falls back to Level 0 ("Working Blind").
 func OrchestratedScan(filePath string) (OrchestratorResult, error) {
+	filePath, err := sanitizePath(filePath)
+	if err != nil {
+		return OrchestratorResult{}, err
+	}
+
 	result := OrchestratorResult{
 		FilePath: filePath,
 		Language: detectLanguage(filePath),
@@ -143,24 +166,34 @@ func detectLanguage(path string) string {
 	return ""
 }
 
+// parserRegistry maps a language string to its ConfigParser implementation.
+func getParserForLang(lang string) ConfigParser {
+	switch lang {
+	case "typescript", "javascript":
+		return ESLintConfigParser{}
+	case "python":
+		return PyLintConfigParser{}
+	case "go":
+		return GoConfigParser{}
+	case "ruby":
+		return RuboCopConfigParser{}
+	}
+	return nil
+}
+
 func detectConfig(filePath string, lang string) string {
+	parser := getParserForLang(lang)
+	if parser == nil {
+		return ""
+	}
+
 	dir := filepath.Dir(filePath)
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
 		absDir = dir
 	}
 
-	var anchors []string
-	switch lang {
-	case "typescript", "javascript":
-		anchors = []string{"package.json", ".eslintrc.json", ".eslintrc.js", ".eslintrc.yaml", ".eslintrc.yml", "eslint.config.js", "eslint.config.mjs"}
-	case "python":
-		anchors = []string{"pyproject.toml", ".pylintrc", "setup.cfg", "tox.ini"}
-	case "go":
-		anchors = []string{".golangci.yml", "golangci.yml"}
-	case "ruby":
-		anchors = []string{".rubocop.yml", "Gemfile"}
-	}
+	anchors := parser.Anchors()
 
 	for {
 		for _, anchor := range anchors {
@@ -181,160 +214,253 @@ func detectConfig(filePath string, lang string) string {
 func runESLint(filePath string) (MaintainabilityMetrics, error) {
 	var metrics MaintainabilityMetrics
 
+	filePath, err := sanitizePath(filePath)
+	if err != nil {
+		return metrics, err
+	}
+
 	// Run npx eslint -f json <file>
 	cmd := exec.Command("npx", "eslint", "-f", "json", filePath)
-	output, _ := cmd.CombinedOutput() // ignore exit 1 because lint failures return error code
+	output, err := cmd.CombinedOutput()
 
-	var list []struct {
-		Messages []struct {
-			RuleID   string `json:"ruleId"`
-			Message  string `json:"message"`
-			Line     int    `json:"line"`
-			Severity int    `json:"severity"`
-		} `json:"messages"`
+	// Check if the command itself failed to start (e.g., npx not in PATH)
+	if errors.Is(err, exec.ErrNotFound) {
+		return metrics, fmt.Errorf("npx/eslint not found in PATH; please install Node.js and ESLint")
 	}
 
-	if err := json.Unmarshal(output, &list); err != nil || len(list) == 0 {
-		return metrics, fmt.Errorf("failed to parse ESLint JSON output: %w", err)
+	// Get exit code from the error
+	exitErr, isExitError := err.(*exec.ExitError)
+	exitCode := 0
+	if isExitError {
+		exitCode = exitErr.ExitCode()
+	} else if err != nil {
+		// Unknown error starting the command
+		return metrics, fmt.Errorf("failed to run ESLint: %w", err)
 	}
 
-	// Regex extractors for standard limits
-	reComplexity := regexp.MustCompile(`complexity of (\d+)`)
-	reParams := regexp.MustCompile(`has (\d+) parameters`)
-	reLines := regexp.MustCompile(`exceeds (\d+) lines`)
+	// Exit code 0: no lint violations — return zero metrics (success)
+	if exitCode == 0 {
+		return metrics, nil
+	}
 
-	for _, result := range list {
-		for _, msg := range result.Messages {
-			if matches := reComplexity.FindStringSubmatch(msg.Message); matches != nil {
-				var val int
-				fmt.Sscanf(matches[1], "%d", &val)
-				if val > metrics.Complexity {
-					metrics.Complexity = val
-				}
-			}
-			if matches := reParams.FindStringSubmatch(msg.Message); matches != nil {
-				var val int
-				fmt.Sscanf(matches[1], "%d", &val)
-				if val > metrics.ArgumentCount {
-					metrics.ArgumentCount = val
-				}
-			}
-			if matches := reLines.FindStringSubmatch(msg.Message); matches != nil {
-				var val int
-				fmt.Sscanf(matches[1], "%d", &val)
-				if val > metrics.FunctionLength {
-					metrics.FunctionLength = val
-				}
-			}
+	// Exit code 1: could be lint violations OR ESLint crashed
+	if exitCode == 1 {
+		var list []struct {
+			Messages []struct {
+				RuleID   string `json:"ruleId"`
+				Message  string `json:"message"`
+				Line     int    `json:"line"`
+				Severity int    `json:"severity"`
+			} `json:"messages"`
 		}
+		if jsonErr := json.Unmarshal(output, &list); jsonErr == nil && len(list) > 0 {
+			// Valid JSON with lint violations — parse normally
+			// Regex extractors for standard limits
+			reComplexity := regexp.MustCompile(`complexity of (\d+)`)
+			reParams := regexp.MustCompile(`has (\d+) parameters`)
+			reLines := regexp.MustCompile(`exceeds (\d+) lines`)
+
+			for _, result := range list {
+				for _, msg := range result.Messages {
+					if matches := reComplexity.FindStringSubmatch(msg.Message); matches != nil {
+						var val int
+						fmt.Sscanf(matches[1], "%d", &val)
+						if val > metrics.Complexity {
+							metrics.Complexity = val
+						}
+					}
+					if matches := reParams.FindStringSubmatch(msg.Message); matches != nil {
+						var val int
+						fmt.Sscanf(matches[1], "%d", &val)
+						if val > metrics.ArgumentCount {
+							metrics.ArgumentCount = val
+						}
+					}
+					if matches := reLines.FindStringSubmatch(msg.Message); matches != nil {
+						var val int
+						fmt.Sscanf(matches[1], "%d", &val)
+						if val > metrics.FunctionLength {
+							metrics.FunctionLength = val
+						}
+					}
+				}
+			}
+			return metrics, nil
+		}
+		// Non-JSON output on exit code 1 means ESLint crashed
+		outputStr := strings.TrimSpace(string(output))
+		return metrics, fmt.Errorf("ESLint crashed or encountered a configuration error (exit code 1): %s", outputStr)
 	}
 
-	return metrics, nil
+	// Any other exit code: unknown failure
+	return metrics, fmt.Errorf("ESLint exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 }
 
 func runPyLint(filePath string) (MaintainabilityMetrics, error) {
 	var metrics MaintainabilityMetrics
 
+	filePath, err := sanitizePath(filePath)
+	if err != nil {
+		return metrics, err
+	}
+
 	// Run pylint --output-format=json <file>
 	cmd := exec.Command("pylint", "--output-format=json", filePath)
-	output, _ := cmd.CombinedOutput()
+	output, err := cmd.CombinedOutput()
 
-	var list []struct {
-		Message string `json:"message"`
-		Symbol  string `json:"symbol"`
-		Line    int    `json:"line"`
+	// Check if the command itself failed to start (e.g., pylint not in PATH)
+	if errors.Is(err, exec.ErrNotFound) {
+		return metrics, fmt.Errorf("pylint not found in PATH; please install pylint")
 	}
 
-	if err := json.Unmarshal(output, &list); err != nil {
-		return metrics, fmt.Errorf("failed to parse PyLint JSON output: %w", err)
+	exitErr, isExitError := err.(*exec.ExitError)
+	exitCode := 0
+	if isExitError {
+		exitCode = exitErr.ExitCode()
+	} else if err != nil {
+		return metrics, fmt.Errorf("failed to run pylint: %w", err)
 	}
 
-	reComplexity := regexp.MustCompile(`McCabe rating is (\d+)`)
-	reParams := regexp.MustCompile(`Too many arguments \((\d+)/`)
-
-	for _, msg := range list {
-		if msg.Symbol == "too-many-statements" {
-			// Extract lines of statements
-			var val int
-			fmt.Sscanf(msg.Message, "Too many statements (%d/50)", &val)
-			if val > metrics.FunctionLength {
-				metrics.FunctionLength = val
-			}
-		}
-		if matches := reComplexity.FindStringSubmatch(msg.Message); matches != nil {
-			var val int
-			fmt.Sscanf(matches[1], "%d", &val)
-			if val > metrics.Complexity {
-				metrics.Complexity = val
-			}
-		}
-		if matches := reParams.FindStringSubmatch(msg.Message); matches != nil {
-			var val int
-			fmt.Sscanf(matches[1], "%d", &val)
-			if val > metrics.ArgumentCount {
-				metrics.ArgumentCount = val
-			}
-		}
+	// Exit code 0: no lint violations — return zero metrics (success)
+	if exitCode == 0 {
+		return metrics, nil
 	}
 
-	return metrics, nil
+	// Exit code >= 1: could be lint violations OR pylint crashed/config error
+	if exitCode >= 1 {
+		var list []struct {
+			Message string `json:"message"`
+			Symbol  string `json:"symbol"`
+			Line    int    `json:"line"`
+		}
+		if jsonErr := json.Unmarshal(output, &list); jsonErr == nil {
+			// Valid JSON with lint violations — parse normally
+			reComplexity := regexp.MustCompile(`McCabe rating is (\d+)`)
+			reParams := regexp.MustCompile(`Too many arguments \((\d+)/`)
+
+			for _, msg := range list {
+				if msg.Symbol == "too-many-statements" {
+					// Extract lines of statements
+					var val int
+					fmt.Sscanf(msg.Message, "Too many statements (%d/50)", &val)
+					if val > metrics.FunctionLength {
+						metrics.FunctionLength = val
+					}
+				}
+				if matches := reComplexity.FindStringSubmatch(msg.Message); matches != nil {
+					var val int
+					fmt.Sscanf(matches[1], "%d", &val)
+					if val > metrics.Complexity {
+						metrics.Complexity = val
+					}
+				}
+				if matches := reParams.FindStringSubmatch(msg.Message); matches != nil {
+					var val int
+					fmt.Sscanf(matches[1], "%d", &val)
+					if val > metrics.ArgumentCount {
+						metrics.ArgumentCount = val
+					}
+				}
+			}
+			return metrics, nil
+		}
+		// Non-JSON output means pylint crashed
+		outputStr := strings.TrimSpace(string(output))
+		return metrics, fmt.Errorf("pylint crashed or encountered a configuration error (exit code %d): %s", exitCode, outputStr)
+	}
+
+	// Any other exit code: unknown failure
+	return metrics, fmt.Errorf("pylint exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 }
 
 func runRuboCop(filePath string) (MaintainabilityMetrics, error) {
 	var metrics MaintainabilityMetrics
 
+	filePath, err := sanitizePath(filePath)
+	if err != nil {
+		return metrics, err
+	}
+
 	// Run rubocop --format json <file>
 	cmd := exec.Command("rubocop", "--format", "json", filePath)
-	output, _ := cmd.CombinedOutput()
+	output, err := cmd.CombinedOutput()
 
-	var result struct {
-		Files []struct {
-			Offenses []struct {
-				CopName string `json:"cop_name"`
-				Message string `json:"message"`
-			} `json:"offenses"`
-		} `json:"files"`
+	// Check if the command itself failed to start (e.g., rubocop not in PATH)
+	if errors.Is(err, exec.ErrNotFound) {
+		return metrics, fmt.Errorf("rubocop not found in PATH; please install rubocop")
 	}
 
-	if err := json.Unmarshal(output, &result); err != nil || len(result.Files) == 0 {
-		return metrics, fmt.Errorf("failed to parse RuboCop JSON output: %w", err)
+	exitErr, isExitError := err.(*exec.ExitError)
+	exitCode := 0
+	if isExitError {
+		exitCode = exitErr.ExitCode()
+	} else if err != nil {
+		return metrics, fmt.Errorf("failed to run rubocop: %w", err)
 	}
 
-	reVal := regexp.MustCompile(`\[(\d+)/`)
+	// Exit code 0: no lint violations — return zero metrics (success)
+	if exitCode == 0 {
+		return metrics, nil
+	}
 
-	for _, file := range result.Files {
-		for _, off := range file.Offenses {
-			var val int
-			if matches := reVal.FindStringSubmatch(off.Message); matches != nil {
-				fmt.Sscanf(matches[1], "%d", &val)
-			}
-			if val == 0 {
-				continue
-			}
-
-			switch off.CopName {
-			case "Metrics/CyclomaticComplexity":
-				if val > metrics.Complexity {
-					metrics.Complexity = val
-				}
-			case "Metrics/MethodLength":
-				if val > metrics.FunctionLength {
-					metrics.FunctionLength = val
-				}
-			case "Metrics/ParameterLists":
-				if val > metrics.ArgumentCount {
-					metrics.ArgumentCount = val
-				}
-			}
+	// Exit code 1: could be lint violations OR rubocop crashed/config error
+	if exitCode == 1 {
+		var result struct {
+			Files []struct {
+				Offenses []struct {
+					CopName string `json:"cop_name"`
+					Message string `json:"message"`
+				} `json:"offenses"`
+			} `json:"files"`
 		}
+		if jsonErr := json.Unmarshal(output, &result); jsonErr == nil && len(result.Files) > 0 {
+			// Valid JSON with lint violations — parse normally
+			reVal := regexp.MustCompile(`\[(\d+)/`)
+
+			for _, file := range result.Files {
+				for _, off := range file.Offenses {
+					var val int
+					if matches := reVal.FindStringSubmatch(off.Message); matches != nil {
+						fmt.Sscanf(matches[1], "%d", &val)
+					}
+					if val == 0 {
+						continue
+					}
+
+					switch off.CopName {
+					case "Metrics/CyclomaticComplexity":
+						if val > metrics.Complexity {
+							metrics.Complexity = val
+						}
+					case "Metrics/MethodLength":
+						if val > metrics.FunctionLength {
+							metrics.FunctionLength = val
+						}
+					case "Metrics/ParameterLists":
+						if val > metrics.ArgumentCount {
+							metrics.ArgumentCount = val
+						}
+					}
+				}
+			}
+			return metrics, nil
+		}
+		// Non-JSON output on exit code 1 means rubocop crashed
+		outputStr := strings.TrimSpace(string(output))
+		return metrics, fmt.Errorf("rubocop crashed or encountered a configuration error (exit code 1): %s", outputStr)
 	}
 
-	return metrics, nil
+	// Any other exit code: unknown failure
+	return metrics, fmt.Errorf("rubocop exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 }
 
 func detectRelaxedLimits(configPath string, lang string) []RelaxedLimit {
 	var exceptions []RelaxedLimit
 	if configPath == "" {
+		return exceptions
+	}
+	parser := getParserForLang(lang)
+	if parser == nil {
 		return exceptions
 	}
 	data, err := os.ReadFile(configPath)
@@ -344,214 +470,25 @@ func detectRelaxedLimits(configPath string, lang string) []RelaxedLimit {
 	content := string(data)
 	ext := filepath.Ext(configPath)
 
-	// 1. Cyclomatic Complexity (baseline: 8)
-	var complexityVal int
-	var foundComplexity bool
-	if lang == "typescript" || lang == "javascript" {
-		vals := findAllConfigVals(content, "complexity", ext)
-		if len(vals) > 0 {
-			complexityVal = maxOf(vals)
-			foundComplexity = true
+	for _, rule := range parser.Rules() {
+		var foundVal int
+		var found bool
+		for _, key := range rule.Keys {
+			vals := findAllConfigVals(content, key, ext)
+			if len(vals) > 0 {
+				foundVal = maxOf(vals)
+				found = true
+				break
+			}
 		}
-	} else if lang == "python" {
-		vals := findAllConfigVals(content, "max-complexity", ext)
-		if len(vals) > 0 {
-			complexityVal = maxOf(vals)
-			foundComplexity = true
+		if found && foundVal > rule.Baseline {
+			exceptions = append(exceptions, RelaxedLimit{
+				RuleName:      rule.RuleName,
+				ConfiguredVal: foundVal,
+				BaselineVal:   rule.Baseline,
+			})
 		}
-	} else if lang == "go" {
-		vals := findAllConfigVals(content, "min-complexity", ext)
-		if len(vals) > 0 {
-			complexityVal = maxOf(vals)
-			foundComplexity = true
-		}
-	} else if lang == "ruby" {
-		vals := findAllConfigVals(content, "CyclomaticComplexity", ext)
-		if len(vals) > 0 {
-			complexityVal = maxOf(vals)
-			foundComplexity = true
-		}
-	}
-	if foundComplexity && complexityVal > BaselineComplexity {
-		exceptions = append(exceptions, RelaxedLimit{
-			RuleName:      "Cyclomatic Complexity",
-			ConfiguredVal: complexityVal,
-			BaselineVal:   BaselineComplexity,
-		})
-	}
-
-	// 2. Function Length (baseline: 50)
-	var funcLenVal int
-	var foundFuncLen bool
-	if lang == "typescript" || lang == "javascript" {
-		vals := findAllConfigVals(content, "max-lines-per-function", ext)
-		if len(vals) > 0 {
-			funcLenVal = maxOf(vals)
-			foundFuncLen = true
-		}
-	} else if lang == "python" {
-		vals := findAllConfigVals(content, "max-statements", ext)
-		if len(vals) > 0 {
-			funcLenVal = maxOf(vals)
-			foundFuncLen = true
-		}
-	} else if lang == "go" {
-		vals := findAllConfigVals(content, "lines", ext)
-		if len(vals) > 0 {
-			funcLenVal = maxOf(vals)
-			foundFuncLen = true
-		}
-	} else if lang == "ruby" {
-		vals := findAllConfigVals(content, "MethodLength", ext)
-		if len(vals) > 0 {
-			funcLenVal = maxOf(vals)
-			foundFuncLen = true
-		}
-	}
-	if foundFuncLen && funcLenVal > BaselineFunctionLength {
-		exceptions = append(exceptions, RelaxedLimit{
-			RuleName:      "Function Length",
-			ConfiguredVal: funcLenVal,
-			BaselineVal:   BaselineFunctionLength,
-		})
-	}
-
-	// 3. Argument Count (baseline: 4)
-	var argCountVal int
-	var foundArgCount bool
-	if lang == "typescript" || lang == "javascript" {
-		vals := findAllConfigVals(content, "max-params", ext)
-		if len(vals) > 0 {
-			argCountVal = maxOf(vals)
-			foundArgCount = true
-		}
-	} else if lang == "python" {
-		vals := findAllConfigVals(content, "max-args", ext)
-		if len(vals) > 0 {
-			argCountVal = maxOf(vals)
-			foundArgCount = true
-		}
-	} else if lang == "ruby" {
-		vals := findAllConfigVals(content, "ParameterLists", ext)
-		if len(vals) > 0 {
-			argCountVal = maxOf(vals)
-			foundArgCount = true
-		}
-	}
-	if foundArgCount && argCountVal > BaselineArgumentCount {
-		exceptions = append(exceptions, RelaxedLimit{
-			RuleName:      "Argument Count",
-			ConfiguredVal: argCountVal,
-			BaselineVal:   BaselineArgumentCount,
-		})
-	}
-
-	// 4. File Length (baseline: 300)
-	var fileLenVal int
-	var foundFileLen bool
-	if lang == "typescript" || lang == "javascript" {
-		vals := findAllConfigVals(content, "max-lines", ext)
-		if len(vals) > 0 {
-			fileLenVal = maxOf(vals)
-			foundFileLen = true
-		}
-	} else if lang == "python" {
-		vals := findAllConfigVals(content, "max-module-lines", ext)
-		if len(vals) > 0 {
-			fileLenVal = maxOf(vals)
-			foundFileLen = true
-		}
-	} else if lang == "ruby" {
-		vals := findAllConfigVals(content, "ModuleLength", ext)
-		if len(vals) > 0 {
-			fileLenVal = maxOf(vals)
-			foundFileLen = true
-		}
-	}
-	if foundFileLen && fileLenVal > BaselineFileLength {
-		exceptions = append(exceptions, RelaxedLimit{
-			RuleName:      "File Length",
-			ConfiguredVal: fileLenVal,
-			BaselineVal:   BaselineFileLength,
-		})
 	}
 
 	return exceptions
-}
-
-func findAllConfigVals(content string, key string, ext string) []int {
-	if ext == ".json" {
-		return findAllConfigValsJSON(content, key)
-	}
-
-	// Line-oriented approach for INI/YAML-style files
-	var vals []int
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
-			continue
-		}
-		if !strings.Contains(line, key) {
-			continue
-		}
-		// Require the key to be a whole word and not followed immediately by a hyphen
-		pattern := `\b` + regexp.QuoteMeta(key) + `\b[^-\d]*?(\d+)`
-		re := regexp.MustCompile(pattern)
-		if matches := re.FindStringSubmatch(line); len(matches) > 1 {
-			var val int
-			if _, err := fmt.Sscanf(matches[1], "%d", &val); err == nil {
-				vals = append(vals, val)
-			}
-		}
-	}
-	return vals
-}
-
-func findAllConfigValsJSON(content string, key string) []int {
-	var vals []int
-	var walk func(interface{})
-	walk = func(v interface{}) {
-		switch val := v.(type) {
-		case map[string]interface{}:
-			for k, vv := range val {
-				if k == key {
-					switch actual := vv.(type) {
-					case float64:
-						vals = append(vals, int(actual))
-					case []interface{}:
-						for _, item := range actual {
-							if f, ok := item.(float64); ok {
-								vals = append(vals, int(f))
-							}
-						}
-					}
-				}
-				walk(vv)
-			}
-		case []interface{}:
-			for _, item := range val {
-				walk(item)
-			}
-		}
-	}
-
-	var data interface{}
-	if err := json.Unmarshal([]byte(content), &data); err == nil {
-		walk(data)
-	}
-	return vals
-}
-
-func maxOf(vals []int) int {
-	if len(vals) == 0 {
-		return 0
-	}
-	m := vals[0]
-	for _, v := range vals {
-		if v > m {
-			m = v
-		}
-	}
-	return m
 }
