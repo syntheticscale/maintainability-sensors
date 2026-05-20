@@ -53,6 +53,13 @@ func TestGoldenSnapshots(t *testing.T) {
 			goldenFile: filepath.Join(goldenDir, "requests-adapters-report.json"),
 		},
 		{
+			repoName:   "go-std-net",
+			repoURL:    "https://github.com/golang/go.git",
+			commitHash: "go1.22.0",
+			scanPath:   "src/net/http/server.go",
+			goldenFile: filepath.Join(goldenDir, "go-std-http-server-report.json"),
+		},
+		{
 			repoName:   "fastapi",
 			repoURL:    "https://github.com/tiangolo/fastapi.git",
 			commitHash: "0.110.0",
@@ -129,10 +136,16 @@ func isFileMissing(path string) bool {
 
 func syncAndCheckout(t *testing.T, name, url, commit, path string) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		t.Logf("Cloning %s...", name)
-		cmd := exec.Command("git", "clone", url, path)
+		t.Logf("Cloning %s at %s (shallow)...", name, commit)
+		cmd := exec.Command("git", "clone", "--depth", "1", "--branch", commit, url, path)
 		if err := cmd.Run(); err != nil {
-			t.Fatalf("failed to clone %s: %v", name, err)
+			t.Logf("Shallow clone failed, falling back to full clone...")
+			cmdFull := exec.Command("git", "clone", url, path)
+			if err := cmdFull.Run(); err != nil {
+				t.Fatalf("failed to clone %s: %v", name, err)
+			}
+		} else {
+			return // Successfully cloned shallow branch/tag
 		}
 	}
 

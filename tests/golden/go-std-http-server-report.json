@@ -1,0 +1,10 @@
+{
+  "file_path": "src/net/http/server.go",
+  "language": "go",
+  "tooling_detected": true,
+  "metrics": {
+    "complexity": 73,
+    "function_length": 267,
+    "argument_count": 4
+  }
+}
