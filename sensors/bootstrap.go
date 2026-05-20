@@ -40,8 +40,8 @@ linters-settings:
   funlen:
     lines: %d
     statements: 40
-  gocyclo:
-    min-complexity: %d
+  cyclop:
+    max-complexity: %d
   lll:
     line-length: 120
 
@@ -49,7 +49,7 @@ linters:
   enable:
     - gocognit
     - funlen
-    - gocyclo
+    - cyclop
     - lll
 `
 
@@ -388,3 +388,4 @@ func printInstallerInstructions(lang string) {
 	}
 	fmt.Printf("\nOnce installed, run maintainability-sensors again to activate precise Level 1+ analysis!\n")
 }
+

@@ -13,6 +13,8 @@ import (
 	"github.com/paulolai/maintainability-sensors/sensors"
 )
 
+const GitHubApiVersion = "2022-11-28"
+
 // GenerateMarkdownScorecard generates a beautiful markdown scorecard of the scan results.
 func GenerateMarkdownScorecard(results []sensors.OrchestratorResult) string {
 	var sb strings.Builder
@@ -148,7 +150,7 @@ func PostGitHubPRComment(scorecard string) error {
 
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	req.Header.Set("X-GitHub-Api-Version", GitHubApiVersion)
 	req.Header.Set("User-Agent", "Maintainability-Sensors-CLI")
 	req.Header.Set("Content-Type", "application/json")
 

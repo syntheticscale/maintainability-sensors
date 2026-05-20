@@ -51,8 +51,9 @@ This tool is designed to be a lightweight, ultra-fast Go CLI utility (<15ms exec
 ## 🧩 Architectural Constraints (ADR Rules)
 
 1. **Stateless Execution:** The CLI must remain completely stateless. It reads local files and writes to stdout or stderr. No database dependencies, no filesystem caches, and no remote telemetry.
-2. **Safety Guardrails:** The `bootstrap` command must **never** destructive-overwrite existing custom configuration files. If an existing config is found, skip writing, alert the user, and output recommended addition snippets.
-3. **Agent-Facing Output:** All warnings and errors must output clear, actionable, and structured **Refactoring Prompts** specifically optimized for LLM coding agents to ingest and act on.
+2. **Minimal External Dependencies:** The binary must have minimal external Go dependencies, strictly limited to standard config unmarshallers (like `yaml.v3` and `go-toml/v2`).
+3. **Safety Guardrails:** The `bootstrap` command must **never** destructive-overwrite existing custom configuration files. If an existing config is found, skip writing, alert the user, and output recommended addition snippets.
+4. **Agent-Facing Output:** All warnings and errors must output clear, actionable, and structured **Refactoring Prompts** specifically optimized for LLM coding agents to ingest and act on.
 
 ---
 

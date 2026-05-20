@@ -25,7 +25,7 @@ Instead of passive `README` guides that agents ignore, sensors act as **hard CI/
 
 * **Ultra-Fast Static Binary:** Built as a single, static Go binary. No databases, no telemetry, no warm-up times. Runs in microseconds (<15ms per file).
 * **CI/CD Gatekeeping:** Returns a non-zero exit code (`exit 1`) when code violates maintainability baselines, ensuring unmaintainable code never merges.
-* **Orchestration Architecture:** Auto-detects and orchestrates your local static analysis tools (ESLint, PyLint, Go Vet, RuboCop). It respects your project's custom linting rules rather than forcing a proprietary model.
+* **Orchestration Architecture:** Auto-detects and orchestrates your local static analysis tools (ESLint, Biome, PyLint, Ruff, Go Vet, RuboCop, StandardRB). It respects your project's custom linting rules rather than forcing a proprietary model.
 * **Agent Self-Correction Formatter:** Converts standard linter outputs into rich, high-context prompts. When the build fails, the CLI tells the agent exactly *why* and *how* to refactor (e.g., *"Nudge coding agent to extract nested conditionals into separate, single-responsibility helper functions"*).
 * **The `bootstrap` Accelerator:** If your repo has no existing rules (Level 0), `bootstrap` programmatically writes pristine linter configs for **TypeScript, Python, Go, and Ruby** enforcing strict maintainability thresholds directly to your project root.
 

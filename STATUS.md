@@ -95,9 +95,9 @@ All major technical debt has been resolved. The remaining items represent minor 
 | Language | Native Parsing | Orchestrated Tool | Bootstrap Config |
 |---|---|---|---|
 | **Go** | ✅ AST parser | golangci-lint | `.golangci.yml` |
-| **TypeScript/JS** | ❌ | ESLint | `.eslintrc.json`, `eslint.config.js` |
-| **Python** | ❌ | PyLint | `.pylintrc` |
-| **Ruby** | ❌ | RuboCop | `.rubocop.yml` |
+| **TypeScript/JS** | ❌ | ESLint, Biome | `.eslintrc.json`, `eslint.config.js`, `biome.json` |
+| **Python** | ❌ | PyLint, Ruff | `.pylintrc`, `ruff.toml` |
+| **Ruby** | ❌ | RuboCop, StandardRB | `.rubocop.yml`, `.standard.yml` |
 | **Java** | ❌ | Checkstyle | `checkstyle.xml` |
 | **C#** | ❌ | Roslyn analyzers | `.editorconfig` |
 
