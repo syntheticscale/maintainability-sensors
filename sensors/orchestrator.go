@@ -218,8 +218,8 @@ func runPyLint(filePath string) (MaintainabilityMetrics, error) {
 		return metrics, fmt.Errorf("failed to parse PyLint JSON output: %w", err)
 	}
 
-	reComplexity := regexp.MustCompile(`Complexity is (\d+)`)
-	reParams := regexp.MustCompile(`More than (\d+) parameters`)
+	reComplexity := regexp.MustCompile(`McCabe rating is (\d+)`)
+	reParams := regexp.MustCompile(`Too many arguments \((\d+)/`)
 
 	for _, msg := range list {
 		if msg.Symbol == "too-many-statements" {
