@@ -113,21 +113,25 @@ analyze_repo() {
         fi
     fi
 
-    # Run the sensors and output the report
+    # Run the sensors and output the report in three standard formats (MD, JSON, HTML)
     log_info "Running maintainability-sensors on '$scan_path'..."
     set +e # Don't exit on linter warning exits
-    $BINARY_PATH run --markdown-out="$output_file" "$CACHE_DIR/$name/$scan_path"
+    $BINARY_PATH run \
+        --markdown-out="${output_file}.md" \
+        --json-out="${output_file}.json" \
+        --html-out="${output_file}.html" \
+        "$CACHE_DIR/$name/$scan_path"
     set -e
 
-    log_success "Generated beautiful markdown report: $output_file"
+    log_success "Generated beautiful scorecards (MD, JSON, HTML) for: $name"
 }
 
 # Execute analysis on our 5 Case Studies
-analyze_repo "go-chi" "tree.go" "go-chi-tree-report.md"
-analyze_repo "requests" "src/requests/adapters.py" "requests-adapters-report.md"
-analyze_repo "go-std-net" "src/net/http/server.go" "go-std-http-server-report.md"
-analyze_repo "fastapi" "fastapi/dependencies/utils.py" "fastapi-dependencies-report.md"
-analyze_repo "nestjs" "packages/core/injector/injector.ts" "nestjs-injector-report.md"
+analyze_repo "go-chi" "tree.go" "go-chi-tree-report"
+analyze_repo "requests" "src/requests/adapters.py" "requests-adapters-report"
+analyze_repo "go-std-net" "src/net/http/server.go" "go-std-http-server-report"
+analyze_repo "fastapi" "fastapi/dependencies/utils.py" "fastapi-dependencies-report"
+analyze_repo "nestjs" "packages/core/injector/injector.ts" "nestjs-injector-report"
 
 log_info "========================================================"
 log_success "All pipeline analysis completed successfully!"

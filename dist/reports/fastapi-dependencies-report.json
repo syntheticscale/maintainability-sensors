@@ -1,0 +1,12 @@
+[
+  {
+    "file_path": "/home/paulo/code/maintainability-sensors/.cache/fastapi/fastapi/dependencies/utils.py",
+    "language": "python",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "function_length": 72,
+      "argument_count": 9
+    }
+  }
+]

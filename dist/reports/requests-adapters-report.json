@@ -1,0 +1,12 @@
+[
+  {
+    "file_path": "/home/paulo/code/maintainability-sensors/.cache/requests/src/requests/adapters.py",
+    "language": "python",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "function_length": 52,
+      "argument_count": 7
+    }
+  }
+]
