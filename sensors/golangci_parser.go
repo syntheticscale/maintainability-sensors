@@ -13,5 +13,6 @@ func (p GoConfigParser) Rules() []ParserRule {
 	return []ParserRule{
 		{RuleName: "Cyclomatic Complexity", Keys: []string{"min-complexity"}, Baseline: BaselineComplexity},
 		{RuleName: "Function Length", Keys: []string{"lines"}, Baseline: BaselineFunctionLength},
+		{RuleName: "Argument Count", Keys: []string{"argument-limit"}, Baseline: BaselineArgumentCount}, // from revive
 	}
 }
