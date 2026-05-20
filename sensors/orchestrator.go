@@ -143,24 +143,34 @@ func detectLanguage(path string) string {
 	return ""
 }
 
+// parserRegistry maps a language string to its ConfigParser implementation.
+func getParserForLang(lang string) ConfigParser {
+	switch lang {
+	case "typescript", "javascript":
+		return ESLintConfigParser{}
+	case "python":
+		return PyLintConfigParser{}
+	case "go":
+		return GoConfigParser{}
+	case "ruby":
+		return RuboCopConfigParser{}
+	}
+	return nil
+}
+
 func detectConfig(filePath string, lang string) string {
+	parser := getParserForLang(lang)
+	if parser == nil {
+		return ""
+	}
+
 	dir := filepath.Dir(filePath)
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
 		absDir = dir
 	}
 
-	var anchors []string
-	switch lang {
-	case "typescript", "javascript":
-		anchors = []string{"package.json", ".eslintrc.json", ".eslintrc.js", ".eslintrc.yaml", ".eslintrc.yml", "eslint.config.js", "eslint.config.mjs"}
-	case "python":
-		anchors = []string{"pyproject.toml", ".pylintrc", "setup.cfg", "tox.ini"}
-	case "go":
-		anchors = []string{".golangci.yml", "golangci.yml"}
-	case "ruby":
-		anchors = []string{".rubocop.yml", "Gemfile"}
-	}
+	anchors := parser.Anchors()
 
 	for {
 		for _, anchor := range anchors {
@@ -337,6 +347,10 @@ func detectRelaxedLimits(configPath string, lang string) []RelaxedLimit {
 	if configPath == "" {
 		return exceptions
 	}
+	parser := getParserForLang(lang)
+	if parser == nil {
+		return exceptions
+	}
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return exceptions
@@ -344,214 +358,25 @@ func detectRelaxedLimits(configPath string, lang string) []RelaxedLimit {
 	content := string(data)
 	ext := filepath.Ext(configPath)
 
-	// 1. Cyclomatic Complexity (baseline: 8)
-	var complexityVal int
-	var foundComplexity bool
-	if lang == "typescript" || lang == "javascript" {
-		vals := findAllConfigVals(content, "complexity", ext)
-		if len(vals) > 0 {
-			complexityVal = maxOf(vals)
-			foundComplexity = true
+	for _, rule := range parser.Rules() {
+		var foundVal int
+		var found bool
+		for _, key := range rule.Keys {
+			vals := findAllConfigVals(content, key, ext)
+			if len(vals) > 0 {
+				foundVal = maxOf(vals)
+				found = true
+				break
+			}
 		}
-	} else if lang == "python" {
-		vals := findAllConfigVals(content, "max-complexity", ext)
-		if len(vals) > 0 {
-			complexityVal = maxOf(vals)
-			foundComplexity = true
+		if found && foundVal > rule.Baseline {
+			exceptions = append(exceptions, RelaxedLimit{
+				RuleName:      rule.RuleName,
+				ConfiguredVal: foundVal,
+				BaselineVal:   rule.Baseline,
+			})
 		}
-	} else if lang == "go" {
-		vals := findAllConfigVals(content, "min-complexity", ext)
-		if len(vals) > 0 {
-			complexityVal = maxOf(vals)
-			foundComplexity = true
-		}
-	} else if lang == "ruby" {
-		vals := findAllConfigVals(content, "CyclomaticComplexity", ext)
-		if len(vals) > 0 {
-			complexityVal = maxOf(vals)
-			foundComplexity = true
-		}
-	}
-	if foundComplexity && complexityVal > BaselineComplexity {
-		exceptions = append(exceptions, RelaxedLimit{
-			RuleName:      "Cyclomatic Complexity",
-			ConfiguredVal: complexityVal,
-			BaselineVal:   BaselineComplexity,
-		})
-	}
-
-	// 2. Function Length (baseline: 50)
-	var funcLenVal int
-	var foundFuncLen bool
-	if lang == "typescript" || lang == "javascript" {
-		vals := findAllConfigVals(content, "max-lines-per-function", ext)
-		if len(vals) > 0 {
-			funcLenVal = maxOf(vals)
-			foundFuncLen = true
-		}
-	} else if lang == "python" {
-		vals := findAllConfigVals(content, "max-statements", ext)
-		if len(vals) > 0 {
-			funcLenVal = maxOf(vals)
-			foundFuncLen = true
-		}
-	} else if lang == "go" {
-		vals := findAllConfigVals(content, "lines", ext)
-		if len(vals) > 0 {
-			funcLenVal = maxOf(vals)
-			foundFuncLen = true
-		}
-	} else if lang == "ruby" {
-		vals := findAllConfigVals(content, "MethodLength", ext)
-		if len(vals) > 0 {
-			funcLenVal = maxOf(vals)
-			foundFuncLen = true
-		}
-	}
-	if foundFuncLen && funcLenVal > BaselineFunctionLength {
-		exceptions = append(exceptions, RelaxedLimit{
-			RuleName:      "Function Length",
-			ConfiguredVal: funcLenVal,
-			BaselineVal:   BaselineFunctionLength,
-		})
-	}
-
-	// 3. Argument Count (baseline: 4)
-	var argCountVal int
-	var foundArgCount bool
-	if lang == "typescript" || lang == "javascript" {
-		vals := findAllConfigVals(content, "max-params", ext)
-		if len(vals) > 0 {
-			argCountVal = maxOf(vals)
-			foundArgCount = true
-		}
-	} else if lang == "python" {
-		vals := findAllConfigVals(content, "max-args", ext)
-		if len(vals) > 0 {
-			argCountVal = maxOf(vals)
-			foundArgCount = true
-		}
-	} else if lang == "ruby" {
-		vals := findAllConfigVals(content, "ParameterLists", ext)
-		if len(vals) > 0 {
-			argCountVal = maxOf(vals)
-			foundArgCount = true
-		}
-	}
-	if foundArgCount && argCountVal > BaselineArgumentCount {
-		exceptions = append(exceptions, RelaxedLimit{
-			RuleName:      "Argument Count",
-			ConfiguredVal: argCountVal,
-			BaselineVal:   BaselineArgumentCount,
-		})
-	}
-
-	// 4. File Length (baseline: 300)
-	var fileLenVal int
-	var foundFileLen bool
-	if lang == "typescript" || lang == "javascript" {
-		vals := findAllConfigVals(content, "max-lines", ext)
-		if len(vals) > 0 {
-			fileLenVal = maxOf(vals)
-			foundFileLen = true
-		}
-	} else if lang == "python" {
-		vals := findAllConfigVals(content, "max-module-lines", ext)
-		if len(vals) > 0 {
-			fileLenVal = maxOf(vals)
-			foundFileLen = true
-		}
-	} else if lang == "ruby" {
-		vals := findAllConfigVals(content, "ModuleLength", ext)
-		if len(vals) > 0 {
-			fileLenVal = maxOf(vals)
-			foundFileLen = true
-		}
-	}
-	if foundFileLen && fileLenVal > BaselineFileLength {
-		exceptions = append(exceptions, RelaxedLimit{
-			RuleName:      "File Length",
-			ConfiguredVal: fileLenVal,
-			BaselineVal:   BaselineFileLength,
-		})
 	}
 
 	return exceptions
-}
-
-func findAllConfigVals(content string, key string, ext string) []int {
-	if ext == ".json" {
-		return findAllConfigValsJSON(content, key)
-	}
-
-	// Line-oriented approach for INI/YAML-style files
-	var vals []int
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
-			continue
-		}
-		if !strings.Contains(line, key) {
-			continue
-		}
-		// Require the key to be a whole word and not followed immediately by a hyphen
-		pattern := `\b` + regexp.QuoteMeta(key) + `\b[^-\d]*?(\d+)`
-		re := regexp.MustCompile(pattern)
-		if matches := re.FindStringSubmatch(line); len(matches) > 1 {
-			var val int
-			if _, err := fmt.Sscanf(matches[1], "%d", &val); err == nil {
-				vals = append(vals, val)
-			}
-		}
-	}
-	return vals
-}
-
-func findAllConfigValsJSON(content string, key string) []int {
-	var vals []int
-	var walk func(interface{})
-	walk = func(v interface{}) {
-		switch val := v.(type) {
-		case map[string]interface{}:
-			for k, vv := range val {
-				if k == key {
-					switch actual := vv.(type) {
-					case float64:
-						vals = append(vals, int(actual))
-					case []interface{}:
-						for _, item := range actual {
-							if f, ok := item.(float64); ok {
-								vals = append(vals, int(f))
-							}
-						}
-					}
-				}
-				walk(vv)
-			}
-		case []interface{}:
-			for _, item := range val {
-				walk(item)
-			}
-		}
-	}
-
-	var data interface{}
-	if err := json.Unmarshal([]byte(content), &data); err == nil {
-		walk(data)
-	}
-	return vals
-}
-
-func maxOf(vals []int) int {
-	if len(vals) == 0 {
-		return 0
-	}
-	m := vals[0]
-	for _, v := range vals {
-		if v > m {
-			m = v
-		}
-	}
-	return m
 }
