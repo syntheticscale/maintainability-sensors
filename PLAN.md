@@ -18,6 +18,8 @@ All architectural flaws and outstanding technical debt from the initial release 
 | **Input Validation** | Added strict schema validation to the `generate` subcommand to prevent cryptic JSON unmarshal crashes. | ✅ |
 | **Golden Snapshots** | Regenerated test snapshots against active local linters to capture real, deterministic code metrics. | ✅ |
 | **CLI & Subprocess Tests**| Extensive test suites for CLI package commands, subprocess error boundaries, and environment fallbacks. | ✅ |
+| **Ecosystem Modernization** | Added batched subprocess execution and native parsers for Biome, Ruff, and StandardRB. | ✅ |
+| **Visionary Features** | Added `baseline` command for legacy debt suppression and inline GitHub PR review comments. | ✅ |
 
 ---
 

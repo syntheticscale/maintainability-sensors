@@ -84,8 +84,6 @@ All major technical debt has been resolved. The remaining items represent minor 
 
 | Issue | Impact | Notes |
 |---|---|---|
-| **GitHub API version hardcoded** | Low | `X-GitHub-Api-Version: 2022-11-28` may deprecate in the future. |
-| **`golangci.yml` template outdated** | Low | Uses older linter names; could be updated to align with modern best practices. |
 | **`ParseCSharp` always returns error** | None | Intentional stub; kept for API compatibility until native parsing is viable. |
 
 ---
@@ -99,6 +97,23 @@ All major technical debt has been resolved. The remaining items represent minor 
 | **Python** | ❌ | PyLint, Ruff | `.pylintrc`, `ruff.toml` |
 | **Ruby** | ❌ | RuboCop, StandardRB | `.rubocop.yml`, `.standard.yml` |
 | **Java** | ❌ | Checkstyle | `checkstyle.xml` |
+| **C#** | ❌ | Roslyn analyzers | `.editorconfig` |
+
+---
+
+## 📈 Metrics
+
+| Metric | Value |
+|---|---|
+| **Binary Architecture**| Static Go Binary (stdlib only) |
+| **Supported Languages** | 6 |
+| **Case Studies** | 6 real-world repos |
+| **CLI Test Coverage** | Comprehensive (pipeline boundaries, error handling, formatting) |
+| **Subprocess Coverage** | Extensive (exit codes, missing tools, parsing crashes) |
+
+---
+
+*This file is auto-generated. Update after significant changes.*va** | ❌ | Checkstyle | `checkstyle.xml` |
 | **C#** | ❌ | Roslyn analyzers | `.editorconfig` |
 
 ---

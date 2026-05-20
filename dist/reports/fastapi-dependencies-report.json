@@ -1,6 +1,6 @@
 [
   {
-    "file_path": "/home/paulo/code/maintainability-sensors/.cache/fastapi/fastapi/dependencies/utils.py",
+    "file_path": "/workspace/.cache/fastapi/fastapi/dependencies/utils.py",
     "language": "python",
     "tooling_detected": true,
     "metrics": {

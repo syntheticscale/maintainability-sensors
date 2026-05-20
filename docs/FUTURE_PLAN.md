@@ -38,7 +38,7 @@ The codebase must anticipate the rapidly shifting tooling landscape to remain re
 
 ---
 
-## 4. Visionary Next-Level Features 🌟
+## 4. [COMPLETED] Visionary Next-Level Features 🌟
 To become an absolute "must-have" for Enterprise AI teams, the tool needs proactive enablement rather than just reactive gatekeeping.
 
 *   **Baseline Auto-generation:** Introduce a `maintainability-sensors baseline` command. It scans the repo, finds all existing legacy violations, and auto-generates a suppressions file (e.g., a `.eslintignore` equivalent or a `maintainability-baseline.json`). This allows teams to enforce strict `exit 1` checks on **new** PRs instantly without failing builds on legacy code.

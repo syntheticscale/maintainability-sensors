@@ -107,5 +107,7 @@ This CLI is designed around three strict architectural rules:
 
 ## 📄 License
 
-MIT © 2026 Paulo Lai & Contributors.  
+Created by [Paulo Lai](https://github.com/paulolai) for Synthetic Scale.
+
+MIT © 2026 Synthetic Scale & Contributors.  
 *This is an independent open-source community reference implementation and is not affiliated with Thoughtworks or Martin Fowler.*

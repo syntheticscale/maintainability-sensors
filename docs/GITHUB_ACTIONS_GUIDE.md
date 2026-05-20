@@ -35,9 +35,9 @@ jobs:
 
 ---
 
-## 2. Advanced: PR Commenter Mode (`--github-pr`)
+## 2. Advanced: Inline PR Review Comments (`--github-pr`)
 
-To have the CLI **directly comment on your active Pull Requests** (posting the scorecard, complexity details, and AI self-correction instructions), enable the `--github-pr` flag and provide the `GITHUB_TOKEN` secret.
+To have the CLI **directly review your active Pull Requests** (posting inline comments on the exact lines of code that exceed complexity limits), enable the `--github-pr` flag and provide the `GITHUB_TOKEN` secret. The CLI natively uses the GitHub Pull Request Review API to create actionable, localized feedback.
 
 ```yaml
 name: Quality Gate & PR Review

@@ -1,6 +1,6 @@
 [
   {
-    "file_path": "/home/paulo/code/maintainability-sensors/.cache/go-std-net/src/net/http/server.go",
+    "file_path": "/workspace/.cache/go-std-net/src/net/http/server.go",
     "language": "go",
     "tooling_detected": true,
     "metrics": {

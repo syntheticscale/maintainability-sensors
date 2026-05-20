@@ -1,6 +1,6 @@
 [
   {
-    "file_path": "/home/paulo/code/maintainability-sensors/.cache/requests/src/requests/adapters.py",
+    "file_path": "/workspace/.cache/requests/src/requests/adapters.py",
     "language": "python",
     "tooling_detected": true,
     "metrics": {

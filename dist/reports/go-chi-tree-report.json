@@ -1,6 +1,6 @@
 [
   {
-    "file_path": "/home/paulo/code/maintainability-sensors/.cache/go-chi/tree.go",
+    "file_path": "/workspace/.cache/go-chi/tree.go",
     "language": "go",
     "tooling_detected": true,
     "metrics": {

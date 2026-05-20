@@ -1,6 +1,6 @@
 [
   {
-    "file_path": "/home/paulo/code/maintainability-sensors/.cache/nestjs/packages/core/injector/injector.ts",
+    "file_path": "/workspace/.cache/nestjs/packages/core/injector/injector.ts",
     "language": "typescript",
     "tooling_detected": true,
     "metrics": {

@@ -51,7 +51,14 @@ maintainability-sensors bootstrap .
 ```
 This writes pristine `.eslintrc.json`, `.pylintrc`, or `.golangci.yml` configurations with strict, deterministic thresholds (e.g. cyclomatic complexity limit 8, max function lines 50, max params 4).
 
-### Step 2: Configure as a Local git Pre-commit Hook
+### Step 2: Suppressing Legacy Debt (Optional)
+If you are adopting this tool on an existing legacy codebase that already has hundreds of violations, you don't want the CI to fail immediately. Instead of lowering the standards, generate a baseline suppression file:
+```bash
+maintainability-sensors baseline .
+```
+This generates a `maintainability-baseline.json` file. The CLI will now dynamically load this file and ignore existing legacy violations, but will still strictly fail the build if an AI agent introduces a *new* violation or makes an existing one worse.
+
+### Step 3: Configure as a Local git Pre-commit Hook
 To ensure that *no* developer or AI agent can commit code that violates the maintainability rules, configure the sensors to run as a **git pre-commit hook**.
 
 Create or update `.git/hooks/pre-commit` in your repository:
