@@ -83,11 +83,6 @@ func calculateGoComplexity(fn *ast.FuncDecl) int {
 			if n.Comm != nil {
 				complexity++
 			}
-		case *ast.BinaryExpr:
-			// Boolean logical AND / OR operators
-			if n.Op == token.LAND || n.Op == token.LOR {
-				complexity++
-			}
 		}
 		return true
 	})
