@@ -37,6 +37,19 @@ func Execute() {
 
 		executeRun(targetPath, *jsonOut, *githubPR, *markdownOut, *jsonOutFile, *htmlOut)
 
+	case "generate":
+		genCmd := flag.NewFlagSet("generate", flag.ExitOnError)
+		markdownOut := genCmd.String("markdown-out", "", "write beautiful markdown scorecard to specified file path")
+		htmlOut := genCmd.String("html-out", "", "write beautiful dark-themed HTML scorecard to specified file path")
+		_ = genCmd.Parse(os.Args[2:])
+
+		if len(genCmd.Args()) < 1 {
+			fmt.Fprintln(os.Stderr, "[ERROR] Missing input JSON file path for generate subcommand.")
+			os.Exit(1)
+		}
+		jsonIn := genCmd.Arg(0)
+		executeGenerate(jsonIn, *markdownOut, *htmlOut)
+
 	case "bootstrap":
 		bootCmd := flag.NewFlagSet("bootstrap", flag.ExitOnError)
 		_ = bootCmd.Parse(os.Args[2:])
@@ -68,12 +81,16 @@ func printGeneralUsage() {
 	fmt.Printf("                    Optional flag: --markdown-out [file-path] (writes beautiful markdown scorecard to specified file path).\n")
 	fmt.Printf("                    Optional flag: --json-out [file-path] (writes raw JSON metric payload to specified file path).\n")
 	fmt.Printf("                    Optional flag: --html-out [file-path] (writes beautiful dark-themed HTML scorecard to specified file path).\n")
+	fmt.Printf("  generate [json-in] Reconstruct visual reports from a saved JSON scorecard (the Single Source of Truth).\n")
+	fmt.Printf("                    Optional flag: --markdown-out [file-path] (writes beautiful markdown scorecard to specified file path).\n")
+	fmt.Printf("                    Optional flag: --html-out [file-path] (writes beautiful dark-themed HTML scorecard to specified file path).\n")
 	fmt.Printf("  bootstrap [path]  Auto-detect repository language and bootstrap pristine, non-overwriting\n")
-	fmt.Printf("                    maintainability configuration files (TS, Python, Go, Java).\n\n")
+	fmt.Printf("                    maintainability configuration files (TS, Python, Go, Java, Ruby, C#).\n\n")
 	fmt.Printf("Examples:\n")
 	fmt.Printf("  maintainability-sensors run .\n")
 	fmt.Printf("  maintainability-sensors run . --markdown-out=report.md --html-out=report.html\n")
 	fmt.Printf("  maintainability-sensors run src/api.py --json\n")
+	fmt.Printf("  maintainability-sensors generate report.json --html-out=report.html --markdown-out=report.md\n")
 	fmt.Printf("  maintainability-sensors bootstrap /path/to/my/project\n")
 }
 
@@ -103,11 +120,14 @@ func executeRun(targetPath string, jsonOutput bool, githubPR bool, markdownOut s
 	} else {
 		// Directory Scan
 		err = filepath.Walk(absPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() {
+			if err != nil {
 				return nil
 			}
-			// Skip typical build / dependency folders
-			if strings.Contains(path, "node_modules") || strings.Contains(path, ".git") || strings.Contains(path, "vendor") || strings.Contains(path, "bin") || strings.Contains(path, ".cache") || strings.Contains(path, ".venv") || strings.Contains(path, "venv") || strings.Contains(path, "env") {
+			if info.IsDir() {
+				dirName := info.Name()
+				if dirName == "node_modules" || dirName == ".git" || dirName == "vendor" || dirName == "bin" || dirName == ".cache" || dirName == ".venv" || dirName == "venv" || dirName == "env" {
+					return filepath.SkipDir
+				}
 				return nil
 			}
 			// Skip files without recognized extension
@@ -245,6 +265,40 @@ func executeBootstrap(targetPath string) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] Bootstrap failed: %v\n", err)
 		os.Exit(1)
+	}
+}
+
+func executeGenerate(jsonIn string, markdownOut string, htmlOut string) {
+	data, err := os.ReadFile(jsonIn)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed to read JSON input file: %v\n", err)
+		os.Exit(1)
+	}
+
+	var results []sensors.OrchestratorResult
+	if err := json.Unmarshal(data, &results); err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed to parse JSON input scorecard: %v\n", err)
+		os.Exit(1)
+	}
+
+	if markdownOut != "" {
+		scorecard := GenerateMarkdownScorecard(results)
+		err := os.WriteFile(markdownOut, []byte(scorecard), 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[ERROR] Failed to write markdown scorecard: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("[SUCCESS] Generated markdown report from JSON at %s\n", markdownOut)
+	}
+
+	if htmlOut != "" {
+		htmlScorecard := GenerateHTMLScorecard(results)
+		err := os.WriteFile(htmlOut, []byte(htmlScorecard), 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[ERROR] Failed to write HTML scorecard: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("[SUCCESS] Generated HTML report from JSON at %s\n", htmlOut)
 	}
 }
 

@@ -1,0 +1,10 @@
+{
+  "file_path": "tree.go",
+  "language": "go",
+  "tooling_detected": true,
+  "metrics": {
+    "complexity": 37,
+    "function_length": 145,
+    "argument_count": 4
+  }
+}

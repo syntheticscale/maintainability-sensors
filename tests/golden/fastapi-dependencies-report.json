@@ -1,0 +1,10 @@
+{
+  "file_path": "fastapi/dependencies/utils.py",
+  "language": "python",
+  "tooling_detected": true,
+  "metrics": {
+    "complexity": 0,
+    "function_length": 64,
+    "argument_count": 8
+  }
+}
