@@ -70,6 +70,17 @@ func Execute() {
 
 		executeBootstrap(targetPath)
 
+	case "baseline":
+		baselineCmd := flag.NewFlagSet("baseline", flag.ExitOnError)
+		_ = baselineCmd.Parse(os.Args[2:])
+
+		targetPath := "."
+		if len(baselineCmd.Args()) > 0 {
+			targetPath = baselineCmd.Arg(0)
+		}
+
+		executeBaseline(targetPath)
+
 	case "-h", "--help", "help":
 		printGeneralUsage()
 
@@ -210,7 +221,7 @@ type ReportOptions struct {
 	ActionVerb  string
 }
 
-func hasViolations(res sensors.OrchestratorResult) bool {
+func hasViolations(res sensors.OrchestratorResult, baseline map[string]sensors.MaintainabilityMetrics) bool {
 	if !res.ToolingDetected {
 		return false
 	}
@@ -228,15 +239,29 @@ func hasViolations(res sensors.OrchestratorResult) bool {
 		}
 	}
 
+	if baseline != nil {
+		if bMetrics, ok := baseline[res.FilePath]; ok {
+			if bMetrics.Complexity > limitComplexity {
+				limitComplexity = bMetrics.Complexity
+			}
+			if bMetrics.FunctionLength > limitLength {
+				limitLength = bMetrics.FunctionLength
+			}
+			if bMetrics.ArgumentCount > limitArgs {
+				limitArgs = bMetrics.ArgumentCount
+			}
+		}
+	}
+
 	return res.Metrics.Complexity > limitComplexity ||
 		res.Metrics.FunctionLength > limitLength ||
 		res.Metrics.ArgumentCount > limitArgs
 }
 
-func FormatResultsCLI(results []sensors.OrchestratorResult, jsonOutput bool, isDir bool) bool {
+func FormatResultsCLI(results []sensors.OrchestratorResult, jsonOutput bool, isDir bool, baseline map[string]sensors.MaintainabilityMetrics) bool {
 	hasV := false
 	for _, res := range results {
-		if hasViolations(res) {
+		if hasViolations(res, baseline) {
 			hasV = true
 			break
 		}
@@ -340,7 +365,8 @@ func executeRun(opts RunOptions) {
 		return
 	}
 
-	hasV := FormatResultsCLI(results, opts.JSONOutput, isDir)
+	baseline := loadBaseline(opts.TargetPath)
+	hasV := FormatResultsCLI(results, opts.JSONOutput, isDir, baseline)
 
 	if os.Getenv("GITHUB_ACTIONS") == "true" {
 		scorecard := GenerateMarkdownScorecard(results)
@@ -382,6 +408,92 @@ func executeBootstrap(targetPath string) {
 		fmt.Fprintf(os.Stderr, "[ERROR] Bootstrap failed: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func loadBaseline(targetPath string) map[string]sensors.MaintainabilityMetrics {
+	baselineFile := "maintainability-baseline.json"
+	if targetPath != "" && targetPath != "." {
+		info, err := os.Stat(targetPath)
+		if err == nil && info.IsDir() {
+			baselineFile = filepath.Join(targetPath, "maintainability-baseline.json")
+		}
+	}
+	
+	data, err := os.ReadFile(baselineFile)
+	if err != nil {
+		return nil
+	}
+	
+	var baseline map[string]sensors.MaintainabilityMetrics
+	if err := json.Unmarshal(data, &baseline); err != nil {
+		return nil
+	}
+	return baseline
+}
+
+func executeBaseline(targetPath string) {
+	files, isDir, err := FindFiles(targetPath)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	if isDir && len(files) == 0 {
+		fmt.Println("No supported source files (TS/JS, Python, Go) found in target directory.")
+		return
+	}
+
+	results, err := ScanFiles(files, isDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+		os.Exit(1)
+	}
+
+	baselineFile := "maintainability-baseline.json"
+	if isDir {
+		baselineFile = filepath.Join(targetPath, "maintainability-baseline.json")
+	}
+
+	baselineData := make(map[string]sensors.MaintainabilityMetrics)
+
+	for _, res := range results {
+		if !res.ToolingDetected {
+			continue
+		}
+
+		limitComplexity := sensors.BaselineComplexity
+		limitLength := sensors.BaselineFunctionLength
+		limitArgs := sensors.BaselineArgumentCount
+
+		for _, exc := range res.Exceptions {
+			if exc.RuleName == "Cyclomatic Complexity" {
+				limitComplexity = exc.ConfiguredVal
+			} else if exc.RuleName == "Function Length" {
+				limitLength = exc.ConfiguredVal
+			} else if exc.RuleName == "Argument Count" {
+				limitArgs = exc.ConfiguredVal
+			}
+		}
+
+		if res.Metrics.Complexity > limitComplexity ||
+			res.Metrics.FunctionLength > limitLength ||
+			res.Metrics.ArgumentCount > limitArgs {
+			baselineData[res.FilePath] = res.Metrics
+		}
+	}
+
+	data, err := json.MarshalIndent(baselineData, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed to marshal baseline JSON: %v\n", err)
+		os.Exit(1)
+	}
+
+	if err := os.WriteFile(baselineFile, data, 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed to write baseline file: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("[SAVED] Baseline auto-generated with %d violations saved to %s\n", len(baselineData), baselineFile)
 }
 
 func writeReports(results []sensors.OrchestratorResult, opts ReportOptions) error {
@@ -438,7 +550,7 @@ func executeGenerate(jsonIn string, markdownOut string, htmlOut string) {
 
 	hasV := false
 	for _, res := range results {
-		if hasViolations(res) {
+		if hasViolations(res, nil) {
 			hasV = true
 			break
 		}
