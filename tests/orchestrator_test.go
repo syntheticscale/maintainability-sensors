@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/paulolai/maintainability-sensors/sensors"
+	"github.com/syntheticscale/maintainability-sensors/sensors"
 )
 
 func TestParseGoAST_ValidFile(t *testing.T) {

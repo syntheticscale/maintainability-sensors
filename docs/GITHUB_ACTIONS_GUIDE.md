@@ -25,7 +25,7 @@ jobs:
       # 1. Download and install the Maintainability Sensors binary
       - name: Install Maintainability Sensors
         run: |
-          curl -sSfL -o /usr/local/bin/maintainability-sensors https://github.com/paulolai/maintainability-sensors/releases/latest/download/maintainability-sensors-linux
+          curl -sSfL -o /usr/local/bin/maintainability-sensors https://github.com/syntheticscale/maintainability-sensors/releases/latest/download/maintainability-sensors-linux
           chmod +x /usr/local/bin/maintainability-sensors
 
       # 2. Run the scan (triggers orchestrated linter and writes summaries)
@@ -55,7 +55,7 @@ jobs:
 
       - name: Install Maintainability Sensors
         run: |
-          curl -sSfL -o /usr/local/bin/maintainability-sensors https://github.com/paulolai/maintainability-sensors/releases/latest/download/maintainability-sensors-linux
+          curl -sSfL -o /usr/local/bin/maintainability-sensors https://github.com/syntheticscale/maintainability-sensors/releases/latest/download/maintainability-sensors-linux
           chmod +x /usr/local/bin/maintainability-sensors
 
       # 3. Scan and write directly back as a PR Issue comment

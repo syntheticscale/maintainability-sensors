@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/paulolai/maintainability-sensors/sensors"
+	"github.com/syntheticscale/maintainability-sensors/sensors"
 	"sync"
 	"golang.org/x/sync/errgroup"
 )

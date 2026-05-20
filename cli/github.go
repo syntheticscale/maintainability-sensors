@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/paulolai/maintainability-sensors/sensors"
+	"github.com/syntheticscale/maintainability-sensors/sensors"
 )
 
 const GitHubApiVersion = "2022-11-28"

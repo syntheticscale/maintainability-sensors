@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/paulolai/maintainability-sensors/sensors"
+	"github.com/syntheticscale/maintainability-sensors/sensors"
 )
 
 // Define -update flag to update golden files: go test ./tests -run TestGoldenSnapshots -update

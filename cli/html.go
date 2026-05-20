@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/paulolai/maintainability-sensors/sensors"
+	"github.com/syntheticscale/maintainability-sensors/sensors"
 )
 
 //go:embed templates/report.html

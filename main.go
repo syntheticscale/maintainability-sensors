@@ -1,6 +1,6 @@
 package main
 
-import "github.com/paulolai/maintainability-sensors/cli"
+import "github.com/syntheticscale/maintainability-sensors/cli"
 
 func main() {
 	cli.Execute()

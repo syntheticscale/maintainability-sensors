@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/paulolai/maintainability-sensors/cli"
-	"github.com/paulolai/maintainability-sensors/sensors"
+	"github.com/syntheticscale/maintainability-sensors/cli"
+	"github.com/syntheticscale/maintainability-sensors/sensors"
 )
 
 func TestOrchestratedScan_RelaxedLimits_ESLint(t *testing.T) {

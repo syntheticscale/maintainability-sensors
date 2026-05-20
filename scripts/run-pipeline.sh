@@ -12,7 +12,7 @@
 set -euo pipefail
 
 # Ensure user local bin folders and local venv are in PATH (for isolated pip tools like pylint)
-export PATH="./.venv/bin:$HOME/.local/bin:$HOME/.hermes/home/.local/bin:/usr/local/bin:$PATH"
+export PATH="./.venv/bin:$HOME/.local/bin:/usr/local/bin:$PATH"
 
 # Configuration
 CACHE_DIR=".cache"

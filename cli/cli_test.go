@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/paulolai/maintainability-sensors/sensors"
+	"github.com/syntheticscale/maintainability-sensors/sensors"
 )
 
 // cliBinary holds the path to the compiled CLI binary (set in TestMain).
