@@ -34,6 +34,7 @@ jobs:
           # Install PyLint for Python golden snapshots
           python -m pip install --upgrade pip
           pip install pylint
+          pip install ruff
           # Install ESLint for TypeScript golden snapshots
           npm install -g eslint
 

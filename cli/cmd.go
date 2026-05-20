@@ -2,116 +2,83 @@ package cli
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/syntheticscale/maintainability-sensors/sensors"
 	"sync"
+
+	"github.com/alecthomas/kong"
+	"github.com/syntheticscale/maintainability-sensors/sensors"
 	"golang.org/x/sync/errgroup"
 )
 
-// Execute runs the main CLI command-line parser.
-func Execute() {
-	if len(os.Args) < 2 {
-		printGeneralUsage()
-		os.Exit(0)
-	}
-
-	subcommand := os.Args[1]
-
-	switch subcommand {
-	case "run":
-		runCmd := flag.NewFlagSet("run", flag.ExitOnError)
-		jsonOut := runCmd.Bool("json", false, "output result in raw JSON format")
-		githubPR := runCmd.Bool("github-pr", false, "post markdown scorecard directly as a GitHub PR comment")
-		markdownOut := runCmd.String("markdown-out", "", "write beautiful markdown scorecard to specified file path")
-		jsonOutFile := runCmd.String("json-out", "", "write raw JSON metric payload to specified file path")
-		htmlOut := runCmd.String("html-out", "", "write beautiful dark-themed HTML scorecard to specified file path")
-		_ = runCmd.Parse(os.Args[2:])
-
-		targetPath := "."
-		if len(runCmd.Args()) > 0 {
-			targetPath = runCmd.Arg(0)
-		}
-
-		executeRun(RunOptions{
-			TargetPath:  targetPath,
-			JSONOutput:  *jsonOut,
-			GithubPR:    *githubPR,
-			MarkdownOut: *markdownOut,
-			JSONOutFile: *jsonOutFile,
-			HTMLOut:     *htmlOut,
-		})
-
-	case "generate":
-		genCmd := flag.NewFlagSet("generate", flag.ExitOnError)
-		markdownOut := genCmd.String("markdown-out", "", "write beautiful markdown scorecard to specified file path")
-		htmlOut := genCmd.String("html-out", "", "write beautiful dark-themed HTML scorecard to specified file path")
-		_ = genCmd.Parse(os.Args[2:])
-
-		if len(genCmd.Args()) < 1 {
-			fmt.Fprintln(os.Stderr, "[ERROR] Missing input JSON file path for generate subcommand.")
-			os.Exit(1)
-		}
-		jsonIn := genCmd.Arg(0)
-		executeGenerate(jsonIn, *markdownOut, *htmlOut)
-
-	case "bootstrap":
-		bootCmd := flag.NewFlagSet("bootstrap", flag.ExitOnError)
-		_ = bootCmd.Parse(os.Args[2:])
-
-		targetPath := "."
-		if len(bootCmd.Args()) > 0 {
-			targetPath = bootCmd.Arg(0)
-		}
-
-		executeBootstrap(targetPath)
-
-	case "baseline":
-		baselineCmd := flag.NewFlagSet("baseline", flag.ExitOnError)
-		_ = baselineCmd.Parse(os.Args[2:])
-
-		targetPath := "."
-		if len(baselineCmd.Args()) > 0 {
-			targetPath = baselineCmd.Arg(0)
-		}
-
-		executeBaseline(targetPath)
-
-	case "-h", "--help", "help":
-		printGeneralUsage()
-
-	default:
-		fmt.Fprintf(os.Stderr, "[ERROR] Unknown subcommand: %s\n\n", subcommand)
-		printGeneralUsage()
-		os.Exit(1)
-	}
+var cli struct {
+	Run      runCmd      `cmd:"" help:"Scan a specific file or folder for maintainability warnings."`
+	Generate generateCmd `cmd:"" help:"Reconstruct visual reports from a saved JSON scorecard (the Single Source of Truth)."`
+	Bootstrap bootstrapCmd `cmd:"" help:"Auto-detect repository language and bootstrap pristine, non-overwriting maintainability configuration files (TS, Python, Go, Java, Ruby, C#)."`
+	Baseline baselineCmd `cmd:"" help:"Auto-generate baseline configurations for a project."`
 }
 
-func printGeneralUsage() {
-	fmt.Printf("Maintainability Sensors for Coding Agents CLI 📡\n")
-	fmt.Printf("Usage: maintainability-sensors <subcommand> [args]\n\n")
-	fmt.Printf("Subcommands:\n")
-	fmt.Printf("  run [path]        Scan a specific file or folder for maintainability warnings.\n")
-	fmt.Printf("                    Optional flag: --json (outputs raw JSON metric payload to stdout).\n")
-	fmt.Printf("                    Optional flag: --github-pr (post markdown scorecard directly as a GitHub PR comment).\n")
-	fmt.Printf("                    Optional flag: --markdown-out [file-path] (writes beautiful markdown scorecard to specified file path).\n")
-	fmt.Printf("                    Optional flag: --json-out [file-path] (writes raw JSON metric payload to specified file path).\n")
-	fmt.Printf("                    Optional flag: --html-out [file-path] (writes beautiful dark-themed HTML scorecard to specified file path).\n")
-	fmt.Printf("  generate [json-in] Reconstruct visual reports from a saved JSON scorecard (the Single Source of Truth).\n")
-	fmt.Printf("                    Optional flag: --markdown-out [file-path] (writes beautiful markdown scorecard to specified file path).\n")
-	fmt.Printf("                    Optional flag: --html-out [file-path] (writes beautiful dark-themed HTML scorecard to specified file path).\n")
-	fmt.Printf("  bootstrap [path]  Auto-detect repository language and bootstrap pristine, non-overwriting\n")
-	fmt.Printf("                    maintainability configuration files (TS, Python, Go, Java, Ruby, C#).\n\n")
-	fmt.Printf("Examples:\n")
-	fmt.Printf("  maintainability-sensors run .\n")
-	fmt.Printf("  maintainability-sensors run . --markdown-out=report.md --html-out=report.html\n")
-	fmt.Printf("  maintainability-sensors run src/api.py --json\n")
-	fmt.Printf("  maintainability-sensors generate report.json --html-out=report.html --markdown-out=report.md\n")
-	fmt.Printf("  maintainability-sensors bootstrap /path/to/my/project\n")
+type runCmd struct {
+	Path        string `arg:"" optional:"" default:"." help:"Target path to scan (file or directory)."`
+	Json        bool   `help:"Output result in raw JSON format."`
+	GithubPr    bool   `help:"Post markdown scorecard directly as a GitHub PR comment."`
+	MarkdownOut string `help:"Write beautiful markdown scorecard to specified file path."`
+	JsonOut     string `help:"Write raw JSON metric payload to specified file path."`
+	HtmlOut     string `help:"Write beautiful dark-themed HTML scorecard to specified file path."`
+}
+
+func (c *runCmd) Run() error {
+	executeRun(RunOptions{
+		TargetPath:  c.Path,
+		JSONOutput:  c.Json,
+		GithubPR:    c.GithubPr,
+		MarkdownOut: c.MarkdownOut,
+		JSONOutFile: c.JsonOut,
+		HTMLOut:     c.HtmlOut,
+	})
+	return nil
+}
+
+type generateCmd struct {
+	JsonIn      string `arg:"" help:"Input JSON file path."`
+	MarkdownOut string `help:"Write beautiful markdown scorecard to specified file path."`
+	HtmlOut     string `help:"Write beautiful dark-themed HTML scorecard to specified file path."`
+}
+
+func (c *generateCmd) Run() error {
+	executeGenerate(c.JsonIn, c.MarkdownOut, c.HtmlOut)
+	return nil
+}
+
+type bootstrapCmd struct {
+	Path string `arg:"" optional:"" default:"." help:"Target path to bootstrap."`
+}
+
+func (c *bootstrapCmd) Run() error {
+	executeBootstrap(c.Path)
+	return nil
+}
+
+type baselineCmd struct {
+	Path string `arg:"" optional:"" default:"." help:"Target path to baseline."`
+}
+
+func (c *baselineCmd) Run() error {
+	executeBaseline(c.Path)
+	return nil
+}
+
+// Execute runs the main CLI command-line parser.
+func Execute() {
+	ctx := kong.Parse(&cli,
+		kong.Name("maintainability-sensors"),
+		kong.Description("Maintainability Sensors for Coding Agents CLI 📡\n\nExamples:\n  maintainability-sensors run .\n  maintainability-sensors run . --markdown-out=report.md --html-out=report.html\n  maintainability-sensors run src/api.py --json\n  maintainability-sensors generate report.json --html-out=report.html --markdown-out=report.md\n  maintainability-sensors bootstrap /path/to/my/project"),
+		kong.UsageOnError(),
+	)
+	err := ctx.Run()
+	ctx.FatalIfErrorf(err)
 }
 
 func FindFiles(targetPath string) ([]string, bool, error) {
