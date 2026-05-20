@@ -57,6 +57,12 @@ jobs:
           chmod +x scripts/run-pipeline.sh
           ./scripts/run-pipeline.sh
 
+      - name: 📤 Upload Generated Reports as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: maintainability-reports
+          path: dist/reports/
+
       - name: 💾 Commit & Push Generated Reports
         run: |
           git config --global user.name "github-actions[bot]"

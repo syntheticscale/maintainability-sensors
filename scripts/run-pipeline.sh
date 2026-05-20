@@ -11,6 +11,9 @@
 
 set -euo pipefail
 
+# Ensure user local bin folders are in PATH (for newly installed pip tools like pylint)
+export PATH="$HOME/.local/bin:$HOME/.hermes/home/.local/bin:/usr/local/bin:$PATH"
+
 # Configuration
 CACHE_DIR=".cache"
 OUTPUT_DIR="dist/reports"
@@ -96,7 +99,17 @@ analyze_repo() {
     if [[ "$name" == "requests" || "$name" == "fastapi" ]]; then
         if ! command -v pylint &>/dev/null; then
             log_warn "pylint not detected. Installing via pip to enable Level 1+ orchestrated analysis..."
-            pip install --quiet pylint || log_warn "Failed to install pylint. Run will fall back to Level 0."
+            pip install --quiet pylint --break-system-packages || pip install --quiet pylint || log_warn "Failed to install pylint. Run will fall back to Level 0."
+        fi
+    fi
+
+    # For TypeScript/JavaScript (nestjs): we run npm install to ensure local eslint is available
+    if [[ "$name" == "nestjs" ]]; then
+        log_info "Ensuring local NestJS ESLint dependencies are installed..."
+        if [ ! -d "$repo_root/node_modules" ]; then
+            (cd "$repo_root" && npm install --quiet --legacy-peer-deps) || log_warn "Failed to install NestJS npm dependencies. Run will fall back to Level 0."
+        else
+            log_info "NestJS node_modules already cached."
         fi
     fi
 
