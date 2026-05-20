@@ -437,18 +437,24 @@ func TestGetParserForLang(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.lang, func(t *testing.T) {
-			got := getParserForLang(tc.lang)
+			got := getParsersForLang(tc.lang)
 			if tc.wantNil {
-				if got != nil {
-					t.Errorf("getParserForLang(%q) = %v, want nil", tc.lang, got)
+				if len(got) > 0 {
+					t.Errorf("getParsersForLang(%q) = %v, want nil", tc.lang, got)
 				}
 				return
 			}
-			if got == nil {
-				t.Fatalf("getParserForLang(%q) = nil, want non-nil", tc.lang)
+			if len(got) == 0 {
+				t.Fatalf("getParsersForLang(%q) = nil, want non-nil", tc.lang)
 			}
-			if got.Name() != tc.wantName {
-				t.Errorf("getParserForLang(%q).Name() = %q, want %q", tc.lang, got.Name(), tc.wantName)
+			found := false
+			for _, p := range got {
+				if p.Name() == tc.wantName {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("expected to find %s parser", tc.wantName)
 			}
 		})
 	}
@@ -473,7 +479,7 @@ func TestDetectRelaxedLimits_ESLintJSON(t *testing.T) {
 		t.Fatalf("failed to write config: %v", err)
 	}
 
-	got := detectRelaxedLimits(configPath, "javascript")
+	got := detectRelaxedLimits(configPath, ESLintConfigParser{})
 
 	if len(got) != 4 {
 		t.Fatalf("expected 4 relaxed limits, got %d: %+v", len(got), got)
@@ -516,7 +522,7 @@ max-module-lines=450
 		t.Fatalf("failed to write config: %v", err)
 	}
 
-	got := detectRelaxedLimits(configPath, "python")
+	got := detectRelaxedLimits(configPath, PyLintConfigParser{})
 
 	if len(got) != 4 {
 		t.Fatalf("expected 4 relaxed limits, got %d: %+v", len(got), got)
@@ -557,7 +563,7 @@ func TestDetectRelaxedLimits_NoRelaxation(t *testing.T) {
 		t.Fatalf("failed to write config: %v", err)
 	}
 
-	got := detectRelaxedLimits(configPath, "javascript")
+	got := detectRelaxedLimits(configPath, ESLintConfigParser{})
 
 	if len(got) != 0 {
 		t.Errorf("expected 0 relaxed limits when all values are below baseline, got %d: %+v", len(got), got)
@@ -565,7 +571,7 @@ func TestDetectRelaxedLimits_NoRelaxation(t *testing.T) {
 }
 
 func TestDetectRelaxedLimits_EmptyPath(t *testing.T) {
-	got := detectRelaxedLimits("", "javascript")
+	got := detectRelaxedLimits("", ESLintConfigParser{})
 	if len(got) != 0 {
 		t.Errorf("expected empty slice for empty config path, got %d: %+v", len(got), got)
 	}
@@ -589,7 +595,7 @@ Metrics/MethodLength:
 		t.Fatalf("failed to write config: %v", err)
 	}
 
-	got := detectRelaxedLimits(configPath, "ruby")
+	got := detectRelaxedLimits(configPath, RuboCopConfigParser{})
 
 	if len(got) != 2 {
 		t.Fatalf("expected 2 relaxed limits, got %d: %+v", len(got), got)
@@ -633,7 +639,7 @@ linters-settings:
 		t.Fatalf("failed to write config: %v", err)
 	}
 
-	got := detectRelaxedLimits(configPath, "go")
+	got := detectRelaxedLimits(configPath, GoConfigParser{})
 
 	if len(got) != 2 {
 		t.Fatalf("expected 2 relaxed limits, got %d: %+v", len(got), got)

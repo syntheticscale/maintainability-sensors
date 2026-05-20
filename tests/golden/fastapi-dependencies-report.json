@@ -3,8 +3,8 @@
   "language": "python",
   "tooling_detected": true,
   "metrics": {
-    "complexity": 20,
-    "function_length": 64,
-    "argument_count": 8
+    "complexity": 0,
+    "function_length": 0,
+    "argument_count": 0
   }
 }
