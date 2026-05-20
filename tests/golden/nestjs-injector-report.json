@@ -7,5 +7,5 @@
     "function_length": 0,
     "argument_count": 0
   },
-  "message": "Orchestration error (ESLint): failed to parse ESLint JSON output: invalid character 'O' looking for beginning of value. (Verify dependencies are installed)"
+  "message": "Orchestration error (ESLint): ESLint exited with unexpected code 2: Oops! Something went wrong! :(\n\nESLint: 10.4.0\n\nESLint couldn't find an eslint.config.(js|mjs|cjs) file.\n\nFrom ESLint v9.0.0, the default configuration file is now eslint.config.js.\nIf you are using a .eslintrc.* file, please follow the migration guide\nto update your configuration file to the new format:\n\nhttps://eslint.org/docs/latest/use/configure/migration-guide\n\nIf you still have problems after following the migration guide, please stop by\nhttps://eslint.org/chat/help to chat with the team.. (Verify dependencies are installed)"
 }
