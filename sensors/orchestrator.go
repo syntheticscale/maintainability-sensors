@@ -34,9 +34,31 @@ type OrchestratorResult struct {
 	Exceptions      []RelaxedLimit         `json:"exceptions,omitempty"`
 }
 
+func sanitizePath(path string) (string, error) {
+	// Reject null bytes outright
+	if strings.Contains(path, "\x00") {
+		return "", fmt.Errorf("invalid path: contains null byte")
+	}
+
+	clean := filepath.Clean(path)
+
+	// Reject paths that traverse above the root after cleaning.
+	// filepath.Clean("../foo") stays "../foo". We reject if it starts with "..".
+	if strings.HasPrefix(clean, "..") {
+		return "", fmt.Errorf("invalid path: traversal outside current directory denied")
+	}
+
+	return clean, nil
+}
+
 // OrchestratedScan scans a specific file. It auto-detects configuration and runs local tooling
 // (ESLint/PyLint/Go AST) or falls back to Level 0 ("Working Blind").
 func OrchestratedScan(filePath string) (OrchestratorResult, error) {
+	filePath, err := sanitizePath(filePath)
+	if err != nil {
+		return OrchestratorResult{}, err
+	}
+
 	result := OrchestratorResult{
 		FilePath: filePath,
 		Language: detectLanguage(filePath),
@@ -191,6 +213,11 @@ func detectConfig(filePath string, lang string) string {
 func runESLint(filePath string) (MaintainabilityMetrics, error) {
 	var metrics MaintainabilityMetrics
 
+	filePath, err := sanitizePath(filePath)
+	if err != nil {
+		return metrics, err
+	}
+
 	// Run npx eslint -f json <file>
 	cmd := exec.Command("npx", "eslint", "-f", "json", filePath)
 	output, _ := cmd.CombinedOutput() // ignore exit 1 because lint failures return error code
@@ -245,6 +272,11 @@ func runESLint(filePath string) (MaintainabilityMetrics, error) {
 func runPyLint(filePath string) (MaintainabilityMetrics, error) {
 	var metrics MaintainabilityMetrics
 
+	filePath, err := sanitizePath(filePath)
+	if err != nil {
+		return metrics, err
+	}
+
 	// Run pylint --output-format=json <file>
 	cmd := exec.Command("pylint", "--output-format=json", filePath)
 	output, _ := cmd.CombinedOutput()
@@ -292,6 +324,11 @@ func runPyLint(filePath string) (MaintainabilityMetrics, error) {
 
 func runRuboCop(filePath string) (MaintainabilityMetrics, error) {
 	var metrics MaintainabilityMetrics
+
+	filePath, err := sanitizePath(filePath)
+	if err != nil {
+		return metrics, err
+	}
 
 	// Run rubocop --format json <file>
 	cmd := exec.Command("rubocop", "--format", "json", filePath)
