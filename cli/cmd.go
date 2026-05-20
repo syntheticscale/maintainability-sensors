@@ -24,6 +24,7 @@ func Execute() {
 	case "run":
 		runCmd := flag.NewFlagSet("run", flag.ExitOnError)
 		jsonOut := runCmd.Bool("json", false, "output result in raw JSON format")
+		githubPR := runCmd.Bool("github-pr", false, "post markdown scorecard directly as a GitHub PR comment")
 		_ = runCmd.Parse(os.Args[2:])
 
 		targetPath := "."
@@ -31,7 +32,7 @@ func Execute() {
 			targetPath = runCmd.Arg(0)
 		}
 
-		executeRun(targetPath, *jsonOut)
+		executeRun(targetPath, *jsonOut, *githubPR)
 
 	case "bootstrap":
 		bootCmd := flag.NewFlagSet("bootstrap", flag.ExitOnError)
@@ -60,6 +61,7 @@ func printGeneralUsage() {
 	fmt.Printf("Subcommands:\n")
 	fmt.Printf("  run [path]        Scan a specific file or folder for maintainability warnings.\n")
 	fmt.Printf("                    Optional flag: --json (outputs raw JSON metric payload).\n")
+	fmt.Printf("                    Optional flag: --github-pr (post markdown scorecard directly as a GitHub PR comment).\n")
 	fmt.Printf("  bootstrap [path]  Auto-detect repository language and bootstrap pristine, non-overwriting\n")
 	fmt.Printf("                    maintainability configuration files (TS, Python, Go, Java).\n\n")
 	fmt.Printf("Examples:\n")
@@ -68,7 +70,7 @@ func printGeneralUsage() {
 	fmt.Printf("  maintainability-sensors bootstrap /path/to/my/project\n")
 }
 
-func executeRun(targetPath string, jsonOutput bool) {
+func executeRun(targetPath string, jsonOutput bool, githubPR bool) {
 	absPath, err := filepath.Abs(targetPath)
 	if err != nil {
 		absPath = targetPath
@@ -80,6 +82,8 @@ func executeRun(targetPath string, jsonOutput bool) {
 		os.Exit(1)
 	}
 
+	var results []sensors.OrchestratorResult
+
 	if !info.IsDir() {
 		// Single File Scan
 		res, err := sensors.OrchestratedScan(absPath)
@@ -87,71 +91,111 @@ func executeRun(targetPath string, jsonOutput bool) {
 			fmt.Fprintf(os.Stderr, "[ERROR] Scan failed: %v\n", err)
 			os.Exit(1)
 		}
-
+		results = append(results, res)
 		printScanResult(res, jsonOutput)
-		return
-	}
+	} else {
+		// Directory Scan
+		err = filepath.Walk(absPath, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return nil
+			}
+			// Skip typical build / dependency folders
+			if strings.Contains(path, "node_modules") || strings.Contains(path, ".git") || strings.Contains(path, "vendor") || strings.Contains(path, "bin") {
+				return nil
+			}
+			// Skip files without recognized extension
+			ext := filepath.Ext(path)
+			if ext != ".ts" && ext != ".tsx" && ext != ".js" && ext != ".jsx" && ext != ".py" && ext != ".go" {
+				return nil
+			}
 
-	// Directory Scan
-	var results []sensors.OrchestratorResult
-	err = filepath.Walk(absPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+			res, err := sensors.OrchestratedScan(path)
+			if err == nil {
+				results = append(results, res)
+			}
 			return nil
-		}
-		// Skip typical build / dependency folders
-		if strings.Contains(path, "node_modules") || strings.Contains(path, ".git") || strings.Contains(path, "vendor") || strings.Contains(path, "bin") {
-			return nil
-		}
-		// Skip files without recognized extension
-		ext := filepath.Ext(path)
-		if ext != ".ts" && ext != ".tsx" && ext != ".js" && ext != ".jsx" && ext != ".py" && ext != ".go" {
-			return nil
+		})
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[ERROR] Directory scan failed: %v\n", err)
+			os.Exit(1)
 		}
 
-		res, err := sensors.OrchestratedScan(path)
-		if err == nil {
-			results = append(results, res)
+		if len(results) == 0 {
+			fmt.Println("No supported source files (TS/JS, Python, Go) found in target directory.")
+			return
 		}
-		return nil
-	})
 
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Directory scan failed: %v\n", err)
-		os.Exit(1)
-	}
-
-	if len(results) == 0 {
-		fmt.Println("No supported source files (TS/JS, Python, Go) found in target directory.")
-		return
-	}
-
-	if jsonOutput {
-		data, _ := json.MarshalIndent(results, "", "  ")
-		fmt.Println(string(data))
-		return
-	}
-
-	// Pretty print summary table
-	fmt.Printf("\n=========================================\n")
-	fmt.Printf(" Maintainability Sensors Report Summary\n")
-	fmt.Printf("=========================================\n\n")
-	fmt.Printf("%-35s %-12s %-10s %-10s %-10s\n", "File", "Lang", "Complexity", "FuncLines", "MaxParams")
-	fmt.Printf("%-35s %-12s %-10s %-10s %-10s\n", "----", "----", "----------", "---------", "---------")
-
-	blindCount := 0
-	for _, res := range results {
-		fileBase := filepath.Base(res.FilePath)
-		if !res.ToolingDetected {
-			blindCount++
-			fmt.Printf("%-35s %-12s %-10s %-10s %-10s\n", fileBase, res.Language, "BLIND (L0)", "BLIND (L0)", "BLIND (L0)")
+		if jsonOutput {
+			data, _ := json.MarshalIndent(results, "", "  ")
+			fmt.Println(string(data))
 		} else {
-			fmt.Printf("%-35s %-12s %-10d %-10d %-10d\n", fileBase, res.Language, res.Metrics.Complexity, res.Metrics.FunctionLength, res.Metrics.ArgumentCount)
+			// Pretty print summary table
+			fmt.Printf("\n=========================================\n")
+			fmt.Printf(" Maintainability Sensors Report Summary\n")
+			fmt.Printf("=========================================\n\n")
+			fmt.Printf("%-35s %-12s %-10s %-10s %-10s\n", "File", "Lang", "Complexity", "FuncLines", "MaxParams")
+			fmt.Printf("%-35s %-12s %-10s %-10s %-10s\n", "----", "----", "----------", "---------", "---------")
+
+			blindCount := 0
+			for _, res := range results {
+				fileBase := filepath.Base(res.FilePath)
+				if !res.ToolingDetected {
+					blindCount++
+					fmt.Printf("%-35s %-12s %-10s %-10s %-10s\n", fileBase, res.Language, "BLIND (L0)", "BLIND (L0)", "BLIND (L0)")
+				} else {
+					fmt.Printf("%-35s %-12s %-10d %-10d %-10d\n", fileBase, res.Language, res.Metrics.Complexity, res.Metrics.FunctionLength, res.Metrics.ArgumentCount)
+				}
+			}
+
+			if blindCount > 0 {
+				fmt.Printf("\n>>> NOTICE: %d files are running BLIND (Level 0) with no static analysis configs.\n", blindCount)
+				fmt.Printf("    Run 'maintainability-sensors bootstrap' to automatically establish their guardrails!\n")
+			}
+
+			// Display directory scan exceptions!
+			var allExceptions []string
+			for _, res := range results {
+				if len(res.Exceptions) > 0 {
+					var details []string
+					for _, exc := range res.Exceptions {
+						details = append(details, fmt.Sprintf("%s (%d vs baseline %d)", exc.RuleName, exc.ConfiguredVal, exc.BaselineVal))
+					}
+					allExceptions = append(allExceptions, fmt.Sprintf("  * %s: %s", filepath.Base(res.FilePath), strings.Join(details, ", ")))
+				}
+			}
+
+			if len(allExceptions) > 0 {
+				fmt.Printf("\n=========================================\n")
+				fmt.Printf(" Exceptions Created by AI (Relaxed Constraints)\n")
+				fmt.Printf("=========================================\n")
+				fmt.Printf("⚠️  The following files have relaxed rules configured in their linters:\n\n")
+				for _, excStr := range allExceptions {
+					fmt.Println(excStr)
+				}
+				fmt.Printf("\nNOTE: These relaxed thresholds must be manually verified by a human during code review.\n")
+				fmt.Printf("(\"Looking at the exceptions AI created was a good point to start my code review.\")\n")
+			}
 		}
 	}
 
-	if blindCount > 0 {
-		fmt.Printf("\n>>> NOTICE: %d files are running BLIND (Level 0) with no static analysis configs.\n", blindCount)
-		fmt.Printf("    Run 'maintainability-sensors bootstrap' to automatically establish their guardrails!\n")
+	// Post results/summary to GitHub if active/triggered
+	if os.Getenv("GITHUB_ACTIONS") == "true" {
+		scorecard := GenerateMarkdownScorecard(results)
+		if err := WriteGitHubStepSummary(scorecard); err != nil {
+			fmt.Fprintf(os.Stderr, "[WARNING] Failed to write GitHub Step Summary: %v\n", err)
+		}
+	}
+
+	isCI_PR := os.Getenv("GITHUB_TOKEN") != "" && (os.Getenv("GITHUB_EVENT_PATH") != "" || os.Getenv("GITHUB_REF") != "")
+	if githubPR || isCI_PR {
+		scorecard := GenerateMarkdownScorecard(results)
+		fmt.Println("Posting scorecard to GitHub PR...")
+		if err := PostGitHubPRComment(scorecard); err != nil {
+			fmt.Fprintf(os.Stderr, "[ERROR] Failed to post GitHub PR comment: %v\n", err)
+		} else {
+			fmt.Println("Successfully posted scorecard comment to GitHub PR!")
+		}
 	}
 }
 
@@ -190,6 +234,19 @@ func printScanResult(res sensors.OrchestratorResult, jsonOutput bool) {
 
 	// Output specific self-correction guidance blocks (Fowler article style)
 	printSelfCorrectionGuidance(res)
+
+	// Display Exceptions if any
+	if len(res.Exceptions) > 0 {
+		fmt.Printf("\n-----------------------------------------\n")
+		fmt.Printf(" Exceptions Created by AI (Relaxed Constraints):\n")
+		fmt.Printf("-----------------------------------------\n")
+		fmt.Printf("⚠️  The following custom limits are set to relaxed values in the configuration:\n\n")
+		for _, exc := range res.Exceptions {
+			fmt.Printf("  * %s: Configured Limit is %d (Standard Baseline is %d)\n", exc.RuleName, exc.ConfiguredVal, exc.BaselineVal)
+		}
+		fmt.Printf("\nNOTE: These relaxed thresholds must be manually verified by a human during code review.\n")
+		fmt.Printf("(\"Looking at the exceptions AI created was a good point to start my code review.\")\n")
+	}
 }
 
 func printSelfCorrectionGuidance(res sensors.OrchestratorResult) {

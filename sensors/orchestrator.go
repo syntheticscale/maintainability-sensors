@@ -17,6 +17,13 @@ type MaintainabilityMetrics struct {
 	ArgumentCount  int `json:"argument_count"`
 }
 
+// RelaxedLimit represents a threshold that has been configured to be looser than our standard.
+type RelaxedLimit struct {
+	RuleName      string `json:"rule_name"`
+	ConfiguredVal int    `json:"configured_val"`
+	BaselineVal   int    `json:"baseline_val"`
+}
+
 // OrchestratorResult represents the output of a file scan.
 type OrchestratorResult struct {
 	FilePath        string                 `json:"file_path"`
@@ -24,6 +31,7 @@ type OrchestratorResult struct {
 	ToolingDetected bool                   `json:"tooling_detected"`
 	Metrics         MaintainabilityMetrics `json:"metrics"`
 	Message         string                 `json:"message,omitempty"`
+	Exceptions      []RelaxedLimit         `json:"exceptions,omitempty"`
 }
 
 // OrchestratedScan scans a specific file. It auto-detects configuration and runs local tooling
@@ -50,6 +58,10 @@ func OrchestratedScan(filePath string) (OrchestratorResult, error) {
 			FunctionLength: metrics.FunctionLength,
 			ArgumentCount:  metrics.ArgumentCount,
 		}
+		configAnchor := detectConfig(filePath, "go")
+		if configAnchor != "" {
+			result.Exceptions = detectRelaxedLimits(configAnchor, "go")
+		}
 		return result, nil
 	}
 
@@ -64,6 +76,7 @@ func OrchestratedScan(filePath string) (OrchestratorResult, error) {
 	}
 
 	result.ToolingDetected = true
+	result.Exceptions = detectRelaxedLimits(configAnchor, result.Language)
 
 	// 3. Subprocess execution of local analyzers
 	switch result.Language {
@@ -114,6 +127,8 @@ func detectConfig(filePath string, lang string) string {
 		anchors = []string{"package.json", ".eslintrc.json", ".eslintrc.js", ".eslintrc.yaml", ".eslintrc.yml", "eslint.config.js", "eslint.config.mjs"}
 	case "python":
 		anchors = []string{"pyproject.toml", ".pylintrc", "setup.cfg", "tox.ini"}
+	case "go":
+		anchors = []string{".golangci.yml", "golangci.yml"}
 	}
 
 	for {
@@ -232,4 +247,160 @@ func runPyLint(filePath string) (MaintainabilityMetrics, error) {
 	}
 
 	return metrics, nil
+}
+
+func detectRelaxedLimits(configPath string, lang string) []RelaxedLimit {
+	var exceptions []RelaxedLimit
+	if configPath == "" {
+		return exceptions
+	}
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return exceptions
+	}
+	content := string(data)
+
+	// 1. Cyclomatic Complexity (baseline: 8)
+	var complexityVal int
+	var foundComplexity bool
+	if lang == "typescript" || lang == "javascript" {
+		vals := findAllConfigVals(content, "complexity")
+		if len(vals) > 0 {
+			complexityVal = maxOf(vals)
+			foundComplexity = true
+		}
+	} else if lang == "python" {
+		vals := findAllConfigVals(content, "max-complexity")
+		if len(vals) > 0 {
+			complexityVal = maxOf(vals)
+			foundComplexity = true
+		}
+	} else if lang == "go" {
+		vals := findAllConfigVals(content, "min-complexity")
+		if len(vals) > 0 {
+			complexityVal = maxOf(vals)
+			foundComplexity = true
+		}
+	}
+	if foundComplexity && complexityVal > 8 {
+		exceptions = append(exceptions, RelaxedLimit{
+			RuleName:      "Cyclomatic Complexity",
+			ConfiguredVal: complexityVal,
+			BaselineVal:   8,
+		})
+	}
+
+	// 2. Function Length (baseline: 50)
+	var funcLenVal int
+	var foundFuncLen bool
+	if lang == "typescript" || lang == "javascript" {
+		vals := findAllConfigVals(content, "max-lines-per-function")
+		if len(vals) > 0 {
+			funcLenVal = maxOf(vals)
+			foundFuncLen = true
+		}
+	} else if lang == "python" {
+		vals := findAllConfigVals(content, "max-statements")
+		if len(vals) > 0 {
+			funcLenVal = maxOf(vals)
+			foundFuncLen = true
+		}
+	} else if lang == "go" {
+		vals := findAllConfigVals(content, "lines")
+		if len(vals) > 0 {
+			funcLenVal = maxOf(vals)
+			foundFuncLen = true
+		}
+	}
+	if foundFuncLen && funcLenVal > 50 {
+		exceptions = append(exceptions, RelaxedLimit{
+			RuleName:      "Function Length",
+			ConfiguredVal: funcLenVal,
+			BaselineVal:   50,
+		})
+	}
+
+	// 3. Argument Count (baseline: 4)
+	var argCountVal int
+	var foundArgCount bool
+	if lang == "typescript" || lang == "javascript" {
+		vals := findAllConfigVals(content, "max-params")
+		if len(vals) > 0 {
+			argCountVal = maxOf(vals)
+			foundArgCount = true
+		}
+	} else if lang == "python" {
+		vals := findAllConfigVals(content, "max-args")
+		if len(vals) > 0 {
+			argCountVal = maxOf(vals)
+			foundArgCount = true
+		}
+	}
+	if foundArgCount && argCountVal > 4 {
+		exceptions = append(exceptions, RelaxedLimit{
+			RuleName:      "Argument Count",
+			ConfiguredVal: argCountVal,
+			BaselineVal:   4,
+		})
+	}
+
+	// 4. File Length (baseline: 300)
+	var fileLenVal int
+	var foundFileLen bool
+	if lang == "typescript" || lang == "javascript" {
+		vals := findAllConfigVals(content, "max-lines")
+		if len(vals) > 0 {
+			fileLenVal = maxOf(vals)
+			foundFileLen = true
+		}
+	} else if lang == "python" {
+		vals := findAllConfigVals(content, "max-module-lines")
+		if len(vals) > 0 {
+			fileLenVal = maxOf(vals)
+			foundFileLen = true
+		}
+	}
+	if foundFileLen && fileLenVal > 300 {
+		exceptions = append(exceptions, RelaxedLimit{
+			RuleName:      "File Length",
+			ConfiguredVal: fileLenVal,
+			BaselineVal:   300,
+		})
+	}
+
+	return exceptions
+}
+
+func findAllConfigVals(content string, key string) []int {
+	var pattern string
+	if key == "max-lines" {
+		pattern = `\bmax-lines\b[^-][^\d]{0,100}?(\d+)`
+	} else {
+		pattern = `\b` + regexp.QuoteMeta(key) + `\b[^\d]{0,100}?(\d+)`
+	}
+	re := regexp.MustCompile(pattern)
+	matches := re.FindAllStringSubmatch(content, -1)
+	var vals []int
+	for _, m := range matches {
+		if len(m) > 1 {
+			var val int
+			if _, err := fmt.Sscanf(m[1], "%d", &val); err == nil {
+				vals = append(vals, val)
+			}
+		}
+	}
+	return vals
+}
+
+func maxOf(vals []int) int {
+	if len(vals) == 0 {
+		return 0
+	}
+	m := vals[0]
+	for _, v := range vals {
+		if v > m {
+			m = v
+		}
+	}
+	return m
 }
