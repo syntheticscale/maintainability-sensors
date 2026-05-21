@@ -1,1 +1,0 @@
-function test(a,b,c,d,e,f,g) { if(a){} if(b){} if(c){} if(d){} if(e){} if(f){} if(g){} if(a){} if(b){} if(c){} if(d){} if(e){} if(f){} if(g){} if(a){} if(b){} if(c){} if(d){} if(e){} if(f){} if(g){} }

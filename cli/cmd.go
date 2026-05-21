@@ -645,6 +645,23 @@ func printSelfCorrectionGuidance(res sensors.OrchestratorResult) {
 		for _, g := range guidance {
 			fmt.Fprintln(os.Stderr, g)
 		}
-		fmt.Fprintf(os.Stderr, "\nIf refactoring is impossible, AI WARNING: suppress the warning with standard inline annotations (e.g. // eslint-disable-next-line -- reason).\n")
+		var suppressionExample string
+		switch res.Language {
+		case "python":
+			suppressionExample = "# pylint: disable=... or # noqa"
+		case "go":
+			suppressionExample = "//nolint:..."
+		case "ruby":
+			suppressionExample = "# rubocop:disable ..."
+		case "javascript", "typescript":
+			suppressionExample = "// eslint-disable-next-line ..."
+		case "csharp":
+			suppressionExample = "#pragma warning disable ..."
+		case "java":
+			suppressionExample = "@SuppressWarnings(\"...\")"
+		default:
+			suppressionExample = "// disable-linter-rule ..."
+		}
+		fmt.Fprintf(os.Stderr, "\nIf refactoring is impossible, AI WARNING: suppress the warning with standard inline annotations (e.g. %s).\n", suppressionExample)
 	}
 }

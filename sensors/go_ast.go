@@ -34,13 +34,15 @@ func ParseGoAST(filePath string) ([]Violation, error) {
 			continue
 		}
 
-		startPos := fset.Position(fn.Body.Lbrace)
-		endPos := fset.Position(fn.Body.Rbrace)
+		startPos := fset.Position(fn.Pos())
+		endPos := fset.Position(fn.End())
 		startLine := startPos.Line
 		endLine := endPos.Line
 
 		// Calculate Function Length (lines of body)
-		length := endLine - startLine + 1
+		bodyStartPos := fset.Position(fn.Body.Lbrace)
+		bodyEndPos := fset.Position(fn.Body.Rbrace)
+		length := bodyEndPos.Line - bodyStartPos.Line + 1
 		violations = append(violations, Violation{
 			RuleName:  "FunctionLength",
 			Value:     length,

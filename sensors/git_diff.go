@@ -38,7 +38,9 @@ func GetModifiedLines(targetBranch string, repoPath string) (map[string][]LineRa
 	result := make(map[string][]LineRange)
 
 	// Get modified files using git diff
-	diffCmd := exec.Command("git", "diff", targetBranch, "--unified=0")
+	ctxDiff, cancelDiff := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelDiff()
+	diffCmd := exec.CommandContext(ctxDiff, "git", "diff", targetBranch, "--unified=0", "--")
 	diffCmd.Dir = repoPath
 
 	stdoutPipe, err := diffCmd.StdoutPipe()
@@ -113,7 +115,7 @@ func GetModifiedLines(targetBranch string, repoPath string) (map[string][]LineRa
 	// Get untracked files
 	ctxUntracked, cancelUntracked := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelUntracked()
-	untrackedCmd := exec.CommandContext(ctxUntracked, "git", "ls-files", "--others", "--exclude-standard")
+	untrackedCmd := exec.CommandContext(ctxUntracked, "git", "ls-files", "--others", "--exclude-standard", "--")
 	untrackedCmd.Dir = repoPath
 	untrackedOut, err := untrackedCmd.Output()
 	if err != nil {
