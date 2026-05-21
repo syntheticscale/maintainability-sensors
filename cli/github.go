@@ -235,21 +235,34 @@ func PostGitHubReview(results []sensors.OrchestratorResult) error {
 	return nil
 }
 
+func getPRNumberFromEventPath() string {
+	eventPath := os.Getenv("GITHUB_EVENT_PATH")
+	if eventPath == "" {
+		return ""
+	}
+	info, err := os.Stat(eventPath)
+	if err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
+		return "" // skip if too large or not a regular file
+	}
+	data, err := os.ReadFile(eventPath)
+	if err != nil {
+		return ""
+	}
+	var event struct {
+		PullRequest struct {
+			Number int `json:"number"`
+		} `json:"pull_request"`
+	}
+	if err := json.Unmarshal(data, &event); err == nil && event.PullRequest.Number > 0 {
+		return fmt.Sprintf("%d", event.PullRequest.Number)
+	}
+	return ""
+}
+
 func getPRNumber() (string, error) {
 	// 1. Try GITHUB_EVENT_PATH
-	eventPath := os.Getenv("GITHUB_EVENT_PATH")
-	if eventPath != "" {
-		data, err := os.ReadFile(eventPath)
-		if err == nil {
-			var event struct {
-				PullRequest struct {
-					Number int `json:"number"`
-				} `json:"pull_request"`
-			}
-			if err := json.Unmarshal(data, &event); err == nil && event.PullRequest.Number > 0 {
-				return fmt.Sprintf("%d", event.PullRequest.Number), nil
-			}
-		}
+	if num := getPRNumberFromEventPath(); num != "" {
+		return num, nil
 	}
 
 	// 2. Try GITHUB_REF (e.g., refs/pull/123/merge)

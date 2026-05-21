@@ -751,9 +751,14 @@ func findMaxConfigVal(content string, ext string, keys []string) (int, bool) {
 	return 0, false
 }
 
+func isValidConfigFile(configPath string) bool {
+	info, err := os.Stat(configPath)
+	return err == nil && info.Mode().IsRegular() && info.Size() <= 2*1024*1024
+}
+
 func detectRelaxedLimits(configPath string, parser ConfigParser) []RelaxedLimit {
 	var exceptions []RelaxedLimit
-	if configPath == "" || parser == nil {
+	if configPath == "" || parser == nil || !isValidConfigFile(configPath) {
 		return exceptions
 	}
 	data, err := os.ReadFile(configPath)

@@ -66,27 +66,40 @@ type CheckDiffCmd struct {
 	TargetPath   string `arg:"" optional:"" default:"." help:"Target path to diff."`
 }
 
-func (c *CheckDiffCmd) Run() error {
-	modifiedLines, err := sensors.GetModifiedLines(c.TargetBranch, c.TargetPath)
-	if err != nil {
-		return fmt.Errorf("[ERROR] Failed to get modified lines: %v", err)
+func isTrueViolation(v sensors.Violation) bool {
+	if v.RuleName == "Complexity" && v.Value <= sensors.BaselineComplexity {
+		return false
 	}
-
-	files, _, err := FindFiles(c.TargetPath)
-	if err != nil {
-		return fmt.Errorf("[ERROR] Failed to find files: %v", err)
+	if v.RuleName == "FunctionLength" && v.Value <= sensors.BaselineFunctionLength {
+		return false
 	}
+	if v.RuleName == "ArgumentCount" && v.Value <= sensors.BaselineArgumentCount {
+		return false
+	}
+	return true
+}
 
-	hasDeltaViolations := false
+func hasOverlap(v sensors.Violation, ranges []sensors.LineRange) bool {
+	for _, r := range ranges {
+		if v.StartLine <= r.End && v.EndLine >= r.Start {
+			return true
+		}
+	}
+	return false
+}
 
+func mapModifiedLinesToAbsPaths(modifiedLines map[string][]sensors.LineRange, targetPath string) map[string][]sensors.LineRange {
 	absModifiedLines := make(map[string][]sensors.LineRange)
-	absTargetDir, _ := filepath.Abs(c.TargetPath)
+	absTargetDir, _ := filepath.Abs(targetPath)
 
 	for relPath, ranges := range modifiedLines {
 		absPath := filepath.Clean(filepath.Join(absTargetDir, relPath))
 		absModifiedLines[absPath] = ranges
 	}
+	return absModifiedLines
+}
 
+func groupFilesByLanguage(files []string, absModifiedLines map[string][]sensors.LineRange) (map[string][]string, map[string]string) {
 	groups := make(map[string][]string)
 	originalPaths := make(map[string]string)
 
@@ -106,6 +119,50 @@ func (c *CheckDiffCmd) Run() error {
 			}
 		}
 	}
+	return groups, originalPaths
+}
+
+func processViolationsMap(violationsMap map[string][]sensors.Violation, absModifiedLines map[string][]sensors.LineRange) bool {
+	hasDeltaViolations := false
+	for file, violations := range violationsMap {
+		absPath, err := filepath.Abs(filepath.Clean(file))
+		if err != nil {
+			continue
+		}
+
+		ranges, hasRanges := absModifiedLines[absPath]
+		if !hasRanges {
+			continue
+		}
+
+		for _, v := range violations {
+			if !isTrueViolation(v) {
+				continue
+			}
+
+			if hasOverlap(v, ranges) {
+				fmt.Fprintf(os.Stderr, "AI WARNING: %s:%d - %s - %s\n", file, v.StartLine, v.RuleName, v.Message)
+				hasDeltaViolations = true
+			}
+		}
+	}
+	return hasDeltaViolations
+}
+
+func (c *CheckDiffCmd) Run() error {
+	modifiedLines, err := sensors.GetModifiedLines(c.TargetBranch, c.TargetPath)
+	if err != nil {
+		return fmt.Errorf("[ERROR] Failed to get modified lines: %v", err)
+	}
+
+	files, _, err := FindFiles(c.TargetPath)
+	if err != nil {
+		return fmt.Errorf("[ERROR] Failed to find files: %v", err)
+	}
+
+	hasDeltaViolations := false
+	absModifiedLines := mapModifiedLinesToAbsPaths(modifiedLines, c.TargetPath)
+	groups, originalPaths := groupFilesByLanguage(files, absModifiedLines)
 
 	for lang, langFiles := range groups {
 		if len(langFiles) == 0 {
@@ -118,30 +175,8 @@ func (c *CheckDiffCmd) Run() error {
 			continue
 		}
 
-		for file, violations := range violationsMap {
-			absPath, err := filepath.Abs(filepath.Clean(file))
-			if err != nil {
-				continue
-			}
-
-			ranges, hasRanges := absModifiedLines[absPath]
-			if !hasRanges {
-				continue
-			}
-
-			for _, v := range violations {
-				overlaps := false
-				for _, r := range ranges {
-										if v.StartLine <= r.End && v.EndLine >= r.Start {
-						overlaps = true
-						break
-					}
-				}
-				if overlaps {
-					fmt.Fprintf(os.Stderr, "AI WARNING: %s:%d - %s - %s\n", file, v.StartLine, v.RuleName, v.Message)
-					hasDeltaViolations = true
-				}
-			}
+		if processViolationsMap(violationsMap, absModifiedLines) {
+			hasDeltaViolations = true
 		}
 	}
 
