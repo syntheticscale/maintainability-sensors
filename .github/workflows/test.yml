@@ -48,4 +48,6 @@ jobs:
             ${{ runner.os }}-validation-repos-
 
       - name: Run Tests
-        run: go test ./...
+        run: |
+          go test ./...
+          go run main.go check-diff

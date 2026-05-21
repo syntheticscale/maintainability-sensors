@@ -143,9 +143,5 @@ func GetModifiedLines(targetBranch string, repoPath string) (map[string][]LineRa
 		return nil, fmt.Errorf("error parsing untracked files output: %w", err)
 	}
 
-	if err := untrackedCmd.Wait(); err != nil {
-		return nil, fmt.Errorf("git ls-files failed: %w", err)
-	}
-
 	return result, nil
 }

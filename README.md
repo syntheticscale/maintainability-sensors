@@ -42,6 +42,28 @@ chmod +x bin/maintainability-sensors
 mv bin/maintainability-sensors /usr/local/bin/
 ```
 
+### Pre-Commit Hook (Dogfooding)
+To ensure agents and developers self-correct before pushing, you can set up a pre-commit hook that runs the same test suite as your CI pipeline alongside `check-diff`:
+
+```bash
+cat << 'EOF' > .git/hooks/pre-commit
+#!/bin/sh
+go test ./...
+TEST_STATUS=$?
+
+go run main.go check-diff
+DIFF_STATUS=$?
+
+if [ $TEST_STATUS -ne 0 ] || [ $DIFF_STATUS -ne 0 ]; then
+  echo "Pre-commit checks failed."
+  exit 1
+fi
+
+exit 0
+EOF
+chmod +x .git/hooks/pre-commit
+```
+
 ---
 
 ## 🚦 Usage & Commands
