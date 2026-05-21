@@ -81,5 +81,3 @@ func TestOrchestratedScan_RejectTraversalPath(t *testing.T) {
 		t.Fatal("expected OrchestratedScan to reject traversal path")
 	}
 }
-
-

@@ -344,6 +344,35 @@ func TestFindAllConfigVals_FlatConfig(t *testing.T) {
 			expected: []int{10, 30},
 		},
 		{
+			name:     "JS format with array and object with max",
+			content:  `export default [ { rules: { "max-lines-per-function": [ "error", { "max": 50, "skipBlankLines": true } ] } } ];`,
+			key:      "max-lines-per-function",
+			ext:      ".js",
+			expected: []int{50},
+		},
+		{
+			name:     "JS format with single object and max",
+			content:  `export default [ { rules: { "complexity": { "max": 10 } } } ];`,
+			key:      "complexity",
+			ext:      ".js",
+			expected: []int{10},
+		},
+		{
+			name: "JS format with multiline array and object",
+			content: `
+			"max-lines-per-function": [
+				"error", 
+				{ 
+					"max": 60,
+					"skipBlankLines": true,
+					"skipComments": true
+				}
+			]`,
+			key:      "max-lines-per-function",
+			ext:      ".js",
+			expected: []int{60},
+		},
+		{
 			name:     "missing key returns empty",
 			content:  `export default [];`,
 			key:      "complexity",

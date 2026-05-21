@@ -8,6 +8,16 @@ import (
 	"github.com/syntheticscale/maintainability-sensors/sensors"
 )
 
+func getMax(violations []sensors.Violation, ruleName string) int {
+	max := 0
+	for _, v := range violations {
+		if v.RuleName == ruleName && v.Value > max {
+			max = v.Value
+		}
+	}
+	return max
+}
+
 func TestParseGoAST_ValidFile(t *testing.T) {
 	tempDir := t.TempDir()
 	goFile := filepath.Join(tempDir, "sample_test.go")
@@ -43,18 +53,21 @@ func ComplexFunc(a, b int, name string, flag bool) int {
 	}
 
 	// Verify maximum argument count (ComplexFunc has 4 parameters: a, b, name, flag)
-	if metrics.ArgumentCount != 4 {
-		t.Errorf("expected max ArgumentCount to be 4, got %d", metrics.ArgumentCount)
+	args := getMax(metrics, "ArgumentCount")
+	if args != 4 {
+		t.Errorf("expected max ArgumentCount to be 4, got %d", args)
 	}
 
 	// Verify maximum function length (ComplexFunc has body from L12 to L22 -> ~10 lines)
-	if metrics.FunctionLength < 9 || metrics.FunctionLength > 12 {
-		t.Errorf("expected max FunctionLength to be around 10, got %d", metrics.FunctionLength)
+	flen := getMax(metrics, "FunctionLength")
+	if flen < 9 || flen > 12 {
+		t.Errorf("expected max FunctionLength to be around 10, got %d", flen)
 	}
 
 	// Verify maximum cyclomatic complexity (ComplexFunc has 1 (base) + 1 (for) + 1 (if) + 1 (&&) + 1 (else-if) + 1 (||) = 6)
-	if metrics.Complexity != 6 {
-		t.Errorf("expected max Complexity to be 6, got %d", metrics.Complexity)
+	comp := getMax(metrics, "Complexity")
+	if comp != 6 {
+		t.Errorf("expected max Complexity to be 6, got %d", comp)
 	}
 }
 
@@ -81,7 +94,7 @@ func TestOrchestratedScan_WorkingBlindFallback(t *testing.T) {
 	}
 }
 
-func TestParseCSharp_ReturnsError(t *testing.T) {
+func TestParseCSharp_ValidFile(t *testing.T) {
 	tempDir := t.TempDir()
 	csFile := filepath.Join(tempDir, "sample.cs")
 
@@ -105,9 +118,63 @@ namespace Sample {
 		t.Fatalf("failed to write test C# file: %v", err)
 	}
 
-	// C# native parsing is not supported and should always return an error.
-	_, err := sensors.ParseCSharp(csFile)
-	if err == nil {
-		t.Fatalf("expected ParseCSharp to return an error, got nil")
+	metrics, err := sensors.ParseCSharp(csFile)
+	if err != nil {
+		t.Fatalf("ParseCSharp failed: %v", err)
+	}
+
+	args := getMax(metrics, "ArgumentCount")
+	if args != 4 {
+		t.Errorf("expected max ArgumentCount to be 4, got %d", args)
+	}
+	comp := getMax(metrics, "Complexity")
+	if comp != 5 {
+		t.Errorf("expected max Complexity to be 5, got %d", comp)
+	}
+	flen := getMax(metrics, "FunctionLength")
+	if flen == 0 {
+		t.Errorf("expected FunctionLength > 0, got 0")
+	}
+}
+
+func TestParseJava_ValidFile(t *testing.T) {
+	tempDir := t.TempDir()
+	javaFile := filepath.Join(tempDir, "Sample.java")
+
+	content := `
+package com.example;
+
+public class Sample {
+    public void processData(int x, String name, boolean flag, double score) {
+        int result = 0;
+        if (x > 10 && flag) {
+            result = 1;
+        } else if (score < 5.0 || name.equals("skip")) {
+            result = 2;
+        }
+        System.out.println(result);
+    }
+}
+`
+	if err := os.WriteFile(javaFile, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test Java file: %v", err)
+	}
+
+	metrics, err := sensors.ParseJava(javaFile)
+	if err != nil {
+		t.Fatalf("ParseJava failed: %v", err)
+	}
+
+	args := getMax(metrics, "ArgumentCount")
+	if args != 4 {
+		t.Errorf("expected max ArgumentCount to be 4, got %d", args)
+	}
+	comp := getMax(metrics, "Complexity")
+	if comp != 5 {
+		t.Errorf("expected max Complexity to be 5, got %d", comp)
+	}
+	flen := getMax(metrics, "FunctionLength")
+	if flen == 0 {
+		t.Errorf("expected FunctionLength > 0, got 0")
 	}
 }

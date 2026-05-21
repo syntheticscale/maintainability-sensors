@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/syntheticscale/maintainability-sensors/sensors"
 )
@@ -42,7 +43,7 @@ func GenerateMarkdownScorecard(results []sensors.OrchestratorResult) string {
 	hasViolations := false
 	var promptsSB strings.Builder
 	promptsSB.WriteString("## ⚠️ AI Agent Self-Correction Prompts\n")
-	promptsSB.WriteString("*Pass the following instructions directly to your AI Coding Agent (Cursor/Claude) to refactor the violations:*\n\n")
+	promptsSB.WriteString("*AI WARNING: Refactor these violations:*\n\n")
 
 	for _, res := range results {
 		if !res.ToolingDetected {
@@ -71,7 +72,7 @@ func GenerateMarkdownScorecard(results []sensors.OrchestratorResult) string {
 
 	if hasViolations {
 		sb.WriteString(promptsSB.String())
-		sb.WriteString("\n*If refactoring is impossible, instruct the agent to suppress the warning with standard inline annotations (e.g. // eslint-disable-next-line -- reason) to keep the baseline clean.*\n\n---\n\n")
+		sb.WriteString("\n*If refactoring is impossible, AI WARNING: suppress the warning with standard inline annotations (e.g. // eslint-disable-next-line -- reason) to keep the baseline clean.*\n\n---\n\n")
 	}
 
 	// Exceptions Section
@@ -118,7 +119,7 @@ func WriteGitHubStepSummary(scorecard string) error {
 }
 
 // PostGitHubReview posts inline PR review comments using the GitHub Pull Request Review API.
-func PostGitHubReview(results []sensors.OrchestratorResult, baseline map[string]sensors.MaintainabilityMetrics) error {
+func PostGitHubReview(results []sensors.OrchestratorResult) error {
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
 		return fmt.Errorf("GITHUB_TOKEN environment variable is not set")
@@ -142,7 +143,7 @@ func PostGitHubReview(results []sensors.OrchestratorResult, baseline map[string]
 	var comments []prComment
 
 	for _, res := range results {
-		if !hasViolations(res, baseline) {
+		if !hasViolations(res) {
 			continue
 		}
 
@@ -157,20 +158,6 @@ func PostGitHubReview(results []sensors.OrchestratorResult, baseline map[string]
 				limitLength = exc.ConfiguredVal
 			} else if exc.RuleName == "Argument Count" {
 				limitArgs = exc.ConfiguredVal
-			}
-		}
-
-		if baseline != nil {
-			if bMetrics, ok := baseline[res.FilePath]; ok {
-				if bMetrics.Complexity > limitComplexity {
-					limitComplexity = bMetrics.Complexity
-				}
-				if bMetrics.FunctionLength > limitLength {
-					limitLength = bMetrics.FunctionLength
-				}
-				if bMetrics.ArgumentCount > limitArgs {
-					limitArgs = bMetrics.ArgumentCount
-				}
 			}
 		}
 
@@ -206,7 +193,11 @@ func PostGitHubReview(results []sensors.OrchestratorResult, baseline map[string]
 		return nil
 	}
 
-	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/pulls/%s/reviews", repo, prNumber)
+	baseURL := os.Getenv("GITHUB_API_URL")
+	if baseURL == "" {
+		baseURL = "https://api.github.com"
+	}
+	apiURL := fmt.Sprintf("%s/repos/%s/pulls/%s/reviews", baseURL, repo, prNumber)
 	payload := map[string]interface{}{
 		"body":     "Maintainability Sensors detected architectural decay.",
 		"event":    "COMMENT",
@@ -228,7 +219,9 @@ func PostGitHubReview(results []sensors.OrchestratorResult, baseline map[string]
 	req.Header.Set("User-Agent", "Maintainability-Sensors-CLI")
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send HTTP request to GitHub: %w", err)

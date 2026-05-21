@@ -5,10 +5,10 @@ import (
 	"os"
 
 	sitter "github.com/smacker/go-tree-sitter"
-	"github.com/smacker/go-tree-sitter/csharp"
+	"github.com/smacker/go-tree-sitter/java"
 )
 
-func ParseCSharp(filePath string) ([]Violation, error) {
+func ParseJava(filePath string) ([]Violation, error) {
         var violations []Violation
 
         if info, err := os.Stat(filePath); err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
@@ -21,7 +21,7 @@ func ParseCSharp(filePath string) ([]Violation, error) {
 	}
 
 	parser := sitter.NewParser()
-	parser.SetLanguage(csharp.GetLanguage())
+	parser.SetLanguage(java.GetLanguage())
 
 	tree, _ := parser.ParseCtx(context.Background(), nil, content)
 	if tree == nil {
@@ -35,7 +35,7 @@ func ParseCSharp(filePath string) ([]Violation, error) {
 		}
 
 		t := n.Type()
-		if t == "method_declaration" || t == "local_function_statement" || t == "constructor_declaration" {
+		if t == "method_declaration" || t == "constructor_declaration" {
 			startLine := int(n.StartPoint().Row) + 1
 			endLine := int(n.EndPoint().Row) + 1
 
@@ -55,7 +55,7 @@ func ParseCSharp(filePath string) ([]Violation, error) {
 				if c == nil {
 					return
 				}
-				if c.Type() == "parameter" || c.Type() == "parameter_array" {
+				if c.Type() == "formal_parameter" || c.Type() == "spread_parameter" {
 					params++
 				}
 				for i := 0; i < int(c.NamedChildCount()); i++ {
@@ -78,7 +78,7 @@ func ParseCSharp(filePath string) ([]Violation, error) {
 					return
 				}
 				ct := c.Type()
-				if ct == "if_statement" || ct == "for_statement" || ct == "foreach_statement" || ct == "while_statement" || ct == "do_statement" || ct == "switch_statement" || ct == "catch_clause" {
+				if ct == "if_statement" || ct == "for_statement" || ct == "enhanced_for_statement" || ct == "while_statement" || ct == "do_statement" || ct == "switch_expression" || ct == "switch_statement" || ct == "catch_clause" {
 					complexity++
 				}
 				if ct == "binary_expression" {
@@ -96,7 +96,7 @@ func ParseCSharp(filePath string) ([]Violation, error) {
 						}
 					}
 				}
-				if ct == "conditional_expression" {
+				if ct == "ternary_expression" {
 					complexity++
 				}
 				for i := 0; i < int(c.NamedChildCount()); i++ {
@@ -122,17 +122,17 @@ func ParseCSharp(filePath string) ([]Violation, error) {
 	return violations, nil
 }
 
-// CSharpPlugin implements the Plugin interface for C#.
-type CSharpPlugin struct{}
+// JavaPlugin implements the Plugin interface for Java.
+type JavaPlugin struct{}
 
-func (p CSharpPlugin) Name() string {
-	return "csharp-ast"
+func (p JavaPlugin) Name() string {
+	return "java-ast"
 }
 
-func (p CSharpPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
+func (p JavaPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
 	metricsMap := make(map[string][]Violation)
 	for _, filePath := range filePaths {
-		violations, err := ParseCSharp(filePath)
+		violations, err := ParseJava(filePath)
 		if err != nil {
 			return nil, err
 		}

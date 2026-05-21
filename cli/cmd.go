@@ -14,10 +14,10 @@ import (
 )
 
 var cli struct {
-	Run      runCmd      `cmd:"" help:"Scan a specific file or folder for maintainability warnings."`
-	Generate generateCmd `cmd:"" help:"Reconstruct visual reports from a saved JSON scorecard (the Single Source of Truth)."`
+	Run       runCmd       `cmd:"" help:"Scan a specific file or folder for maintainability warnings."`
+	Generate  generateCmd  `cmd:"" help:"Reconstruct visual reports from a saved JSON scorecard (the Single Source of Truth)."`
 	Bootstrap bootstrapCmd `cmd:"" help:"Auto-detect repository language and bootstrap pristine, non-overwriting maintainability configuration files (TS, Python, Go, Java, Ruby, C#)."`
-	Baseline baselineCmd `cmd:"" help:"Auto-generate baseline configurations for a project."`
+	CheckDiff CheckDiffCmd `cmd:"" name:"check-diff" help:"Check maintainability delta against a target branch."`
 }
 
 type runCmd struct {
@@ -61,12 +61,95 @@ func (c *bootstrapCmd) Run() error {
 	return nil
 }
 
-type baselineCmd struct {
-	Path string `arg:"" optional:"" default:"." help:"Target path to baseline."`
+type CheckDiffCmd struct {
+	TargetBranch string `optional:"" default:"HEAD" help:"Target branch to diff against."`
+	TargetPath   string `arg:"" optional:"" default:"." help:"Target path to diff."`
 }
 
-func (c *baselineCmd) Run() error {
-	executeBaseline(c.Path)
+func (c *CheckDiffCmd) Run() error {
+	modifiedLines, err := sensors.GetModifiedLines(c.TargetBranch, c.TargetPath)
+	if err != nil {
+		return fmt.Errorf("[ERROR] Failed to get modified lines: %v", err)
+	}
+
+	files, _, err := FindFiles(c.TargetPath)
+	if err != nil {
+		return fmt.Errorf("[ERROR] Failed to find files: %v", err)
+	}
+
+	hasDeltaViolations := false
+
+	absModifiedLines := make(map[string][]sensors.LineRange)
+	absTargetDir, _ := filepath.Abs(c.TargetPath)
+
+	for relPath, ranges := range modifiedLines {
+		absPath := filepath.Clean(filepath.Join(absTargetDir, relPath))
+		absModifiedLines[absPath] = ranges
+	}
+
+	groups := make(map[string][]string)
+	originalPaths := make(map[string]string)
+
+	for _, p := range files {
+		cleanPath := filepath.Clean(p)
+		absPath, err := filepath.Abs(cleanPath)
+		if err != nil {
+			continue
+		}
+
+		if _, ok := absModifiedLines[absPath]; ok {
+			lang := sensors.DetectLanguage(p)
+			if lang != "" {
+				groups[lang] = append(groups[lang], p)
+				originalPaths[cleanPath] = p
+				originalPaths[absPath] = p
+			}
+		}
+	}
+
+	for lang, langFiles := range groups {
+		if len(langFiles) == 0 {
+			continue
+		}
+
+		violationsMap, err := sensors.ScanDeltaBatch(langFiles, originalPaths, lang)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[WARNING] Delta scan failed for %s: %v\n", lang, err)
+			continue
+		}
+
+		for file, violations := range violationsMap {
+			absPath, err := filepath.Abs(filepath.Clean(file))
+			if err != nil {
+				continue
+			}
+
+			ranges, hasRanges := absModifiedLines[absPath]
+			if !hasRanges {
+				continue
+			}
+
+			for _, v := range violations {
+				overlaps := false
+				for _, r := range ranges {
+										if v.StartLine <= r.End && v.EndLine >= r.Start {
+						overlaps = true
+						break
+					}
+				}
+				if overlaps {
+					fmt.Fprintf(os.Stderr, "AI WARNING: %s:%d - %s - %s\n", file, v.StartLine, v.RuleName, v.Message)
+					hasDeltaViolations = true
+				}
+			}
+		}
+	}
+
+	if hasDeltaViolations {
+		return fmt.Errorf("Delta violations found")
+	}
+
+	fmt.Fprintln(os.Stderr, "Delta clean.")
 	return nil
 }
 
@@ -84,6 +167,15 @@ func Execute() {
 func FindFiles(targetPath string) ([]string, bool, error) {
 	cleanPath := filepath.Clean(targetPath)
 
+	absTargetDir, err := filepath.Abs(cleanPath)
+	if err != nil {
+		return nil, false, fmt.Errorf("[ERROR] Failed to get absolute path of target directory: %v", err)
+	}
+	
+	if resolvedTargetDir, err := filepath.EvalSymlinks(absTargetDir); err == nil {
+		absTargetDir = resolvedTargetDir
+	}
+
 	info, err := os.Stat(cleanPath)
 	if err != nil {
 		return nil, false, fmt.Errorf("[ERROR] Path does not exist: %s", targetPath)
@@ -93,27 +185,60 @@ func FindFiles(targetPath string) ([]string, bool, error) {
 	isDir := info.IsDir()
 
 	if !isDir {
-		files = append(files, cleanPath)
+		absPath, err := filepath.Abs(cleanPath)
+		if err == nil {
+			if resolvedPath, err := filepath.EvalSymlinks(absPath); err == nil {
+				absPath = resolvedPath
+			}
+			if strings.HasPrefix(absPath, absTargetDir) {
+				files = append(files, cleanPath)
+			}
+		}
 		return files, false, nil
 	}
 
-	err = filepath.Walk(cleanPath, func(path string, info os.FileInfo, err error) error {
+	err = filepath.WalkDir(cleanPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[WARNING] Cannot access %s: %v\n", path, err)
 			return nil
 		}
-		if info.IsDir() {
-			dirName := info.Name()
+		if d.IsDir() {
+			dirName := d.Name()
 			if dirName == "node_modules" || dirName == ".git" || dirName == "vendor" || dirName == "bin" || dirName == ".cache" || dirName == ".venv" || dirName == "venv" || dirName == "env" {
 				return filepath.SkipDir
 			}
 			return nil
 		}
+
+		info, err := d.Info()
+		if err != nil {
+		        fmt.Fprintf(os.Stderr, "[WARNING] Cannot get info for %s: %v\n", path, err)
+		        return nil
+		}
+		if !info.Mode().IsRegular() {
+		        return nil
+		}
+		if info.Size() > 2*1024*1024 {			fmt.Fprintf(os.Stderr, "[WARNING] Skipping file %s: exceeds 2MB limit\n", path)
+			return nil
+		}
+
 		// Skip files without recognized extension
 		ext := filepath.Ext(path)
 		if ext != ".ts" && ext != ".tsx" && ext != ".js" && ext != ".jsx" && ext != ".py" && ext != ".go" && ext != ".rb" && ext != ".cs" {
 			return nil
 		}
+
+		absPath, err := filepath.Abs(path)
+		if err != nil {
+			return nil
+		}
+		if resolvedPath, err := filepath.EvalSymlinks(absPath); err == nil {
+			absPath = resolvedPath
+		}
+		if !strings.HasPrefix(absPath, absTargetDir) {
+			return nil
+		}
+
 		files = append(files, path)
 		return nil
 	})
@@ -188,7 +313,7 @@ type ReportOptions struct {
 	ActionVerb  string
 }
 
-func hasViolations(res sensors.OrchestratorResult, baseline map[string]sensors.MaintainabilityMetrics) bool {
+func hasViolations(res sensors.OrchestratorResult) bool {
 	if !res.ToolingDetected {
 		return false
 	}
@@ -206,29 +331,15 @@ func hasViolations(res sensors.OrchestratorResult, baseline map[string]sensors.M
 		}
 	}
 
-	if baseline != nil {
-		if bMetrics, ok := baseline[res.FilePath]; ok {
-			if bMetrics.Complexity > limitComplexity {
-				limitComplexity = bMetrics.Complexity
-			}
-			if bMetrics.FunctionLength > limitLength {
-				limitLength = bMetrics.FunctionLength
-			}
-			if bMetrics.ArgumentCount > limitArgs {
-				limitArgs = bMetrics.ArgumentCount
-			}
-		}
-	}
-
 	return res.Metrics.Complexity > limitComplexity ||
 		res.Metrics.FunctionLength > limitLength ||
 		res.Metrics.ArgumentCount > limitArgs
 }
 
-func FormatResultsCLI(results []sensors.OrchestratorResult, jsonOutput bool, isDir bool, baseline map[string]sensors.MaintainabilityMetrics) bool {
+func FormatResultsCLI(results []sensors.OrchestratorResult, jsonOutput bool, isDir bool) bool {
 	hasV := false
 	for _, res := range results {
-		if hasViolations(res, baseline) {
+		if hasViolations(res) {
 			hasV = true
 			break
 		}
@@ -261,26 +372,26 @@ func printJSONResults(results []sensors.OrchestratorResult) {
 }
 
 func printSummaryTable(results []sensors.OrchestratorResult) {
-	fmt.Printf("\n=========================================\n")
-	fmt.Printf(" Maintainability Sensors Report Summary\n")
-	fmt.Printf("=========================================\n\n")
-	fmt.Printf("%-35s %-12s %-10s %-10s %-10s\n", "File", "Lang", "Complexity", "FuncLines", "MaxParams")
-	fmt.Printf("%-35s %-12s %-10s %-10s %-10s\n", "----", "----", "----------", "---------", "---------")
+	fmt.Fprintf(os.Stderr, "\n=========================================\n")
+	fmt.Fprintf(os.Stderr, " Maintainability Sensors Report Summary\n")
+	fmt.Fprintf(os.Stderr, "=========================================\n\n")
+	fmt.Fprintf(os.Stderr, "%-35s %-12s %-10s %-10s %-10s\n", "File", "Lang", "Complexity", "FuncLines", "MaxParams")
+	fmt.Fprintf(os.Stderr, "%-35s %-12s %-10s %-10s %-10s\n", "----", "----", "----------", "---------", "---------")
 
 	blindCount := 0
 	for _, res := range results {
 		fileBase := filepath.Base(res.FilePath)
 		if !res.ToolingDetected {
 			blindCount++
-			fmt.Printf("%-35s %-12s %-10s %-10s %-10s\n", fileBase, res.Language, "BLIND (L0)", "BLIND (L0)", "BLIND (L0)")
+			fmt.Fprintf(os.Stderr, "%-35s %-12s %-10s %-10s %-10s\n", fileBase, res.Language, "BLIND (L0)", "BLIND (L0)", "BLIND (L0)")
 		} else {
-			fmt.Printf("%-35s %-12s %-10d %-10d %-10d\n", fileBase, res.Language, res.Metrics.Complexity, res.Metrics.FunctionLength, res.Metrics.ArgumentCount)
+			fmt.Fprintf(os.Stderr, "%-35s %-12s %-10d %-10d %-10d\n", fileBase, res.Language, res.Metrics.Complexity, res.Metrics.FunctionLength, res.Metrics.ArgumentCount)
 		}
 	}
 
 	if blindCount > 0 {
-		fmt.Printf("\n>>> NOTICE: %d files are running BLIND (Level 0) with no static analysis configs.\n", blindCount)
-		fmt.Printf("    Run 'maintainability-sensors bootstrap' to automatically establish their guardrails!\n")
+		fmt.Fprintf(os.Stderr, "\n>>> NOTICE: %d files are running BLIND (Level 0) with no static analysis configs.\n", blindCount)
+		fmt.Fprintf(os.Stderr, "    Run 'maintainability-sensors bootstrap' to automatically establish their guardrails!\n")
 	}
 }
 
@@ -297,15 +408,15 @@ func printExceptionsList(results []sensors.OrchestratorResult) {
 	}
 
 	if len(allExceptions) > 0 {
-		fmt.Printf("\n=========================================\n")
-		fmt.Printf(" Exceptions Created by AI (Relaxed Constraints)\n")
-		fmt.Printf("=========================================\n")
-		fmt.Printf("⚠️  The following files have relaxed rules configured in their linters:\n\n")
+		fmt.Fprintf(os.Stderr, "\n=========================================\n")
+		fmt.Fprintf(os.Stderr, " Exceptions Created by AI (Relaxed Constraints)\n")
+		fmt.Fprintf(os.Stderr, "=========================================\n")
+		fmt.Fprintf(os.Stderr, "⚠️  The following files have relaxed rules configured in their linters:\n\n")
 		for _, excStr := range allExceptions {
-			fmt.Println(excStr)
+			fmt.Fprintln(os.Stderr, excStr)
 		}
-		fmt.Printf("\nNOTE: These relaxed thresholds must be manually verified by a human during code review.\n")
-		fmt.Printf("(\"Looking at the exceptions AI created was a good point to start my code review.\")\n")
+		fmt.Fprintf(os.Stderr, "\nNOTE: These relaxed thresholds must be manually verified by a human during code review.\n")
+		fmt.Fprintf(os.Stderr, "(\"Looking at the exceptions AI created was a good point to start my code review.\")\n")
 	}
 }
 
@@ -317,7 +428,7 @@ func executeRun(opts RunOptions) {
 	}
 
 	if isDir && len(files) == 0 {
-		fmt.Println("No supported source files (TS/JS, Python, Go) found in target directory.")
+		fmt.Fprintln(os.Stderr, "No supported source files (TS/JS, Python, Go) found in target directory.")
 		return
 	}
 
@@ -328,12 +439,11 @@ func executeRun(opts RunOptions) {
 	}
 
 	if isDir && len(results) == 0 {
-		fmt.Println("No supported source files (TS/JS, Python, Go) found in target directory.")
+		fmt.Fprintln(os.Stderr, "No supported source files (TS/JS, Python, Go) found in target directory.")
 		return
 	}
 
-	baseline := loadBaseline(opts.TargetPath)
-	hasV := FormatResultsCLI(results, opts.JSONOutput, isDir, baseline)
+	hasV := FormatResultsCLI(results, opts.JSONOutput, isDir)
 
 	if os.Getenv("GITHUB_ACTIONS") == "true" {
 		scorecard := GenerateMarkdownScorecard(results)
@@ -344,11 +454,11 @@ func executeRun(opts RunOptions) {
 
 	isCI_PR := os.Getenv("GITHUB_TOKEN") != "" && (os.Getenv("GITHUB_EVENT_PATH") != "" || os.Getenv("GITHUB_REF") != "")
 	if opts.GithubPR || isCI_PR {
-		fmt.Println("Posting inline review to GitHub PR...")
-		if err := PostGitHubReview(results, baseline); err != nil {
+		fmt.Fprintln(os.Stderr, "Posting inline review to GitHub PR...")
+		if err := PostGitHubReview(results); err != nil {
 			fmt.Fprintf(os.Stderr, "[ERROR] Failed to post GitHub inline review: %v\n", err)
 		} else {
-			fmt.Println("Successfully posted inline review to GitHub PR!")
+			fmt.Fprintln(os.Stderr, "Successfully posted inline review to GitHub PR!")
 		}
 	}
 
@@ -376,99 +486,13 @@ func executeBootstrap(targetPath string) {
 	}
 }
 
-func loadBaseline(targetPath string) map[string]sensors.MaintainabilityMetrics {
-	baselineFile := "maintainability-baseline.json"
-	if targetPath != "" && targetPath != "." {
-		info, err := os.Stat(targetPath)
-		if err == nil && info.IsDir() {
-			baselineFile = filepath.Join(targetPath, "maintainability-baseline.json")
-		}
-	}
-	
-	data, err := os.ReadFile(baselineFile)
-	if err != nil {
-		return nil
-	}
-	
-	var baseline map[string]sensors.MaintainabilityMetrics
-	if err := json.Unmarshal(data, &baseline); err != nil {
-		return nil
-	}
-	return baseline
-}
-
-func executeBaseline(targetPath string) {
-	files, isDir, err := FindFiles(targetPath)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-
-	if isDir && len(files) == 0 {
-		fmt.Println("No supported source files (TS/JS, Python, Go) found in target directory.")
-		return
-	}
-
-	results, err := ScanFiles(files, isDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
-		os.Exit(1)
-	}
-
-	baselineFile := "maintainability-baseline.json"
-	if isDir {
-		baselineFile = filepath.Join(targetPath, "maintainability-baseline.json")
-	}
-
-	baselineData := make(map[string]sensors.MaintainabilityMetrics)
-
-	for _, res := range results {
-		if !res.ToolingDetected {
-			continue
-		}
-
-		limitComplexity := sensors.BaselineComplexity
-		limitLength := sensors.BaselineFunctionLength
-		limitArgs := sensors.BaselineArgumentCount
-
-		for _, exc := range res.Exceptions {
-			if exc.RuleName == "Cyclomatic Complexity" {
-				limitComplexity = exc.ConfiguredVal
-			} else if exc.RuleName == "Function Length" {
-				limitLength = exc.ConfiguredVal
-			} else if exc.RuleName == "Argument Count" {
-				limitArgs = exc.ConfiguredVal
-			}
-		}
-
-		if res.Metrics.Complexity > limitComplexity ||
-			res.Metrics.FunctionLength > limitLength ||
-			res.Metrics.ArgumentCount > limitArgs {
-			baselineData[res.FilePath] = res.Metrics
-		}
-	}
-
-	data, err := json.MarshalIndent(baselineData, "", "  ")
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Failed to marshal baseline JSON: %v\n", err)
-		os.Exit(1)
-	}
-
-	if err := os.WriteFile(baselineFile, data, 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Failed to write baseline file: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("[SAVED] Baseline auto-generated with %d violations saved to %s\n", len(baselineData), baselineFile)
-}
-
 func writeReports(results []sensors.OrchestratorResult, opts ReportOptions) error {
 	if opts.MarkdownOut != "" {
 		scorecard := GenerateMarkdownScorecard(results)
 		if err := os.WriteFile(opts.MarkdownOut, []byte(scorecard), 0644); err != nil {
 			return fmt.Errorf("failed to write markdown scorecard: %w", err)
 		}
-		fmt.Printf("[%s] %s markdown report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.MarkdownOut)
+		fmt.Fprintf(os.Stderr, "[%s] %s markdown report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.MarkdownOut)
 	}
 	if opts.JSONOut != "" {
 		data, err := json.MarshalIndent(results, "", "  ")
@@ -478,14 +502,14 @@ func writeReports(results []sensors.OrchestratorResult, opts ReportOptions) erro
 		if err := os.WriteFile(opts.JSONOut, data, 0644); err != nil {
 			return fmt.Errorf("failed to write JSON scorecard: %w", err)
 		}
-		fmt.Printf("[%s] %s JSON report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.JSONOut)
+		fmt.Fprintf(os.Stderr, "[%s] %s JSON report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.JSONOut)
 	}
 	if opts.HTMLOut != "" {
 		htmlScorecard := GenerateHTMLScorecard(results)
 		if err := os.WriteFile(opts.HTMLOut, []byte(htmlScorecard), 0644); err != nil {
 			return fmt.Errorf("failed to write HTML scorecard: %w", err)
 		}
-		fmt.Printf("[%s] %s HTML report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.HTMLOut)
+		fmt.Fprintf(os.Stderr, "[%s] %s HTML report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.HTMLOut)
 	}
 	return nil
 }
@@ -516,7 +540,7 @@ func executeGenerate(jsonIn string, markdownOut string, htmlOut string) {
 
 	hasV := false
 	for _, res := range results {
-		if hasViolations(res, nil) {
+		if hasViolations(res) {
 			hasV = true
 			break
 		}
@@ -547,38 +571,38 @@ func printScanResult(res sensors.OrchestratorResult, jsonOutput bool) {
 		return
 	}
 
-	fmt.Printf("\n=========================================\n")
-	fmt.Printf(" Maintainability Sensor Result: %s\n", filepath.Base(res.FilePath))
-	fmt.Printf("=========================================\n\n")
-	fmt.Printf("File Path:  %s\n", res.FilePath)
-	fmt.Printf("Language:   %s\n", strings.ToUpper(res.Language))
+	fmt.Fprintf(os.Stderr, "\n=========================================\n")
+	fmt.Fprintf(os.Stderr, " Maintainability Sensor Result: %s\n", filepath.Base(res.FilePath))
+	fmt.Fprintf(os.Stderr, "=========================================\n\n")
+	fmt.Fprintf(os.Stderr, "File Path:  %s\n", res.FilePath)
+	fmt.Fprintf(os.Stderr, "Language:   %s\n", strings.ToUpper(res.Language))
 
 	if !res.ToolingDetected {
-		fmt.Printf("Status:     RUNNING BLIND (Level 0) ⚠️\n")
-		fmt.Printf("Message:    %s\n", res.Message)
+		fmt.Fprintf(os.Stderr, "Status:     RUNNING BLIND (Level 0) ⚠️\n")
+		fmt.Fprintf(os.Stderr, "Message:    %s\n", res.Message)
 		return
 	}
 
-	fmt.Printf("Status:     ORCHESTRATED (Level 1+) ✅\n\n")
-	fmt.Printf("Maintainability Telemetry:\n")
-	fmt.Printf("- Max Cyclomatic Complexity:    %d (Limit: %d)\n", res.Metrics.Complexity, sensors.BaselineComplexity)
-	fmt.Printf("- Max Function Line Count:      %d (Limit: %d)\n", res.Metrics.FunctionLength, sensors.BaselineFunctionLength)
-	fmt.Printf("- Max Function Parameter Count: %d (Limit: %d)\n", res.Metrics.ArgumentCount, sensors.BaselineArgumentCount)
+	fmt.Fprintf(os.Stderr, "Status:     ORCHESTRATED (Level 1+) ✅\n\n")
+	fmt.Fprintf(os.Stderr, "Maintainability Telemetry:\n")
+	fmt.Fprintf(os.Stderr, "- Max Cyclomatic Complexity:    %d (Limit: %d)\n", res.Metrics.Complexity, sensors.BaselineComplexity)
+	fmt.Fprintf(os.Stderr, "- Max Function Line Count:      %d (Limit: %d)\n", res.Metrics.FunctionLength, sensors.BaselineFunctionLength)
+	fmt.Fprintf(os.Stderr, "- Max Function Parameter Count: %d (Limit: %d)\n", res.Metrics.ArgumentCount, sensors.BaselineArgumentCount)
 
 	// Output specific self-correction guidance blocks (Fowler article style)
 	printSelfCorrectionGuidance(res)
 
 	// Display Exceptions if any
 	if len(res.Exceptions) > 0 {
-		fmt.Printf("\n-----------------------------------------\n")
-		fmt.Printf(" Exceptions Created by AI (Relaxed Constraints):\n")
-		fmt.Printf("-----------------------------------------\n")
-		fmt.Printf("⚠️  The following custom limits are set to relaxed values in the configuration:\n\n")
+		fmt.Fprintf(os.Stderr, "\n-----------------------------------------\n")
+		fmt.Fprintf(os.Stderr, " Exceptions Created by AI (Relaxed Constraints):\n")
+		fmt.Fprintf(os.Stderr, "-----------------------------------------\n")
+		fmt.Fprintf(os.Stderr, "⚠️  The following custom limits are set to relaxed values in the configuration:\n\n")
 		for _, exc := range res.Exceptions {
-			fmt.Printf("  * %s: Configured Limit is %d (Standard Baseline is %d)\n", exc.RuleName, exc.ConfiguredVal, exc.BaselineVal)
+			fmt.Fprintf(os.Stderr, "  * %s: Configured Limit is %d (Standard Baseline is %d)\n", exc.RuleName, exc.ConfiguredVal, exc.BaselineVal)
 		}
-		fmt.Printf("\nNOTE: These relaxed thresholds must be manually verified by a human during code review.\n")
-		fmt.Printf("(\"Looking at the exceptions AI created was a good point to start my code review.\")\n")
+		fmt.Fprintf(os.Stderr, "\nNOTE: These relaxed thresholds must be manually verified by a human during code review.\n")
+		fmt.Fprintf(os.Stderr, "(\"Looking at the exceptions AI created was a good point to start my code review.\")\n")
 	}
 }
 
@@ -614,13 +638,19 @@ func printSelfCorrectionGuidance(res sensors.OrchestratorResult) {
 	}
 
 	if hasViolation {
-		fmt.Printf("\n-----------------------------------------\n")
-		fmt.Printf(" AI Agent Self-Correction Prompts:\n")
-		fmt.Printf("-----------------------------------------\n")
-		fmt.Printf("Pass the following instructions directly to your AI Coding Agent (Cursor/Claude) to refactor the violations:\n\n")
+		fmt.Fprintf(os.Stderr, "\n-----------------------------------------\n")
+		fmt.Fprintf(os.Stderr, " AI Agent Self-Correction Prompts:\n")
+		fmt.Fprintf(os.Stderr, "-----------------------------------------\n")
+		fmt.Fprintf(os.Stderr, "AI WARNING: Refactor these violations:\n\n")
 		for _, g := range guidance {
-			fmt.Println(g)
+			fmt.Fprintln(os.Stderr, g)
 		}
-		fmt.Printf("\nIf refactoring is impossible, instruct the agent to suppress the warning with standard inline annotations (e.g. // eslint-disable-next-line -- reason) to keep the baseline clean.\n")
+		fmt.Fprintf(os.Stderr, "\nIf refactoring is impossible, AI WARNING: suppress the warning with standard inline annotations (e.g. // eslint-disable-next-line -- reason).\n")
+	}
+}
+	for _, g := range guidance {
+			fmt.Fprintln(os.Stderr, g)
+		}
+		fmt.Fprintf(os.Stderr, "\nIf refactoring is impossible, AI WARNING: suppress the warning with standard inline annotations (e.g. // eslint-disable-next-line -- reason).\n")
 	}
 }

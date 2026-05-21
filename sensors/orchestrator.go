@@ -1,15 +1,19 @@
 package sensors
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 )
@@ -87,192 +91,174 @@ func OrchestratedScanBatch(filePaths []string, lang string) ([]OrchestratorResul
 		validPaths = append(validPaths, clean)
 	}
 
-	if lang == "go" {
-		var mu sync.Mutex
-		var g errgroup.Group
+	plugins := GlobalRegistry.GetPlugins(lang)
+	if len(plugins) == 0 {
 		results := make([]OrchestratorResult, 0, len(validPaths))
-
 		for _, cleanPath := range validPaths {
-			cleanPath := cleanPath
-			g.Go(func() error {
-				res := OrchestratorResult{FilePath: originalPaths[cleanPath], Language: lang}
-				res, err := scanGoFile(res, cleanPath)
-				if err != nil {
-					return err
-				}
-				mu.Lock()
-				results = append(results, res)
-				mu.Unlock()
-				return nil
+			results = append(results, OrchestratorResult{
+				FilePath:        originalPaths[cleanPath],
+				Language:        lang,
+				ToolingDetected: false,
 			})
 		}
-		if err := g.Wait(); err != nil {
-			return nil, err
-		}
 		return results, nil
 	}
 
-	if isExternalToolingRequired(lang) {
-		var results []OrchestratorResult
-		for _, cleanPath := range validPaths {
-			res := OrchestratorResult{FilePath: originalPaths[cleanPath], Language: lang}
-			res, _ = handleExternalToolingOnly(res, cleanPath, lang)
-			results = append(results, res)
-		}
-		return results, nil
-	}
-
-	return scanWithLocalAnalyzersBatch(validPaths, originalPaths, lang)
-}
-
-func scanGoFile(result OrchestratorResult, filePath string) (OrchestratorResult, error) {
-	metrics, err := ParseGoAST(filePath)
-	if err != nil {
-		return result, fmt.Errorf("native Go AST parse error: %w", err)
-	}
-	result.ToolingDetected = true
-	result.Metrics = MaintainabilityMetrics{
-		Complexity:     metrics.Complexity,
-		FunctionLength: metrics.FunctionLength,
-		ArgumentCount:  metrics.ArgumentCount,
-	}
-	if configAnchor, parser := detectConfigAndParser(filePath, "go"); configAnchor != "" {
-		result.Exceptions = detectRelaxedLimits(configAnchor, parser)
-	}
-	return result, nil
-}
-
-func isExternalToolingRequired(lang string) bool {
-	return lang == "csharp" || lang == "java"
-}
-
-func handleExternalToolingOnly(result OrchestratorResult, filePath, lang string) (OrchestratorResult, error) {
-	result.ToolingDetected = false
-	if lang == "csharp" {
-		result.Message = fmt.Sprintf("[WARNING] C# analysis requires external tooling (e.g., dotnet build with Roslyn analyzers or IDE analyzers). Native parsing is not supported for '%s'.", filepath.Base(filePath))
-	} else if lang == "java" {
-		result.Message = fmt.Sprintf("[WARNING] Java analysis requires external tooling (e.g., Checkstyle via Maven/Gradle). Native parsing is not supported for '%s'.", filepath.Base(filePath))
-	}
-	fmt.Fprintln(os.Stderr, result.Message)
-	return result, nil
-}
-
-func scanWithLocalAnalyzersBatch(validPaths []string, originalPaths map[string]string, lang string) ([]OrchestratorResult, error) {
-	var results []OrchestratorResult
-
-	var configuredPaths []string
-	var blindPaths []string
 	configAnchors := make(map[string]string)
 	toolByPath := make(map[string]ConfigParser)
 
 	for _, cleanPath := range validPaths {
 		anchor, parser := detectConfigAndParser(cleanPath, lang)
-		if anchor == "" {
-			blindPaths = append(blindPaths, cleanPath)
-		} else {
-			configuredPaths = append(configuredPaths, cleanPath)
+		if anchor != "" {
 			configAnchors[cleanPath] = anchor
 			toolByPath[cleanPath] = parser
 		}
 	}
 
-	for _, cleanPath := range blindPaths {
-		orig := originalPaths[cleanPath]
-		res := OrchestratorResult{
-			FilePath:        orig,
-			Language:        lang,
-			ToolingDetected: false,
-			Message:         fmt.Sprintf("[WARNING] RUNNING BLIND (Level 0) on '%s'. No local %s static analysis config detected. Run 'bootstrap' command to fix.", filepath.Base(cleanPath), strings.ToUpper(lang)),
-		}
-		fmt.Fprintln(os.Stderr, res.Message)
-		results = append(results, res)
-	}
-
-	if len(configuredPaths) == 0 {
-		return results, nil
-	}
-
-	// Group configured paths by tool
-	pathsByTool := make(map[string][]string)
-	for _, p := range configuredPaths {
-		toolName := toolByPath[p].Name()
-		pathsByTool[toolName] = append(pathsByTool[toolName], p)
-	}
-
 	metricsMap := make(map[string]MaintainabilityMetrics)
 	var batchErrorMsg string
 
-	// Run tools for each group
-	for toolName, paths := range pathsByTool {
-		var toolMetrics map[string]MaintainabilityMetrics
-		var err error
-		switch toolName {
-		case "eslint":
-			toolMetrics, err = runESLintBatch(paths)
-			if err != nil {
-				batchErrorMsg = fmt.Sprintf("Orchestration error (ESLint): %v. (Verify dependencies are installed)", err)
+	pathsRemaining := validPaths
+
+	for _, plugin := range plugins {
+		if len(pathsRemaining) == 0 {
+			break
+		}
+
+		pluginName := plugin.Name()
+		isNative := strings.HasSuffix(pluginName, "-ast")
+
+		var pathsForPlugin []string
+		for _, p := range pathsRemaining {
+			if isNative {
+				pathsForPlugin = append(pathsForPlugin, p)
+			} else {
+				if toolByPath[p] != nil && toolByPath[p].Name() == pluginName {
+					pathsForPlugin = append(pathsForPlugin, p)
+				}
 			}
-		case "biome":
-			toolMetrics, err = runBiomeBatch(paths)
-			if err != nil {
-				batchErrorMsg = fmt.Sprintf("Orchestration error (Biome): %v. (Verify dependencies are installed)", err)
+		}
+
+		if len(pathsForPlugin) == 0 {
+			continue
+		}
+
+		toolMetrics := make(map[string][]Violation)
+		var mu sync.Mutex
+		var eg errgroup.Group
+
+		for i := 0; i < len(pathsForPlugin); i += 300 {
+			start := i
+			end := i + 300
+			if end > len(pathsForPlugin) {
+				end = len(pathsForPlugin)
 			}
-		case "pylint":
-			toolMetrics, err = runPyLintBatch(paths)
-			if err != nil {
-				batchErrorMsg = fmt.Sprintf("Orchestration error (PyLint): %v. (Verify pylint is installed)", err)
-			}
-		case "ruff":
-			toolMetrics, err = runRuffBatch(paths)
-			if err != nil {
-				batchErrorMsg = fmt.Sprintf("Orchestration error (Ruff): %v. (Verify ruff is installed)", err)
-			}
-		case "rubocop":
-			toolMetrics, err = runRuboCopBatch(paths)
-			if err != nil {
-				batchErrorMsg = fmt.Sprintf("Orchestration error (RuboCop): %v. (Verify rubocop is installed)", err)
-			}
-		case "standardrb":
-			toolMetrics, err = runStandardRBBatch(paths)
-			if err != nil {
-				batchErrorMsg = fmt.Sprintf("Orchestration error (StandardRB): %v. (Verify standardrb is installed)", err)
-			}
+			chunkPaths := pathsForPlugin[start:end]
+
+			eg.Go(func() error {
+				chunkMetrics, err := plugin.Analyze(chunkPaths)
+				if err != nil {
+					return err
+				}
+
+				mu.Lock()
+				defer mu.Unlock()
+				for k, v := range chunkMetrics {
+					toolMetrics[k] = v
+				}
+				return nil
+			})
+		}
+
+		analyzeErr := eg.Wait()
+
+		if analyzeErr != nil {
+			batchErrorMsg = fmt.Sprintf("Orchestration error (%s): %v", pluginName, analyzeErr)
+			continue
 		}
 
 		if toolMetrics != nil {
-			for k, v := range toolMetrics {
-				metricsMap[k] = v
+			var nextRemaining []string
+			for _, p := range pathsRemaining {
+				absP, _ := filepath.Abs(p)
+				found := false
+				for outPath, outMetrics := range toolMetrics {
+					outAbs, _ := filepath.Abs(outPath)
+					if outAbs == absP || outPath == p || filepath.Clean(outAbs) == filepath.Clean(p) {
+						metrics := metricsMap[p]
+						for _, v := range outMetrics {
+							switch v.RuleName {
+							case "Complexity":
+								if v.Value > metrics.Complexity {
+									metrics.Complexity = v.Value
+								}
+							case "FunctionLength":
+								if v.Value > metrics.FunctionLength {
+									metrics.FunctionLength = v.Value
+								}
+							case "ArgumentCount":
+								if v.Value > metrics.ArgumentCount {
+									metrics.ArgumentCount = v.Value
+								}
+							}
+						}
+						metricsMap[p] = metrics
+						found = true
+						break
+					}
+				}
+				if !found {
+					isForThisPlugin := false
+					for _, pfp := range pathsForPlugin {
+						if p == pfp {
+							isForThisPlugin = true
+							break
+						}
+					}
+					if !isForThisPlugin {
+						nextRemaining = append(nextRemaining, p)
+					}
+				}
 			}
+			pathsRemaining = nextRemaining
 		}
 	}
 
-	for _, cleanPath := range configuredPaths {
+	var results []OrchestratorResult
+	for _, cleanPath := range validPaths {
 		orig := originalPaths[cleanPath]
 		res := OrchestratorResult{
-			FilePath:        orig,
-			Language:        lang,
-			ToolingDetected: true,
+			FilePath: orig,
+			Language: lang,
 		}
 
-		res.Exceptions = detectRelaxedLimits(configAnchors[cleanPath], toolByPath[cleanPath])
+		// Tooling is detected if there is a config anchor OR if any native plugin exists for this language
+		hasNativePlugin := false
+		for _, pl := range plugins {
+			if strings.HasSuffix(pl.Name(), "-ast") {
+				hasNativePlugin = true
+				break
+			}
+		}
 
-		if batchErrorMsg != "" {
+		if configAnchors[cleanPath] != "" || hasNativePlugin {
+			res.ToolingDetected = true
+		} else {
+			res.ToolingDetected = false
+			res.Message = fmt.Sprintf("[WARNING] RUNNING BLIND (Level 0) on '%s'. No local %s static analysis config detected. Run 'bootstrap' command to fix.", filepath.Base(cleanPath), strings.ToUpper(lang))
+			fmt.Fprintln(os.Stderr, res.Message)
+		}
+
+		if anchor := configAnchors[cleanPath]; anchor != "" {
+			res.Exceptions = detectRelaxedLimits(anchor, toolByPath[cleanPath])
+		}
+
+		if batchErrorMsg != "" && !res.ToolingDetected { // if failed and blind
+			res.Message = batchErrorMsg
+		} else if batchErrorMsg != "" && res.ToolingDetected && metricsMap[cleanPath] == (MaintainabilityMetrics{}) {
 			res.Message = batchErrorMsg
 		} else {
-			var m MaintainabilityMetrics
-			found := false
-
-			absClean, _ := filepath.Abs(cleanPath)
-
-			for outPath, outMetrics := range metricsMap {
-				outAbs, _ := filepath.Abs(outPath)
-				if outAbs == absClean || outPath == cleanPath || strings.HasSuffix(outAbs, cleanPath) {
-					m = outMetrics
-					found = true
-					break
-				}
-			}
-			if found {
+			if m, ok := metricsMap[cleanPath]; ok {
 				res.Metrics = m
 			}
 		}
@@ -280,6 +266,128 @@ func scanWithLocalAnalyzersBatch(validPaths []string, originalPaths map[string]s
 	}
 
 	return results, nil
+}
+
+// ScanDeltaBatch scans a batch of files for a specific language concurrently and returns raw violations.
+func ScanDeltaBatch(filePaths []string, originalPaths map[string]string, lang string) (map[string][]Violation, error) {
+	if len(filePaths) == 0 {
+		return nil, nil
+	}
+
+	validPaths := make([]string, 0, len(filePaths))
+	for _, p := range filePaths {
+		clean, err := sanitizePath(p)
+		if err != nil {
+			return nil, err
+		}
+		validPaths = append(validPaths, clean)
+	}
+
+	plugins := GlobalRegistry.GetPlugins(lang)
+	if len(plugins) == 0 {
+		return nil, nil
+	}
+
+	toolByPath := make(map[string]ConfigParser)
+	for _, cleanPath := range validPaths {
+		anchor, parser := detectConfigAndParser(cleanPath, lang)
+		if anchor != "" {
+			toolByPath[cleanPath] = parser
+		}
+	}
+
+	metricsMap := make(map[string][]Violation)
+	pathsRemaining := validPaths
+
+	for _, plugin := range plugins {
+		if len(pathsRemaining) == 0 {
+			break
+		}
+
+		pluginName := plugin.Name()
+		isNative := strings.HasSuffix(pluginName, "-ast")
+
+		var pathsForPlugin []string
+		for _, p := range pathsRemaining {
+			if isNative {
+				pathsForPlugin = append(pathsForPlugin, p)
+			} else {
+				if toolByPath[p] != nil && toolByPath[p].Name() == pluginName {
+					pathsForPlugin = append(pathsForPlugin, p)
+				}
+			}
+		}
+
+		if len(pathsForPlugin) == 0 {
+			continue
+		}
+
+		toolMetrics := make(map[string][]Violation)
+		var mu sync.Mutex
+		var eg errgroup.Group
+
+		for i := 0; i < len(pathsForPlugin); i += 300 {
+			start := i
+			end := i + 300
+			if end > len(pathsForPlugin) {
+				end = len(pathsForPlugin)
+			}
+			chunkPaths := pathsForPlugin[start:end]
+
+			eg.Go(func() error {
+				chunkMetrics, err := plugin.Analyze(chunkPaths)
+				if err != nil {
+					return err
+				}
+
+				mu.Lock()
+				defer mu.Unlock()
+				for k, v := range chunkMetrics {
+					toolMetrics[k] = v
+				}
+				return nil
+			})
+		}
+
+		if err := eg.Wait(); err != nil {
+			return nil, fmt.Errorf("Orchestration error (%s): %w", pluginName, err)
+		}
+
+		if toolMetrics != nil {
+			var nextRemaining []string
+			for _, p := range pathsRemaining {
+				absP, _ := filepath.Abs(p)
+				found := false
+				for outPath, outMetrics := range toolMetrics {
+					outAbs, _ := filepath.Abs(outPath)
+					if outAbs == absP || outPath == p || filepath.Clean(outAbs) == filepath.Clean(p) {
+						origPath := originalPaths[p]
+						if origPath == "" {
+							origPath = p
+						}
+						metricsMap[origPath] = append(metricsMap[origPath], outMetrics...)
+						found = true
+						break
+					}
+				}
+				if !found {
+					isForThisPlugin := false
+					for _, pfp := range pathsForPlugin {
+						if p == pfp {
+							isForThisPlugin = true
+							break
+						}
+					}
+					if !isForThisPlugin {
+						nextRemaining = append(nextRemaining, p)
+					}
+				}
+			}
+			pathsRemaining = nextRemaining
+		}
+	}
+
+	return metricsMap, nil
 }
 
 func DetectLanguage(path string) string {
@@ -353,22 +461,42 @@ func detectConfig(filePath string, lang string) string {
 	return anchor
 }
 
-func runLintCommand(name string, args ...string) ([]byte, int, error) {
-	cmd := exec.Command(name, args...)
-	output, err := cmd.CombinedOutput()
+func runLintCommandJSON(name string, target interface{}, args ...string) (int, []byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
 
-	if errors.Is(err, exec.ErrNotFound) {
-		return nil, 0, fmt.Errorf("%s not found in PATH", name)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return 0, nil, fmt.Errorf("failed to get stdout pipe: %w", err)
 	}
+
+	var stderrBuf bytes.Buffer
+	cmd.Stderr = &stderrBuf
+
+	if err := cmd.Start(); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return 0, nil, fmt.Errorf("%s not found in PATH", name)
+		}
+		return 0, nil, fmt.Errorf("failed to start %s: %w", name, err)
+	}
+
+	decodeErr := json.NewDecoder(stdout).Decode(target)
+
+	err = cmd.Wait()
 
 	exitCode := 0
 	if exitErr, ok := err.(*exec.ExitError); ok {
 		exitCode = exitErr.ExitCode()
 	} else if err != nil {
-		return output, 0, fmt.Errorf("failed to run %s: %w", name, err)
+		return 0, stderrBuf.Bytes(), fmt.Errorf("failed to run %s: %w", name, err)
 	}
 
-	return output, exitCode, nil
+	if decodeErr != nil && decodeErr != io.EOF {
+		return exitCode, stderrBuf.Bytes(), fmt.Errorf("failed to decode JSON: %w", decodeErr)
+	}
+
+	return exitCode, stderrBuf.Bytes(), nil
 }
 
 func updateMetric(metric *int, valStr string) {
@@ -379,32 +507,16 @@ func updateMetric(metric *int, valStr string) {
 	}
 }
 
-func runESLintBatch(filePaths []string) (map[string]MaintainabilityMetrics, error) {
-	args := []string{"eslint", "-f", "json"}
-	args = append(args, filePaths...)
-	output, exitCode, err := runLintCommand("npx", args...)
-	if err != nil && exitCode == 0 {
-		return nil, fmt.Errorf("ESLint error: %w", err)
-	}
+type ESLintPlugin struct{}
 
-	if exitCode == 0 || exitCode == 1 {
-		var metricsMap map[string]MaintainabilityMetrics
-		if len(output) > 0 {
-			metricsMap, err = parseESLintOutputBatch(output)
-			if err != nil && exitCode == 1 {
-				return nil, fmt.Errorf("ESLint crashed or encountered a configuration error (exit code 1): %s", strings.TrimSpace(string(output)))
-			}
-		}
-		if metricsMap == nil {
-			metricsMap = make(map[string]MaintainabilityMetrics)
-		}
-		return metricsMap, nil
-	}
-
-	return nil, fmt.Errorf("ESLint exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
+func (p ESLintPlugin) Name() string {
+	return "eslint"
 }
 
-func parseESLintOutputBatch(output []byte) (map[string]MaintainabilityMetrics, error) {
+func (p ESLintPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
+    args := []string{"--no-install", "eslint", "-f", "json"}
+    args = append(args, "--")
+    args = append(args, filePaths...)
 	var list []struct {
 		FilePath string `json:"filePath"`
 		Messages []struct {
@@ -414,51 +526,112 @@ func parseESLintOutputBatch(output []byte) (map[string]MaintainabilityMetrics, e
 			Severity int    `json:"severity"`
 		} `json:"messages"`
 	}
-	if err := json.Unmarshal(output, &list); err != nil {
-		return nil, err
+	exitCode, output, err := runLintCommandJSON("npx", &list, args...)
+	if err != nil {
+		if exitCode > 0 {
+			return nil, fmt.Errorf("ESLint crashed or encountered a configuration error (exit code %d): %v\n%s", exitCode, err, string(output))
+		}
+		return nil, fmt.Errorf("ESLint error: %w", err)
 	}
 
-	metricsMap := make(map[string]MaintainabilityMetrics)
-	reComplexity := regexp.MustCompile(`complexity of (\d+)`)
-	reParams := regexp.MustCompile(`has (\d+) parameters`)
-	reLines := regexp.MustCompile(`exceeds (\d+) lines`)
-
-	for _, result := range list {
-		var metrics MaintainabilityMetrics
-		for _, msg := range result.Messages {
-			if matches := reComplexity.FindStringSubmatch(msg.Message); matches != nil {
-				updateMetric(&metrics.Complexity, matches[1])
-			}
-			if matches := reParams.FindStringSubmatch(msg.Message); matches != nil {
-				updateMetric(&metrics.ArgumentCount, matches[1])
-			}
-			if matches := reLines.FindStringSubmatch(msg.Message); matches != nil {
-				updateMetric(&metrics.FunctionLength, matches[1])
+	if exitCode == 0 || exitCode == 1 {
+		metricsMap := make(map[string][]Violation)
+		if len(list) > 0 {
+			reComplexity := regexp.MustCompile(`complexity of (\d+)`)
+			reParameters := regexp.MustCompile(`has (\d+) parameters`)
+			reLines := regexp.MustCompile(`exceeds (\d+) lines`)
+			reFallback := regexp.MustCompile(`(\d+)`)
+			for _, result := range list {
+				var violations []Violation
+				for _, msg := range result.Messages {
+					var val int
+					if msg.RuleID == "complexity" {
+						if m := reComplexity.FindStringSubmatch(msg.Message); len(m) > 1 {
+							fmt.Sscanf(m[1], "%d", &val)
+						} else if m := reFallback.FindStringSubmatch(msg.Message); len(m) > 1 {
+							fmt.Sscanf(m[1], "%d", &val)
+						}
+						violations = append(violations, Violation{RuleName: "Complexity", Value: val, StartLine: msg.Line, EndLine: msg.Line, Message: msg.Message})
+					} else if msg.RuleID == "max-params" {
+						if m := reParameters.FindStringSubmatch(msg.Message); len(m) > 1 {
+							fmt.Sscanf(m[1], "%d", &val)
+						} else if m := reFallback.FindStringSubmatch(msg.Message); len(m) > 1 {
+							fmt.Sscanf(m[1], "%d", &val)
+						}
+						violations = append(violations, Violation{RuleName: "ArgumentCount", Value: val, StartLine: msg.Line, EndLine: msg.Line, Message: msg.Message})
+					} else if msg.RuleID == "max-lines-per-function" {
+						if m := reLines.FindStringSubmatch(msg.Message); len(m) > 1 {
+							fmt.Sscanf(m[1], "%d", &val)
+						} else if m := reFallback.FindStringSubmatch(msg.Message); len(m) > 1 {
+							fmt.Sscanf(m[1], "%d", &val)
+						}
+						violations = append(violations, Violation{RuleName: "FunctionLength", Value: val, StartLine: msg.Line, EndLine: msg.Line, Message: msg.Message})
+					}
+				}
+				metricsMap[result.FilePath] = violations
 			}
 		}
-		metricsMap[result.FilePath] = metrics
+		return metricsMap, nil
 	}
-	return metricsMap, nil
+
+	return nil, fmt.Errorf("ESLint exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 }
 
-func runPyLintBatch(filePaths []string) (map[string]MaintainabilityMetrics, error) {
+type PyLintPlugin struct{}
+
+func (p PyLintPlugin) Name() string {
+	return "pylint"
+}
+
+func (p PyLintPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
 	args := []string{"--output-format=json"}
+	args = append(args, "--")
 	args = append(args, filePaths...)
-	output, exitCode, err := runLintCommand("pylint", args...)
-	if err != nil && exitCode == 0 {
+
+	var list []struct {
+		Path    string `json:"path"`
+		Message string `json:"message"`
+		Symbol  string `json:"symbol"`
+	}
+	exitCode, output, err := runLintCommandJSON("pylint", &list, args...)
+	if err != nil {
+		if exitCode > 0 {
+			return nil, fmt.Errorf("pylint crashed or encountered a configuration error (exit code %d): %v\n%s", exitCode, err, string(output))
+		}
 		return nil, fmt.Errorf("pylint error: %w", err)
 	}
 
 	if exitCode >= 0 {
-		var metricsMap map[string]MaintainabilityMetrics
-		if len(output) > 0 {
-			metricsMap, _ = parsePyLintOutputBatch(output)
-		}
-		if metricsMap == nil {
-			metricsMap = make(map[string]MaintainabilityMetrics)
+		metricsMap := make(map[string][]Violation)
+		if len(list) > 0 {
+			for _, msg := range list {
+				var val int
+				var rule string
+				if msg.Symbol == "too-many-statements" {
+					if strings.Contains(msg.Message, "Too many statements") {
+						fmt.Sscanf(msg.Message, "Too many statements (%d/%*d)", &val)
+						rule = "FunctionLength"
+					}
+				} else if msg.Symbol == "too-many-arguments" {
+					if strings.Contains(msg.Message, "Too many arguments") {
+						fmt.Sscanf(msg.Message, "Too many arguments (%d/%*d)", &val)
+						rule = "ArgumentCount"
+					}
+				} else if msg.Symbol == "too-many-branches" || msg.Symbol == "too-complex" {
+					if strings.Contains(msg.Message, "McCabe rating is") {
+						fmt.Sscanf(msg.Message, "McCabe rating is %d", &val)
+						rule = "Complexity"
+					}
+				}
+				if rule != "" {
+					metricsMap[msg.Path] = append(metricsMap[msg.Path], Violation{RuleName: rule, Value: val, Message: msg.Message})
+				}
+			}
 		}
 		if exitCode > 0 && len(metricsMap) == 0 {
-			if parseErr := json.Unmarshal(output, &[]interface{}{}); parseErr != nil {
+			// To catch crashes
+			var dummy []interface{}
+			if parseErr := json.Unmarshal(output, &dummy); parseErr != nil {
 				return nil, fmt.Errorf("pylint crashed or encountered a configuration error (exit code %d): %s", exitCode, strings.TrimSpace(string(output)))
 			}
 		}
@@ -468,69 +641,17 @@ func runPyLintBatch(filePaths []string) (map[string]MaintainabilityMetrics, erro
 	return nil, fmt.Errorf("pylint exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 }
 
-func parsePyLintOutputBatch(output []byte) (map[string]MaintainabilityMetrics, error) {
-	var list []struct {
-		Path    string `json:"path"`
-		Message string `json:"message"`
-		Symbol  string `json:"symbol"`
-	}
-	if err := json.Unmarshal(output, &list); err != nil {
-		return nil, err
-	}
+type RuboCopPlugin struct{}
 
-	metricsMap := make(map[string]MaintainabilityMetrics)
-	reComplexity := regexp.MustCompile(`McCabe rating is (\d+)`)
-	reParams := regexp.MustCompile(`Too many arguments \((\d+)/`)
-	reStatements := regexp.MustCompile(`Too many statements \((\d+)/`)
-
-	for _, msg := range list {
-		metrics := metricsMap[msg.Path]
-		if msg.Symbol == "too-many-statements" {
-			var val int
-			if matches := reStatements.FindStringSubmatch(msg.Message); matches != nil {
-				fmt.Sscanf(matches[1], "%d", &val)
-				if val > metrics.FunctionLength {
-					metrics.FunctionLength = val
-				}
-			}
-		}
-		if matches := reComplexity.FindStringSubmatch(msg.Message); matches != nil {
-			updateMetric(&metrics.Complexity, matches[1])
-		}
-		if matches := reParams.FindStringSubmatch(msg.Message); matches != nil {
-			updateMetric(&metrics.ArgumentCount, matches[1])
-		}
-		metricsMap[msg.Path] = metrics
-	}
-	return metricsMap, nil
+func (p RuboCopPlugin) Name() string {
+	return "rubocop"
 }
 
-func runRuboCopBatch(filePaths []string) (map[string]MaintainabilityMetrics, error) {
+func (p RuboCopPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
 	args := []string{"--format", "json"}
+	args = append(args, "--")
 	args = append(args, filePaths...)
-	output, exitCode, err := runLintCommand("rubocop", args...)
-	if err != nil && exitCode == 0 {
-		return nil, fmt.Errorf("rubocop error: %w", err)
-	}
 
-	if exitCode == 0 || exitCode == 1 {
-		var metricsMap map[string]MaintainabilityMetrics
-		if len(output) > 0 {
-			metricsMap, err = parseRuboCopOutputBatch(output)
-			if err != nil && exitCode == 1 {
-				return nil, fmt.Errorf("rubocop crashed or encountered a configuration error (exit code 1): %s", strings.TrimSpace(string(output)))
-			}
-		}
-		if metricsMap == nil {
-			metricsMap = make(map[string]MaintainabilityMetrics)
-		}
-		return metricsMap, nil
-	}
-
-	return nil, fmt.Errorf("rubocop exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
-}
-
-func parseRuboCopOutputBatch(output []byte) (map[string]MaintainabilityMetrics, error) {
 	var result struct {
 		Files []struct {
 			Path     string `json:"path"`
@@ -540,42 +661,49 @@ func parseRuboCopOutputBatch(output []byte) (map[string]MaintainabilityMetrics, 
 			} `json:"offenses"`
 		} `json:"files"`
 	}
-	if err := json.Unmarshal(output, &result); err != nil {
-		return nil, err
+	exitCode, output, err := runLintCommandJSON("rubocop", &result, args...)
+	if err != nil {
+		if exitCode > 0 {
+			return nil, fmt.Errorf("rubocop crashed or encountered a configuration error (exit code %d): %v\n%s", exitCode, err, string(output))
+		}
+		return nil, fmt.Errorf("rubocop error: %w", err)
 	}
 
-	metricsMap := make(map[string]MaintainabilityMetrics)
-	reVal := regexp.MustCompile(`\[(\d+)/`)
-
-	for _, file := range result.Files {
-		var metrics MaintainabilityMetrics
-		for _, off := range file.Offenses {
-			var val int
-			if matches := reVal.FindStringSubmatch(off.Message); matches != nil {
-				fmt.Sscanf(matches[1], "%d", &val)
-			}
-			if val == 0 {
-				continue
-			}
-
-			switch off.CopName {
-			case "Metrics/CyclomaticComplexity":
-				if val > metrics.Complexity {
-					metrics.Complexity = val
+	if exitCode == 0 || exitCode == 1 {
+		metricsMap := make(map[string][]Violation)
+		if len(result.Files) > 0 {
+			reVal := regexp.MustCompile(`\[(\d+)/`)
+			for _, file := range result.Files {
+				var violations []Violation
+				for _, off := range file.Offenses {
+					var val int
+					if strings.Contains(off.Message, "[") {
+						if m := reVal.FindStringSubmatch(off.Message); len(m) > 1 {
+							fmt.Sscanf(m[1], "%d", &val)
+						}
+					}
+					if val == 0 {
+						continue
+					}
+					switch off.CopName {
+					case "Metrics/CyclomaticComplexity":
+						violations = append(violations, Violation{RuleName: "Complexity", Value: val, Message: off.Message})
+					case "Metrics/MethodLength":
+						violations = append(violations, Violation{RuleName: "FunctionLength", Value: val, Message: off.Message})
+					case "Metrics/ParameterLists":
+						violations = append(violations, Violation{RuleName: "ArgumentCount", Value: val, Message: off.Message})
+					}
 				}
-			case "Metrics/MethodLength":
-				if val > metrics.FunctionLength {
-					metrics.FunctionLength = val
-				}
-			case "Metrics/ParameterLists":
-				if val > metrics.ArgumentCount {
-					metrics.ArgumentCount = val
-				}
+				metricsMap[file.Path] = violations
 			}
 		}
-		metricsMap[file.Path] = metrics
+		if exitCode == 1 && len(result.Files) == 0 && len(output) > 0 {
+			return nil, fmt.Errorf("rubocop crashed or encountered a configuration error (exit code 1): %s", strings.TrimSpace(string(output)))
+		}
+		return metricsMap, nil
 	}
-	return metricsMap, nil
+
+	return nil, fmt.Errorf("rubocop exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 }
 
 func findMaxConfigVal(content string, ext string, keys []string) (int, bool) {
@@ -613,24 +741,66 @@ func detectRelaxedLimits(configPath string, parser ConfigParser) []RelaxedLimit 
 	return exceptions
 }
 
-func runRuffBatch(filePaths []string) (map[string]MaintainabilityMetrics, error) {
+type RuffPlugin struct{}
+
+func (p RuffPlugin) Name() string {
+	return "ruff"
+}
+
+func (p RuffPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
 	args := []string{"check", "--output-format=json"}
+	args = append(args, "--")
 	args = append(args, filePaths...)
-	output, exitCode, err := runLintCommand("ruff", args...)
-	if err != nil && exitCode == 0 {
+
+	var list []struct {
+		Filename string `json:"filename"`
+		Message  string `json:"message"`
+		Code     string `json:"code"`
+	}
+	exitCode, output, err := runLintCommandJSON("ruff", &list, args...)
+	if err != nil {
+		if exitCode > 0 {
+			return nil, fmt.Errorf("ruff crashed or encountered a configuration error (exit code %d): %v\n%s", exitCode, err, string(output))
+		}
 		return nil, fmt.Errorf("ruff error: %w", err)
 	}
 
 	if exitCode >= 0 {
-		var metricsMap map[string]MaintainabilityMetrics
-		if len(output) > 0 {
-			metricsMap, _ = parseRuffOutputBatch(output)
-		}
-		if metricsMap == nil {
-			metricsMap = make(map[string]MaintainabilityMetrics)
+		metricsMap := make(map[string][]Violation)
+		if len(list) > 0 {
+			reVal := regexp.MustCompile(`\((\d+)\s*>`)
+			for _, msg := range list {
+				var val int
+
+				if strings.Contains(msg.Message, "(") && strings.Contains(msg.Message, ">") {
+					if m := reVal.FindStringSubmatch(msg.Message); len(m) > 1 {
+						fmt.Sscanf(m[1], "%d", &val)
+					}
+				}
+
+				var rule string
+				if val > 0 {
+					if msg.Code == "C901" || strings.HasPrefix(msg.Code, "C90") {
+						rule = "Complexity"
+					} else if msg.Code == "PLR0915" {
+						rule = "FunctionLength"
+					} else if msg.Code == "PLR0913" {
+						rule = "ArgumentCount"
+					}
+				} else {
+					if msg.Code == "C901" {
+						rule = "Complexity"
+						val = 1
+					}
+				}
+				if rule != "" {
+					metricsMap[msg.Filename] = append(metricsMap[msg.Filename], Violation{RuleName: rule, Value: val, Message: msg.Message})
+				}
+			}
 		}
 		if exitCode > 0 && len(metricsMap) == 0 {
-			if parseErr := json.Unmarshal(output, &[]interface{}{}); parseErr != nil {
+			var dummy []interface{}
+			if parseErr := json.Unmarshal(output, &dummy); parseErr != nil {
 				return nil, fmt.Errorf("ruff crashed or encountered a configuration error (exit code %d): %s", exitCode, strings.TrimSpace(string(output)))
 			}
 		}
@@ -640,77 +810,16 @@ func runRuffBatch(filePaths []string) (map[string]MaintainabilityMetrics, error)
 	return nil, fmt.Errorf("ruff exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 }
 
-func parseRuffOutputBatch(output []byte) (map[string]MaintainabilityMetrics, error) {
-	var list []struct {
-		Filename string `json:"filename"`
-		Message  string `json:"message"`
-		Code     string `json:"code"`
-	}
-	if err := json.Unmarshal(output, &list); err != nil {
-		return nil, err
-	}
+type BiomePlugin struct{}
 
-	metricsMap := make(map[string]MaintainabilityMetrics)
-	reVal := regexp.MustCompile(`\((\d+)\s*>`)
-
-	for _, msg := range list {
-		metrics := metricsMap[msg.Filename]
-		var val int
-		if matches := reVal.FindStringSubmatch(msg.Message); matches != nil {
-			fmt.Sscanf(matches[1], "%d", &val)
-		}
-
-		if val > 0 {
-			if msg.Code == "C901" || strings.HasPrefix(msg.Code, "C90") {
-				if val > metrics.Complexity {
-					metrics.Complexity = val
-				}
-			} else if msg.Code == "PLR0915" {
-				if val > metrics.FunctionLength {
-					metrics.FunctionLength = val
-				}
-			} else if msg.Code == "PLR0913" {
-				if val > metrics.ArgumentCount {
-					metrics.ArgumentCount = val
-				}
-			}
-		} else {
-			// Fallback string matching just in case
-			if msg.Code == "C901" {
-				updateMetric(&metrics.Complexity, "1")
-			}
-		}
-		metricsMap[msg.Filename] = metrics
-	}
-	return metricsMap, nil
+func (p BiomePlugin) Name() string {
+	return "biome"
 }
 
-func runBiomeBatch(filePaths []string) (map[string]MaintainabilityMetrics, error) {
+func (p BiomePlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
 	args := []string{"lint", "--formatter-enabled=false", "--output-format=json"}
 	args = append(args, filePaths...)
-	output, exitCode, err := runLintCommand("biome", args...)
-	if err != nil && exitCode == 0 {
-		return nil, fmt.Errorf("biome error: %w", err)
-	}
 
-	if exitCode == 0 || exitCode == 1 {
-		var metricsMap map[string]MaintainabilityMetrics
-		if len(output) > 0 {
-			metricsMap, err = parseBiomeOutputBatch(output)
-			if err != nil && exitCode == 1 {
-				return nil, fmt.Errorf("biome crashed or encountered a configuration error (exit code 1): %s", strings.TrimSpace(string(output)))
-			}
-		}
-		if metricsMap == nil {
-			metricsMap = make(map[string]MaintainabilityMetrics)
-		}
-		return metricsMap, nil
-	}
-
-	return nil, fmt.Errorf("biome exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
-}
-
-func parseBiomeOutputBatch(output []byte) (map[string]MaintainabilityMetrics, error) {
 	var result struct {
 		Diagnostics []struct {
 			Category string `json:"category"`
@@ -719,64 +828,116 @@ func parseBiomeOutputBatch(output []byte) (map[string]MaintainabilityMetrics, er
 					File string `json:"file"`
 				} `json:"path"`
 			} `json:"location"`
+			Description string `json:"description"`
 		} `json:"diagnostics"`
 	}
-	if err := json.Unmarshal(output, &result); err != nil {
-		return nil, err
+	exitCode, output, err := runLintCommandJSON("biome", &result, args...)
+	if err != nil {
+		if exitCode > 0 {
+			return nil, fmt.Errorf("biome crashed or encountered a configuration error (exit code %d): %v\n%s", exitCode, err, string(output))
+		}
+		return nil, fmt.Errorf("biome error: %w", err)
 	}
 
-	metricsMap := make(map[string]MaintainabilityMetrics)
+	if exitCode == 0 || exitCode == 1 {
+		metricsMap := make(map[string][]Violation)
+		if len(result.Diagnostics) > 0 {
+			reVal := regexp.MustCompile(`(\d+)`)
+			for _, diag := range result.Diagnostics {
+				path := diag.Location.Path.File
+				if path == "" {
+					continue
+				}
 
-	// Since we might not have the raw message structure perfectly modeled for Biome's varied output,
-	// we will just use regex on the raw JSON output to extract values, or fall back to 1.
-	// But let's try a simpler approach since Biome output is tricky: just regex the whole output bytes!
-	
-	// Wait, we can just parse the JSON, and extract default violation counts if we can't parse the number.
-	for _, diag := range result.Diagnostics {
-		path := diag.Location.Path.File
-		if path == "" {
-			continue
+				var val int
+				if strings.Contains(diag.Category, "complexity") || strings.Contains(diag.Description, "complexity") {
+					if m := reVal.FindStringSubmatch(diag.Description); len(m) > 1 {
+						fmt.Sscanf(m[1], "%d", &val)
+					}
+					if val == 0 {
+						val = 2
+					} // Fallback if parse fails but issue exists
+					metricsMap[path] = append(metricsMap[path], Violation{RuleName: "Complexity", Value: val, Message: diag.Description})
+				}
+				if strings.Contains(diag.Category, "maxParameters") || strings.Contains(diag.Description, "parameters") {
+					if m := reVal.FindStringSubmatch(diag.Description); len(m) > 1 {
+						fmt.Sscanf(m[1], "%d", &val)
+					}
+					if val == 0 {
+						val = 2
+					} // Fallback
+					metricsMap[path] = append(metricsMap[path], Violation{RuleName: "ArgumentCount", Value: val, Message: diag.Description})
+				}
+			}
 		}
-		metrics := metricsMap[path]
-		
-		val := 2 // Dummy value if regex doesn't match, just to flag it.
-		// A more accurate regex can be run against the raw output if needed, but for now:
-		if strings.Contains(diag.Category, "complexity") {
-			if val > metrics.Complexity { metrics.Complexity = val }
+		if exitCode == 1 && len(metricsMap) == 0 && len(output) > 0 {
+			return nil, fmt.Errorf("biome crashed or encountered a configuration error (exit code 1): %s", strings.TrimSpace(string(output)))
 		}
-		if strings.Contains(diag.Category, "maxParameters") {
-			if val > metrics.ArgumentCount { metrics.ArgumentCount = val }
-		}
-		metricsMap[path] = metrics
+		return metricsMap, nil
 	}
-	return metricsMap, nil
+
+	return nil, fmt.Errorf("biome exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 }
 
-func runStandardRBBatch(filePaths []string) (map[string]MaintainabilityMetrics, error) {
+type StandardRBPlugin struct{}
+
+func (p StandardRBPlugin) Name() string {
+	return "standardrb"
+}
+
+func (p StandardRBPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
 	args := []string{"--format", "json"}
+	args = append(args, "--")
 	args = append(args, filePaths...)
-	output, exitCode, err := runLintCommand("standardrb", args...)
-	if err != nil && exitCode == 0 {
+
+	var result struct {
+		Files []struct {
+			Path     string `json:"path"`
+			Offenses []struct {
+				CopName string `json:"cop_name"`
+				Message string `json:"message"`
+			} `json:"offenses"`
+		} `json:"files"`
+	}
+	exitCode, output, err := runLintCommandJSON("standardrb", &result, args...)
+	if err != nil {
+		if exitCode > 0 {
+			return nil, fmt.Errorf("standardrb crashed or encountered a configuration error (exit code %d): %v\n%s", exitCode, err, string(output))
+		}
 		return nil, fmt.Errorf("standardrb error: %w", err)
 	}
 
 	if exitCode == 0 || exitCode == 1 {
-		var metricsMap map[string]MaintainabilityMetrics
-		if len(output) > 0 {
-			metricsMap, err = parseStandardRBOutputBatch(output)
-			if err != nil && exitCode == 1 {
-				return nil, fmt.Errorf("standardrb crashed or encountered a configuration error (exit code 1): %s", strings.TrimSpace(string(output)))
+		metricsMap := make(map[string][]Violation)
+		if len(result.Files) > 0 {
+			for _, file := range result.Files {
+				var violations []Violation
+				for _, off := range file.Offenses {
+					var val int
+					if strings.Contains(off.Message, "[") {
+						fmt.Sscanf(off.Message, "%*[^[][%d/%*d]", &val)
+					}
+					if val == 0 {
+						continue
+					}
+
+					switch off.CopName {
+					case "Metrics/CyclomaticComplexity":
+						violations = append(violations, Violation{RuleName: "Complexity", Value: val, Message: off.Message})
+					case "Metrics/MethodLength":
+						violations = append(violations, Violation{RuleName: "FunctionLength", Value: val, Message: off.Message})
+					case "Metrics/ParameterLists":
+						violations = append(violations, Violation{RuleName: "ArgumentCount", Value: val, Message: off.Message})
+					}
+				}
+				metricsMap[file.Path] = violations
 			}
 		}
-		if metricsMap == nil {
-			metricsMap = make(map[string]MaintainabilityMetrics)
+		if exitCode == 1 && len(result.Files) == 0 && len(output) > 0 {
+			return nil, fmt.Errorf("standardrb crashed or encountered a configuration error (exit code 1): %s", strings.TrimSpace(string(output)))
 		}
 		return metricsMap, nil
 	}
 
 	return nil, fmt.Errorf("standardrb exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
-}
-
-func parseStandardRBOutputBatch(output []byte) (map[string]MaintainabilityMetrics, error) {
-	return parseRuboCopOutputBatch(output)
 }

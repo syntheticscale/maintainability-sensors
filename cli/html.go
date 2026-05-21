@@ -13,18 +13,20 @@ import (
 //go:embed templates/report.html
 var reportHTML string
 
+var reportTemplate = template.Must(template.New("report").Parse(reportHTML))
+
 // ReportData holds pre-computed data for the HTML report template.
 type ReportData struct {
-	TotalFiles       int
+	TotalFiles        int
 	OrchestratedCount int
-	BlindCount       int
-	TotalViolations  int
-	TotalExceptions  int
-	HasViolations    bool
-	HasExceptions    bool
-	Rows             []FileRow
-	FilePrompts      []FilePromptData
-	FileExceptions   []FileExceptionData
+	BlindCount        int
+	TotalViolations   int
+	TotalExceptions   int
+	HasViolations     bool
+	HasExceptions     bool
+	Rows              []FileRow
+	FilePrompts       []FilePromptData
+	FileExceptions    []FileExceptionData
 }
 
 // FileRow represents a single row in the scorecard table.
@@ -43,9 +45,9 @@ type FileRow struct {
 
 // FilePromptData holds prompts for a file with violations.
 type FilePromptData struct {
-	BaseName    string
-	Prompts     []string
-	FullPrompt  string
+	BaseName   string
+	Prompts    []string
+	FullPrompt string
 }
 
 // FileExceptionData holds exceptions for a file.
@@ -143,13 +145,8 @@ func GenerateHTMLScorecard(results []sensors.OrchestratorResult) string {
 	data.HasViolations = data.TotalViolations > 0
 	data.HasExceptions = data.TotalExceptions > 0
 
-	tmpl, err := template.New("report").Parse(reportHTML)
-	if err != nil {
-		return fmt.Sprintf("<!-- Template parse error: %v -->", err)
-	}
-
 	var buf strings.Builder
-	if err := tmpl.Execute(&buf, data); err != nil {
+	if err := reportTemplate.Execute(&buf, data); err != nil {
 		return fmt.Sprintf("<!-- Template execution error: %v -->", err)
 	}
 

@@ -509,7 +509,7 @@ func TestPostGitHubReview_NoToken(t *testing.T) {
 	unsetEnv(t, "GITHUB_REPOSITORY")
 	unsetEnv(t, "GITHUB_REF")
 
-	err := PostGitHubReview(nil, nil)
+	err := PostGitHubReview(nil)
 	if err == nil {
 		t.Fatal("expected error when GITHUB_TOKEN is not set")
 	}
@@ -522,7 +522,7 @@ func TestPostGitHubReview_NoRepo(t *testing.T) {
 	setEnv(t, "GITHUB_TOKEN", "fake-token")
 	unsetEnv(t, "GITHUB_REPOSITORY")
 
-	err := PostGitHubReview(nil, nil)
+	err := PostGitHubReview(nil)
 	if err == nil {
 		t.Fatal("expected error when GITHUB_REPOSITORY is not set")
 	}
@@ -537,7 +537,7 @@ func TestPostGitHubReview_NoPRNumber(t *testing.T) {
 	unsetEnv(t, "GITHUB_EVENT_PATH")
 	unsetEnv(t, "GITHUB_REF")
 
-	err := PostGitHubReview(nil, nil)
+	err := PostGitHubReview(nil)
 	if err == nil {
 		t.Fatal("expected error when PR number cannot be determined")
 	}

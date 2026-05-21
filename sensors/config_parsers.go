@@ -75,7 +75,7 @@ func findAllConfigValsJS(content string, key string) []int {
 	var vals []int
 
 	safeKey := regexp.QuoteMeta(key)
-	pattern := fmt.Sprintf(`(?:["']%s["']|\b%s\b)\s*:\s*(?:\[[^\]]*?\{\s*["']?max["']?\s*:\s*(\d+)\s*\}[^\]]*?\]|\[\s*["'][^"']+["']\s*,\s*(\d+)\s*\]|\{\s*["']?max["']?\s*:\s*(\d+)\s*\}|(\d+))`, safeKey, safeKey)
+	pattern := fmt.Sprintf(`(?:["']%s["']|\b%s\b)\s*:\s*(?:\[[^\]]*?\{\s*[^}]*?["']?(?:max|Max)["']?\s*:\s*(\d+)[^}]*?\}[^\]]*?\]|\[[^\]]*?,\s*(\d+)[^\]]*?\]|\{\s*[^}]*?["']?(?:max|Max)["']?\s*:\s*(\d+)[^}]*?\}|(\d+))`, safeKey, safeKey)
 	re := regexp.MustCompile(pattern)
 
 	matches := re.FindAllStringSubmatch(content, -1)
@@ -130,7 +130,7 @@ func findAllConfigValsYAML(content string, key string) []int {
 			}
 		}
 	}
-	
+
 	sort.Ints(vals)
 	return vals
 }
@@ -157,7 +157,7 @@ func findAllConfigValsTOML(content string, key string) []int {
 	var data interface{}
 	toml.Unmarshal([]byte(content), &data)
 	walk(data)
-	
+
 	sort.Ints(vals)
 	return vals
 }

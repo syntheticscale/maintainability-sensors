@@ -4,11 +4,15 @@ This guide details how to integrate `maintainability-sensors` directly into your
 
 ---
 
-## 1. Quick Start: Standard CI Step Summary
+## 1. The Strategy: Check-Diff over Full Scans
 
-You can run `maintainability-sensors` on every commit. If it runs in a GitHub Actions runner, the CLI will automatically output a beautiful, rich Markdown scorecard directly into the GitHub Actions Job Summary (`GITHUB_STEP_SUMMARY`).
+Legacy codebases often contain hundreds of existing maintainability violations. Failing the CI build because a developer touched a file that *already* had issues is counterproductive and punishes them for legacy debt. 
 
-Add this step to your existing `.github/workflows/ci.yml` pipeline:
+Instead, we run the sensors in **Delta Mode** using `check-diff`. This ensures that PRs are only blocked if the *changed lines* (the delta) introduce **new** rot.
+
+## 2. Quick Start: Standard CI Step Summary
+
+Add this step to your existing `.github/workflows/ci.yml` pipeline to scan the PR's delta against the `main` branch. The CLI will automatically output a rich Markdown scorecard into the GitHub Actions Job Summary.
 
 ```yaml
 name: Continuous Integration
@@ -21,6 +25,8 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required to fetch origin/main for check-diff
 
       # 1. Download and install the Maintainability Sensors binary
       - name: Install Maintainability Sensors
@@ -28,16 +34,16 @@ jobs:
           curl -sSfL -o /usr/local/bin/maintainability-sensors https://github.com/syntheticscale/maintainability-sensors/releases/latest/download/maintainability-sensors-linux
           chmod +x /usr/local/bin/maintainability-sensors
 
-      # 2. Run the scan (triggers orchestrated linter and writes summaries)
-      - name: Run Maintainability Scan
-        run: maintainability-sensors run .
+      # 2. Run the delta scan (only checks changed lines against main)
+      - name: Run Maintainability Scan (Delta)
+        run: maintainability-sensors check-diff origin/main
 ```
 
 ---
 
-## 2. Advanced: Inline PR Review Comments (`--github-pr`)
+## 3. Advanced: Inline PR Review Comments (`--github-pr`)
 
-To have the CLI **directly review your active Pull Requests** (posting inline comments on the exact lines of code that exceed complexity limits), enable the `--github-pr` flag and provide the `GITHUB_TOKEN` secret. The CLI natively uses the GitHub Pull Request Review API to create actionable, localized feedback.
+To have the CLI **directly review your active Pull Requests** (posting inline comments on the exact lines of code that exceed complexity limits), enable the `--github-pr` flag and provide the `GITHUB_TOKEN` secret. 
 
 ```yaml
 name: Quality Gate & PR Review
@@ -52,23 +58,25 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Maintainability Sensors
         run: |
           curl -sSfL -o /usr/local/bin/maintainability-sensors https://github.com/syntheticscale/maintainability-sensors/releases/latest/download/maintainability-sensors-linux
           chmod +x /usr/local/bin/maintainability-sensors
 
-      # 3. Scan and write directly back as a PR Issue comment
+      # 3. Scan the diff and write directly back as a PR Issue comment
       - name: Post PR Scorecard Review
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          maintainability-sensors run . --github-pr
+          maintainability-sensors check-diff origin/main --github-pr
 ```
 
 ---
 
-## 🔒 3. Required Permissions
+## 🔒 4. Required Permissions
 
 For the `--github-pr` commenting feature to succeed, your GitHub Actions token must have permission to write comments to pull requests. Ensure your job has these permissions configured:
 

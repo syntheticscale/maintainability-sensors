@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 )
 
 // GoMetrics holds extracted metrics from a Go file.
@@ -14,13 +15,17 @@ type GoMetrics struct {
 }
 
 // ParseGoAST reads a Go file and extracts maintainability metrics natively.
-func ParseGoAST(filePath string) (GoMetrics, error) {
-	var metrics GoMetrics
+func ParseGoAST(filePath string) ([]Violation, error) {
+        var violations []Violation
 
-	fset := token.NewFileSet()
+        if info, err := os.Stat(filePath); err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
+                return violations, nil
+        }
+
+        fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
-		return metrics, err
+		return violations, err
 	}
 
 	for _, decl := range f.Decls {
@@ -29,38 +34,49 @@ func ParseGoAST(filePath string) (GoMetrics, error) {
 			continue
 		}
 
-		// Calculate Function Length (lines of body)
 		startPos := fset.Position(fn.Body.Lbrace)
 		endPos := fset.Position(fn.Body.Rbrace)
-		length := endPos.Line - startPos.Line
-		if length > metrics.FunctionLength {
-			metrics.FunctionLength = length
-		}
+		startLine := startPos.Line
+		endLine := endPos.Line
+
+		// Calculate Function Length (lines of body)
+		length := endLine - startLine + 1
+		violations = append(violations, Violation{
+			RuleName:  "FunctionLength",
+			Value:     length,
+			StartLine: startLine,
+			EndLine:   endLine,
+		})
 
 		// Calculate Parameter (Argument) Count
 		params := 0
 		if fn.Type.Params != nil {
 			for _, field := range fn.Type.Params.List {
-				// A field can define multiple identifiers of the same type: `a, b int`
 				if len(field.Names) > 0 {
 					params += len(field.Names)
 				} else {
-					params++ // anonymous parameter
+					params++
 				}
 			}
 		}
-		if params > metrics.ArgumentCount {
-			metrics.ArgumentCount = params
-		}
+		violations = append(violations, Violation{
+			RuleName:  "ArgumentCount",
+			Value:     params,
+			StartLine: startLine,
+			EndLine:   endLine,
+		})
 
 		// Calculate Cyclomatic Complexity of the function
 		complexity := calculateGoComplexity(fn)
-		if complexity > metrics.Complexity {
-			metrics.Complexity = complexity
-		}
+		violations = append(violations, Violation{
+			RuleName:  "Complexity",
+			Value:     complexity,
+			StartLine: startLine,
+			EndLine:   endLine,
+		})
 	}
 
-	return metrics, nil
+	return violations, nil
 }
 
 // calculateGoComplexity counts decision points in a Go function AST.
@@ -69,6 +85,8 @@ func calculateGoComplexity(fn *ast.FuncDecl) int {
 
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
 		switch n := n.(type) {
+		case *ast.FuncLit:
+			return false // Do not leak complexity from nested closures
 		case *ast.IfStmt:
 			complexity++
 		case *ast.ForStmt, *ast.RangeStmt:
@@ -92,4 +110,23 @@ func calculateGoComplexity(fn *ast.FuncDecl) int {
 	})
 
 	return complexity
+}
+
+// GoPlugin implements the Plugin interface for Go using native AST parsing.
+type GoPlugin struct{}
+
+func (p GoPlugin) Name() string {
+	return "go-ast"
+}
+
+func (p GoPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
+	metricsMap := make(map[string][]Violation)
+	for _, filePath := range filePaths {
+		violations, err := ParseGoAST(filePath)
+		if err != nil {
+			return nil, err
+		}
+		metricsMap[filePath] = violations
+	}
+	return metricsMap, nil
 }

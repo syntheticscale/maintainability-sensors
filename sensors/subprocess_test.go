@@ -15,6 +15,16 @@ func writeMockScript(t *testing.T, dir, name, content string) {
 	}
 }
 
+func getMax(violations []Violation, ruleName string) int {
+	max := 0
+	for _, v := range violations {
+		if v.RuleName == ruleName && v.Value > max {
+			max = v.Value
+		}
+	}
+	return max
+}
+
 func withMockLinterPath(t *testing.T) func() {
 	t.Helper()
 	mockDir := t.TempDir()
@@ -35,7 +45,7 @@ esac
 `)
 
 	writeMockScript(t, mockDir, "pylint", `#!/bin/bash
-FILE="$2"
+FILE="${@: -1}"
 BASENAME=$(basename "$FILE")
 case "$BASENAME" in
   *exit0*) exit 0 ;;
@@ -50,7 +60,7 @@ esac
 `)
 
 	writeMockScript(t, mockDir, "rubocop", `#!/bin/bash
-FILE="$3"
+FILE="${@: -1}"
 BASENAME=$(basename "$FILE")
 case "$BASENAME" in
   *exit0*) exit 0 ;;
@@ -91,7 +101,7 @@ func TestRunESLint_Subprocess(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			metricsMap, err := runESLintBatch([]string{tc.filePath})
+			metricsMap, err := ESLintPlugin{}.Analyze([]string{tc.filePath})
 			metrics := metricsMap[tc.filePath]
 			if tc.wantErr {
 				if err == nil {
@@ -105,14 +115,17 @@ func TestRunESLint_Subprocess(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if metrics.Complexity != tc.wantComp {
-				t.Errorf("Complexity = %d, want %d", metrics.Complexity, tc.wantComp)
+			comp := getMax(metrics, "Complexity")
+			if comp != tc.wantComp {
+				t.Errorf("Complexity = %d, want %d", comp, tc.wantComp)
 			}
-			if metrics.FunctionLength != tc.wantLen {
-				t.Errorf("FunctionLength = %d, want %d", metrics.FunctionLength, tc.wantLen)
+			flen := getMax(metrics, "FunctionLength")
+			if flen != tc.wantLen {
+				t.Errorf("FunctionLength = %d, want %d", flen, tc.wantLen)
 			}
-			if metrics.ArgumentCount != tc.wantArgs {
-				t.Errorf("ArgumentCount = %d, want %d", metrics.ArgumentCount, tc.wantArgs)
+			args := getMax(metrics, "ArgumentCount")
+			if args != tc.wantArgs {
+				t.Errorf("ArgumentCount = %d, want %d", args, tc.wantArgs)
 			}
 		})
 	}
@@ -123,7 +136,7 @@ func TestRunESLint_Subprocess(t *testing.T) {
 		os.Setenv("PATH", emptyDir)
 		defer os.Setenv("PATH", origPath)
 
-		_, err := runESLintBatch([]string{"test.ts"})
+		_, err := ESLintPlugin{}.Analyze([]string{"test.ts"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -155,7 +168,7 @@ func TestRunPyLint_Subprocess(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			metricsMap, err := runPyLintBatch([]string{tc.filePath})
+			metricsMap, err := PyLintPlugin{}.Analyze([]string{tc.filePath})
 			metrics := metricsMap[tc.filePath]
 			if tc.wantErr {
 				if err == nil {
@@ -169,14 +182,17 @@ func TestRunPyLint_Subprocess(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if metrics.Complexity != tc.wantComp {
-				t.Errorf("Complexity = %d, want %d", metrics.Complexity, tc.wantComp)
+			comp := getMax(metrics, "Complexity")
+			if comp != tc.wantComp {
+				t.Errorf("Complexity = %d, want %d", comp, tc.wantComp)
 			}
-			if metrics.FunctionLength != tc.wantLen {
-				t.Errorf("FunctionLength = %d, want %d", metrics.FunctionLength, tc.wantLen)
+			flen := getMax(metrics, "FunctionLength")
+			if flen != tc.wantLen {
+				t.Errorf("FunctionLength = %d, want %d", flen, tc.wantLen)
 			}
-			if metrics.ArgumentCount != tc.wantArgs {
-				t.Errorf("ArgumentCount = %d, want %d", metrics.ArgumentCount, tc.wantArgs)
+			args := getMax(metrics, "ArgumentCount")
+			if args != tc.wantArgs {
+				t.Errorf("ArgumentCount = %d, want %d", args, tc.wantArgs)
 			}
 		})
 	}
@@ -187,7 +203,7 @@ func TestRunPyLint_Subprocess(t *testing.T) {
 		os.Setenv("PATH", emptyDir)
 		defer os.Setenv("PATH", origPath)
 
-		_, err := runPyLintBatch([]string{"test.py"})
+		_, err := PyLintPlugin{}.Analyze([]string{"test.py"})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -219,7 +235,7 @@ func TestRunRuboCop_Subprocess(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			metricsMap, err := runRuboCopBatch([]string{tc.filePath})
+			metricsMap, err := RuboCopPlugin{}.Analyze([]string{tc.filePath})
 			metrics := metricsMap[tc.filePath]
 			if tc.wantErr {
 				if err == nil {
@@ -233,14 +249,17 @@ func TestRunRuboCop_Subprocess(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if metrics.Complexity != tc.wantComp {
-				t.Errorf("Complexity = %d, want %d", metrics.Complexity, tc.wantComp)
+			comp := getMax(metrics, "Complexity")
+			if comp != tc.wantComp {
+				t.Errorf("Complexity = %d, want %d", comp, tc.wantComp)
 			}
-			if metrics.FunctionLength != tc.wantLen {
-				t.Errorf("FunctionLength = %d, want %d", metrics.FunctionLength, tc.wantLen)
+			flen := getMax(metrics, "FunctionLength")
+			if flen != tc.wantLen {
+				t.Errorf("FunctionLength = %d, want %d", flen, tc.wantLen)
 			}
-			if metrics.ArgumentCount != tc.wantArgs {
-				t.Errorf("ArgumentCount = %d, want %d", metrics.ArgumentCount, tc.wantArgs)
+			args := getMax(metrics, "ArgumentCount")
+			if args != tc.wantArgs {
+				t.Errorf("ArgumentCount = %d, want %d", args, tc.wantArgs)
 			}
 		})
 	}
@@ -251,7 +270,7 @@ func TestRunRuboCop_Subprocess(t *testing.T) {
 		os.Setenv("PATH", emptyDir)
 		defer os.Setenv("PATH", origPath)
 
-		_, err := runRuboCopBatch([]string{"test.rb"})
+		_, err := RuboCopPlugin{}.Analyze([]string{"test.rb"})
 		if err == nil {
 			t.Fatal("expected error")
 		}

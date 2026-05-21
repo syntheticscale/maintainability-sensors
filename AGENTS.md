@@ -8,7 +8,7 @@ Every AI assistant or developer working on this codebase must respect these rule
 
 ## 🏛️ Repository Architecture
 
-This tool is designed to be a lightweight, ultra-fast Go CLI utility (<15ms execution time) that orchestrates local static analysis and parses ASTs natively.
+This tool is designed to be a lightweight, ultra-fast Go CLI utility that orchestrates local static analysis and parses ASTs natively.
 
 ```
 /
@@ -82,6 +82,8 @@ go build -o bin/maintainability-sensors main.go
 
 When modifying existing sensors or adding a new language bootstrap:
 1. **Spec First:** Define the language limits and expected linter patterns.
-2. **Test First (TDD):** Implement table-driven tests inside the `tests/` directory and ensure they fail.
+2. **Test First (TDD):** Implement table-driven tests inside the `tests/` directory and ensure they fail. **Testing Policy:** Prefer component/integration tests over testing implementation details with unit tests. Only add unit tests for highly complex, isolated logic (e.g., metric extraction from ASTs).
 3. **Implement Cleanly:** Write the minimum code inside the `sensors/` package to pass the tests.
 4. **Compile & Verify:** Confirm that `go test ./...` passes beautifully in milliseconds and the compiled binary functions as expected.
+5. **Subagent Protocol (Stop & Report):** If you encounter any blocking issues, ambiguous requirements, or areas that warrant architectural questions during execution, you MUST stop and report back to the orchestrating agent immediately. Do not guess or force a fragile solution.
+6. **Multi-Persona Self-Review:** For any significant architectural changes or large features, you MUST pause and conduct a rigorous self-review using the multi-persona protocols defined in `docs/AI_REVIEW_PROTOCOLS.md`. Do not simply accept the "happy path" completion.

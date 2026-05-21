@@ -165,7 +165,9 @@ func syncAndCheckout(t *testing.T, name, url, commit, path string) {
 	t.Logf("Checking out %s at %s...", name, commit)
 	cmdFetch := exec.Command("git", "fetch", "--tags")
 	cmdFetch.Dir = path
-	_ = cmdFetch.Run()
+	if err := cmdFetch.Run(); err != nil {
+		t.Fatalf("failed to fetch tags for %s: %v", name, err)
+	}
 
 	cmdCheckout := exec.Command("git", "checkout", commit)
 	cmdCheckout.Dir = path

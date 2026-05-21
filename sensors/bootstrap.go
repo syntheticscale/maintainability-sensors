@@ -44,6 +44,10 @@ linters-settings:
     max-complexity: %d
   lll:
     line-length: 120
+  revive:
+    rules:
+      - name: argument-limit
+        arguments: [%d]
 
 linters:
   enable:
@@ -51,6 +55,7 @@ linters:
     - funlen
     - cyclop
     - lll
+    - revive
 `
 
 	checkstyleTemplate = `<?xml version="1.0"?>
@@ -139,9 +144,9 @@ func BootstrapRepo(repoPath string) error {
 	}
 
 	for _, lang := range langs {
-		fmt.Printf("=========================================\n")
-		fmt.Printf(" Orchestrating Bootstrap for %s...\n", getFriendlyLangName(lang))
-		fmt.Printf("=========================================\n\n")
+		fmt.Fprintf(os.Stderr, "=========================================\n")
+		fmt.Fprintf(os.Stderr, " Orchestrating Bootstrap for %s...\n", getFriendlyLangName(lang))
+		fmt.Fprintf(os.Stderr, "=========================================\n\n")
 
 		if err := bootstrapLanguage(lang, absPath); err != nil {
 			return err
@@ -181,7 +186,7 @@ func bootstrapTSJS(absPath string) error {
 		if err := os.WriteFile(eslintPath, []byte(fmt.Sprintf(eslintTemplate, BaselineComplexity, BaselineArgumentCount, BaselineFunctionLength, BaselineFileLength)), 0644); err != nil {
 			return fmt.Errorf("failed to write .eslintrc.json: %w", err)
 		}
-		fmt.Printf("- [CREATED] .eslintrc.json (Pristine Maintainability Rule Suite)\n\n")
+		fmt.Fprintf(os.Stderr, "- [CREATED] .eslintrc.json (Pristine Maintainability Rule Suite)\n\n")
 	}
 	printInstallerInstructions("tsjs")
 	return nil
@@ -199,7 +204,7 @@ func bootstrapPython(absPath string) error {
 		if err := os.WriteFile(pylintPath, []byte(fmt.Sprintf(pylintTemplate, BaselineArgumentCount, BaselineFunctionLength, BaselineComplexity, BaselineFileLength)), 0644); err != nil {
 			return fmt.Errorf("failed to write .pylintrc: %w", err)
 		}
-		fmt.Printf("- [CREATED] .pylintrc (Pristine McCabe / PyLint Complexity Rules)\n\n")
+		fmt.Fprintf(os.Stderr, "- [CREATED] .pylintrc (Pristine McCabe / PyLint Complexity Rules)\n\n")
 	}
 	printInstallerInstructions("python")
 	return nil
@@ -211,12 +216,13 @@ func bootstrapGo(absPath string) error {
 		printExistingConfigBanner(".golangci.yml", fmt.Sprintf(`
 - gocognit: { min-complexity: %d }
 - funlen: { lines: %d }
-- gocyclo: { min-complexity: %d }`, BaselineComplexity, BaselineFunctionLength, BaselineComplexity))
+- gocyclo: { min-complexity: %d }
+- revive: { argument-limit: %d }`, BaselineComplexity, BaselineFunctionLength, BaselineComplexity, BaselineArgumentCount))
 	} else {
-		if err := os.WriteFile(gociPath, []byte(fmt.Sprintf(golangciTemplate, BaselineComplexity, BaselineFunctionLength, BaselineComplexity)), 0644); err != nil {
+		if err := os.WriteFile(gociPath, []byte(fmt.Sprintf(golangciTemplate, BaselineComplexity, BaselineFunctionLength, BaselineComplexity, BaselineArgumentCount)), 0644); err != nil {
 			return fmt.Errorf("failed to write .golangci.yml: %w", err)
 		}
-		fmt.Printf("- [CREATED] .golangci.yml (Pristine Go Vet / Gocognit Complexity Rules)\n\n")
+		fmt.Fprintf(os.Stderr, "- [CREATED] .golangci.yml (Pristine Go Vet / Gocognit Complexity Rules)\n\n")
 	}
 	printInstallerInstructions("go")
 	return nil
@@ -233,7 +239,7 @@ func bootstrapJava(absPath string) error {
 		if err := os.WriteFile(checkPath, []byte(fmt.Sprintf(checkstyleTemplate, BaselineComplexity, BaselineComplexity, BaselineArgumentCount, BaselineArgumentCount, BaselineFunctionLength, BaselineFunctionLength, BaselineFileLength, BaselineFileLength)), 0644); err != nil {
 			return fmt.Errorf("failed to write checkstyle.xml: %w", err)
 		}
-		fmt.Printf("- [CREATED] checkstyle.xml (Pristine Java Checkstyle Complexity Rules)\n\n")
+		fmt.Fprintf(os.Stderr, "- [CREATED] checkstyle.xml (Pristine Java Checkstyle Complexity Rules)\n\n")
 	}
 	printInstallerInstructions("java")
 	return nil
@@ -250,7 +256,7 @@ func bootstrapRuby(absPath string) error {
 		if err := os.WriteFile(ruboPath, []byte(fmt.Sprintf(rubocopTemplate, BaselineComplexity, BaselineFunctionLength, BaselineArgumentCount, BaselineFileLength)), 0644); err != nil {
 			return fmt.Errorf("failed to write .rubocop.yml: %w", err)
 		}
-		fmt.Printf("- [CREATED] .rubocop.yml (Pristine Ruby RuboCop Complexity Rules)\n\n")
+		fmt.Fprintf(os.Stderr, "- [CREATED] .rubocop.yml (Pristine Ruby RuboCop Complexity Rules)\n\n")
 	}
 	printInstallerInstructions("ruby")
 	return nil
@@ -266,7 +272,7 @@ func bootstrapCSharp(absPath string) error {
 		if err := os.WriteFile(editorPath, []byte(fmt.Sprintf(editorconfigTemplate, BaselineComplexity, BaselineComplexity)), 0644); err != nil {
 			return fmt.Errorf("failed to write .editorconfig: %w", err)
 		}
-		fmt.Printf("- [CREATED] .editorconfig (Pristine Microsoft C# EditorConfig Analyzers)\n\n")
+		fmt.Fprintf(os.Stderr, "- [CREATED] .editorconfig (Pristine Microsoft C# EditorConfig Analyzers)\n\n")
 	}
 	printInstallerInstructions("csharp")
 	return nil
@@ -282,8 +288,8 @@ func detectLanguages(dirPath string) []string {
 		"csharp": 0,
 	}
 
-	_ = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
+	err := filepath.WalkDir(dirPath, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
 			return nil
 		}
 		// Skip standard node_modules / git directories
@@ -307,6 +313,10 @@ func detectLanguages(dirPath string) []string {
 		}
 		return nil
 	})
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to walk directory during language detection: %v\n", err)
+	}
 
 	var langs []string
 	for k, v := range counts {
@@ -337,55 +347,54 @@ func getFriendlyLangName(lang string) string {
 }
 
 func printExistingConfigBanner(fileName string, recommendations string) {
-	fmt.Printf("- [SKIP] '%s' already exists in repository root. Protecting existing setup.\n", fileName)
-	fmt.Printf("  >>> RECOMMENDATION: Manually integrate the following parameters into your custom configuration:\n%s\n\n", recommendations)
+	fmt.Fprintf(os.Stderr, "- [SKIP] '%s' already exists in repository root. Protecting existing setup.\n", fileName)
+	fmt.Fprintf(os.Stderr, "  >>> RECOMMENDATION: Manually integrate the following parameters into your custom configuration:\n%s\n\n", recommendations)
 }
 
 func printInstallerInstructions(lang string) {
-	fmt.Printf("-----------------------------------------\n")
-	fmt.Printf(" Next Steps: Install Required Local Tools\n")
-	fmt.Printf("-----------------------------------------\n")
+	fmt.Fprintf(os.Stderr, "-----------------------------------------\n")
+	fmt.Fprintf(os.Stderr, " Next Steps: Install Required Local Tools\n")
+	fmt.Fprintf(os.Stderr, "-----------------------------------------\n")
 
 	switch lang {
 	case "tsjs":
-		fmt.Printf("Execute this command to install the required development engines:\n")
-		fmt.Printf("  npm install --save-dev eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin\n\n")
-		fmt.Printf("Or for Yarn / PNPM:\n")
-		fmt.Printf("  pnpm add -D eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin\n")
+		fmt.Fprintf(os.Stderr, "Execute this command to install the required development engines:\n")
+		fmt.Fprintf(os.Stderr, "  npm install --save-dev eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin\n\n")
+		fmt.Fprintf(os.Stderr, "Or for Yarn / PNPM:\n")
+		fmt.Fprintf(os.Stderr, "  pnpm add -D eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin\n")
 	case "python":
-		fmt.Printf("Execute this command to install the required PyLint engine:\n")
-		fmt.Printf("  pip install pylint\n\n")
-		fmt.Printf("To run McCabe cyclomatic checks with pylint:\n")
-		fmt.Printf("  pylint --load-plugins=pylint.extensions.mccabe your_code_directory/\n")
+		fmt.Fprintf(os.Stderr, "Execute this command to install the required PyLint engine:\n")
+		fmt.Fprintf(os.Stderr, "  pip install pylint\n\n")
+		fmt.Fprintf(os.Stderr, "To run McCabe cyclomatic checks with pylint:\n")
+		fmt.Fprintf(os.Stderr, "  pylint --load-plugins=pylint.extensions.mccabe your_code_directory/\n")
 	case "go":
-		fmt.Printf("Execute this command to install the golangci-lint meta-linter:\n")
-		fmt.Printf("  curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.60.0\n\n")
-		fmt.Printf("Run checks with:\n")
-		fmt.Printf("  golangci-lint run ./...\n")
+		fmt.Fprintf(os.Stderr, "Execute this command to install the golangci-lint meta-linter:\n")
+		fmt.Fprintf(os.Stderr, "  curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.60.0\n\n")
+		fmt.Fprintf(os.Stderr, "Run checks with:\n")
+		fmt.Fprintf(os.Stderr, "  golangci-lint run ./...\n")
 	case "java":
-		fmt.Printf("To run Java Checkstyle checks, add the checkstyle-plugin to your Maven pom.xml or Gradle build script:\n\n")
-		fmt.Printf("Maven pom.xml Configuration:\n")
-		fmt.Printf("  <plugin>\n")
-		fmt.Printf("    <groupId>org.apache.maven.plugins</groupId>\n")
-		fmt.Printf("    <artifactId>maven-checkstyle-plugin</artifactId>\n")
-		fmt.Printf("    <version>3.3.1</version>\n")
-		fmt.Printf("    <configuration>\n")
-		fmt.Printf("      <configLocation>checkstyle.xml</configLocation>\n")
-		fmt.Printf("    </configuration>\n")
-		fmt.Printf("  </plugin>\n")
+		fmt.Fprintf(os.Stderr, "To run Java Checkstyle checks, add the checkstyle-plugin to your Maven pom.xml or Gradle build script:\n\n")
+		fmt.Fprintf(os.Stderr, "Maven pom.xml Configuration:\n")
+		fmt.Fprintf(os.Stderr, "  <plugin>\n")
+		fmt.Fprintf(os.Stderr, "    <groupId>org.apache.maven.plugins</groupId>\n")
+		fmt.Fprintf(os.Stderr, "    <artifactId>maven-checkstyle-plugin</artifactId>\n")
+		fmt.Fprintf(os.Stderr, "    <version>3.3.1</version>\n")
+		fmt.Fprintf(os.Stderr, "    <configuration>\n")
+		fmt.Fprintf(os.Stderr, "      <configLocation>checkstyle.xml</configLocation>\n")
+		fmt.Fprintf(os.Stderr, "    </configuration>\n")
+		fmt.Fprintf(os.Stderr, "  </plugin>\n")
 	case "ruby":
-		fmt.Printf("Execute this command to install the RuboCop engine:\n")
-		fmt.Printf("  gem install rubocop\n\n")
-		fmt.Printf("To run checks natively:\n")
-		fmt.Printf("  rubocop --format json your_code_directory/\n")
+		fmt.Fprintf(os.Stderr, "Execute this command to install the RuboCop engine:\n")
+		fmt.Fprintf(os.Stderr, "  gem install rubocop\n\n")
+		fmt.Fprintf(os.Stderr, "To run checks natively:\n")
+		fmt.Fprintf(os.Stderr, "  rubocop --format json your_code_directory/\n")
 	case "csharp":
-		fmt.Printf("Microsoft C# Analyzers are built natively into the .NET SDK.\n")
-		fmt.Printf("To verify code formatting and analyzer rules, run standard .NET commands:\n\n")
-		fmt.Printf("Run static code analysis:\n")
-		fmt.Printf("  dotnet build /p:TreatWarningsAsErrors=true\n\n")
-		fmt.Printf("Or run automatic formatting verification:\n")
-		fmt.Printf("  dotnet format --verify-no-changes\n")
+		fmt.Fprintf(os.Stderr, "Microsoft C# Analyzers are built natively into the .NET SDK.\n")
+		fmt.Fprintf(os.Stderr, "To verify code formatting and analyzer rules, run standard .NET commands:\n\n")
+		fmt.Fprintf(os.Stderr, "Run static code analysis:\n")
+		fmt.Fprintf(os.Stderr, "  dotnet build /p:TreatWarningsAsErrors=true\n\n")
+		fmt.Fprintf(os.Stderr, "Or run automatic formatting verification:\n")
+		fmt.Fprintf(os.Stderr, "  dotnet format --verify-no-changes\n")
 	}
-	fmt.Printf("\nOnce installed, run maintainability-sensors again to activate precise Level 1+ analysis!\n")
+	fmt.Fprintf(os.Stderr, "\nOnce installed, run maintainability-sensors again to activate precise Level 1+ analysis!\n")
 }
-

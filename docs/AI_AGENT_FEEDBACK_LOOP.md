@@ -1,6 +1,6 @@
 # Governing the AI Agent Loop: Automated Self-Correction 🤖
 
-This guide explains how to establish the **deterministic feedback loop** between your AI Coding Agents (such as Cursor, Claude Code, Copilot, or customized autonomous coding agents) and the `maintainability-sensors` CLI to ensure unconstrained AI code generation does not degrade your codebase.
+This guide explains how to establish the **deterministic feedback loop** between your AI Coding Agents (such as Gemini CLI, Cursor, Claude Code, or autonomous agents) and the `maintainability-sensors` CLI to ensure unconstrained AI code generation does not degrade your codebase.
 
 ---
 
@@ -14,16 +14,18 @@ By integrating **Maintainability Sensors** directly into their workspace, you tu
 
 ---
 
-## 2. Setting Up the Feedback Loop (Step-by-Step)
+## 2. The Solution: Autonomous `check-diff` Validation
+
+Instead of scanning the entire codebase (which might have existing legacy debt), the AI agent must validate its *own* specific changes using `check-diff`. This ensures the agent is only held responsible for the code it just generated or modified.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│              1. Agent Generates Code (Cursor)               │
+│              1. Agent Generates Code                        │
 └──────────────────────────────┬──────────────────────────────┘
                                │
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
-│        2. Local Pre-commit / Terminal Scan Fires            │
+│    2. Agent Autonomously Runs `check-diff` on Delta         │
 └──────────────────────────────┬──────────────────────────────┘
                                │
                     (Sensor Violations Found?)
@@ -33,81 +35,49 @@ By integrating **Maintainability Sensors** directly into their workspace, you tu
                │                               │
                ▼                               ▼
 ┌──────────────────────────────┐              ┌────────────────┐
-│ 3. CLI Outputs Self-         │              │ 4. PR Merged   │
-│    Correction Prompt Blocks  │              │    Successfully│
+│ 3. CLI Outputs Structured    │              │ 4. Code Ready  │
+│    Correction Prompt Blocks  │              │    for PR      │
 └──────────────┬───────────────┘              └────────────────┘
                │
                ▼
 ┌──────────────────────────────┐
 │ 4. Agent Ingests Prompt &    │
-│    Refactors Itself          │
+│    Refactors Its Own Code    │
 └──────────────────────────────┘
 ```
 
 ### Step 1: Bootstrap the Environment
-First, ensure that your repository has active maintainability sensors configured. Run:
+First, ensure that your repository has active maintainability sensors configured. Ask the agent or run:
 ```bash
 maintainability-sensors bootstrap .
 ```
-This writes pristine `.eslintrc.json`, `.pylintrc`, or `.golangci.yml` configurations with strict, deterministic thresholds (e.g. cyclomatic complexity limit 8, max function lines 50, max params 4).
+This writes pristine configurations with strict, deterministic thresholds (e.g., cyclomatic complexity limit 8, max function lines 50, max params 4).
 
-### Step 2: Suppressing Legacy Debt (Optional)
-If you are adopting this tool on an existing legacy codebase that already has hundreds of violations, you don't want the CI to fail immediately. Instead of lowering the standards, generate a baseline suppression file:
+### Step 2: The Agent's Internal Verification Loop
+When the AI agent finishes generating a feature or a fix, it must intrinsically run the following command before presenting the code to the user or opening a PR:
+
 ```bash
-maintainability-sensors baseline .
+maintainability-sensors check-diff origin/main
 ```
-This generates a `maintainability-baseline.json` file. The CLI will now dynamically load this file and ignore existing legacy violations, but will still strictly fail the build if an AI agent introduces a *new* violation or makes an existing one worse.
+*(Or diffing against the current HEAD if working entirely locally with uncommitted changes)*
 
-### Step 3: Configure as a Local git Pre-commit Hook
-To ensure that *no* developer or AI agent can commit code that violates the maintainability rules, configure the sensors to run as a **git pre-commit hook**.
-
-Create or update `.git/hooks/pre-commit` in your repository:
-```bash
-#!/bin/bash
-
-# Run maintainability sensors on the staged files
-staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx|py|go)$')
-
-if [ -z "$staged_files" ]; then
-    exit 0
-fi
-
-# Run scan. If there are violations, print recommendations and exit 1
-maintainability-sensors run $staged_files
-
-if [ $? -ne 0 ]; then
-    echo "========================================================="
-    echo " [ERROR] Maintainability Sensor Violations Detected!"
-    echo " Feed the prompts above to your AI Agent to refactor."
-    echo "========================================================="
-    exit 1
-fi
-```
-Make the hook executable:
-```bash
-chmod +x .git/hooks/pre-commit
-```
-
-### Step 3: Feeding Prompt Blocks back to Cursor / Claude Code
-When the pre-commit hook or manual scan fails, the tool outputs structured, machine-optimized **Refactoring Instructions**:
+### Step 3: Self-Correction via Prompts
+If the `check-diff` command fails, the tool outputs structured, machine-optimized **Refactoring Instructions**:
 
 ```
-  * Complexity is 12 (Max 8). Nudge coding agent to extract nested conditionals into separate, single-responsibility helper functions.
+  * Complexity is 12 (Max 8) on lines 45-80. Nudge coding agent to extract nested conditionals into separate, single-responsibility helper functions.
 ```
 
-When using **Cursor (composer/agent mode)** or **Claude Code**, simply paste this block or tell the agent:
-> *"The maintainability sensors blocked my commit because `Complexity is 12 (Max 8)`. Read the error output and refactor the nested conditionals in `MyComponent.tsx` into separate helper functions to satisfy the sensor. Do not alter external behavior."*
-
-The agent will parse the instruction, implement the modular refactoring, run the test, and pass the sensor gate.
+The AI agent will parse this instruction, implement the modular refactoring on the lines it just wrote, run the tests, and loop back to Step 2 until the sensor gate passes.
 
 ---
 
 ## ⚖️ Elastic Thresholds: Slightly Relaxing the Limits
 
-A key finding in Birgitta Böckeler's blog post is that we should **not** force a binary "suppress-or-comply" choice. Some refactorings are truly impossible or counterproductive.
+A key finding is that we should **not** force a binary "suppress-or-comply" choice. Some refactorings are truly impossible or counterproductive.
 
-If the AI agent or developer believes that a threshold should be slightly relaxed:
-1.  They edit the local configuration file (e.g., increasing `max-params` in `.eslintrc.json` from 4 to 5).
-2.  They **must append an inline comment or configuration reason** explaining why.
+If the AI agent believes that a threshold should be slightly relaxed for a specific file:
+1.  It edits the local configuration file (e.g., increasing `max-params` from 4 to 5).
+2.  It **must append an inline comment or configuration reason** explaining why.
 3.  Our `maintainability-sensors` scanner will automatically detect this change and flag it under **"Exceptions Created by AI (Relaxed Constraints)"** in the PR scorecard.
 4.  This isolates the exact places where the AI struggled to refactor, providing the **perfect starting point for human code reviews**.

@@ -1,103 +1,83 @@
 # Project Status 📡
 
-**Last Updated:** 2026-05-20  
+**Last Updated:** 2026-05-21  
 **Branch:** `main`  
-**State:** 🟢 Stable (Architecture Rewrite Complete)
+**State:** 🟢 Stable (Enterprise Hardening & Hybrid Plugin Architecture Complete)
 
 ---
 
-## 🏗️ Current Architecture
+## 🏗️ Current Architecture (Hybrid Plugin Model)
 
-The codebase has recently undergone a major architectural overhaul, resulting in a highly modular, easily testable design that strictly adheres to its "Ultra-Fast Static Binary" constraint.
+The codebase has transitioned to a highly scalable **Hybrid Plugin Architecture**. The CLI acts purely as the gatekeeping framework, while metrics extraction is delegated through a strict Plugin Interface (`Analyze(filePaths []string)`).
 
 ```
 maintainability-sensors/
 ├── main.go                          # CLI entrypoint
 ├── cli/
-│   ├── cmd.go                       # Subcommands (run, generate, bootstrap)
-│   ├── html.go                      # HTML scorecard generator
-│   ├── github.go                    # GitHub Actions & PR comment integration
-│   ├── cli_test.go                  # Unit tests for CLI commands (46 tests)
-│   └── templates/report.html        # Embedded dark-themed report
+│   ├── cmd.go                       # Subcommands & Workspace Jailing
+│   ├── html.go                      # Statically cached HTML scorecard generator
+│   └── github.go                    # Enterprise GitHub integration
 ├── sensors/
-│   ├── orchestrator.go              # Subprocess executor + linter JSON parser
-│   ├── config_parsers.go            # Native YAML/INI subset parser & JS config parser
-│   ├── eslint_parser.go             # ESLint config parser
-│   ├── pylint_parser.go             # PyLint config parser
-│   ├── golangci_parser.go           # golangci-lint config parser
-│   ├── rubocop_parser.go            # RuboCop config parser
-│   ├── go_ast.go                    # Native Go AST metric collector (McCabe)
-│   ├── bootstrap.go                 # Pristine config template generator (Polyglot)
-│   ├── constants.go                 # Baseline threshold constants
-│   ├── csharp_parser.go             # Stub (external tooling required)
-│   ├── parsers_test.go              # Unit tests for config parsers
-│   ├── sanitize_test.go             # Unit tests for path sanitization
-│   └── subprocess_test.go           # Unit tests for subprocess error branches
-├── tests/
-│   ├── orchestrator_test.go         # Go AST & Level 0 fallback tests
-│   ├── component_test.go            # High-level polyglot e2e integration test
-│   ├── relaxed_limits_test.go       # Relaxed limit detection tests
-│   ├── golden_test.go               # Golden snapshot tests (Real metrics)
-└── docs/
-    ├── GITHUB_ACTIONS_GUIDE.md      # CI/CD integration guide
-    ├── AI_AGENT_FEEDBACK_LOOP.md    # Agent self-correction loop guide
-    └── CASE_STUDIES.md              # 6-repository architectural deep-dive
+│   ├── plugin.go                    # Core Plugin Interface & Registry
+│   ├── orchestrator.go              # Argument Chunking & Plugin Invocation
+│   ├── go_ast.go                    # Native Go Plugin (Tree-sitter approach)
+│   ├── csharp_parser.go             # Native C# Plugin (Tree-sitter)
+│   ├── java_parser.go               # Native Java Plugin (Tree-sitter)
+│   ├── eslint_parser.go             # (Tier 2 wrappers implement Plugin interface)
+│   └── bootstrap.go                 # Enterprise-safe config generator
+└── tests/
+    └── golden_test.go               # Validates formatted LLM prompts
 ```
 
 ---
 
-## ✅ Completed Work (May 2026 Sprint)
+## ✅ Completed Work (Enterprise Hardening Sprint)
 
-The recent sprint focused on eradicating technical debt, expanding modern framework support, and guaranteeing test reliability.
+This sprint focused on making the tool robust enough for strictly regulated, massive-scale CI/CD pipelines.
 
 | Category | Achievements |
 |---|---|
-| **Architecture** | Refactored the `executeRun` monolith into a decoupled `FindFiles` -> `ScanFiles` -> `FormatResultsCLI` pipeline. |
-| **Bootstrapping** | Overhauled `BootstrapRepo` to correctly support modern monorepos by configuring all detected languages. |
-| **Config Parsing** | Replaced fragile regex with a robust, stack-based YAML/INI parser in `config_parsers.go`. |
-| **Modernization** | Added complete parsing support for ESLint 9 Flat Configs (`eslint.config.js`, `eslint.config.mjs`). |
-| **Validation** | Implemented structural JSON schema validation in the `generate` subcommand to eliminate cryptic crashes. |
-| **Testing** | Expanded test suites to cover CLI commands, subprocess branches, and regenerated golden snapshots with real metrics. |
-| **CI Gatekeeping** | Configured CLI to return non-zero exit codes when code violates maintainability limits, enabling strict CI/CD enforcement. |
-| **AST Parsing** | Fixed Go AST native metric collector to accurately incorporate binary expressions (`&&`, `||`) into cyclomatic complexity. |
-
----
-
-## 📊 Test Status
-
-```
-✅ sensors/ package:     65+ subtests (parsers, sanitization, config detection, subprocess boundaries)
-✅ cli/ package:         46 unit tests (pipeline logic, GitHub integration, input validation)
-✅ tests/ package:       Integration + golden snapshot tests (5 real-world repos)
-✅ Race detector:        PASS
-✅ go vet:               CLEAN
-✅ Build:                SUCCESS
-```
+| **Hybrid Plugins** | Replaced brittle monolithic switch statements with a scalable `Plugin` interface and global registry. |
+| **Native Execution** | Built native AST parsers (`go-tree-sitter`) for C# and Java. No JVM or .NET SDK required. |
+| **OOM Protection** | Implemented streaming JSON parsing and 2MB file-size limits. Replaced `CombinedOutput()` buffers. |
+| **Scale & Speed** | Upgraded to `filepath.WalkDir` and implemented 300-file argument chunking to prevent OS `ARG_MAX` panics on huge monorepos. |
+| **Security Bounding**| Enforced a strict Workspace Jail to prevent absolute path traversal and added POSIX `--` delimiters to prevent command injection. |
+| **Compliance** | Added GitHub API URL overrides (`GITHUB_API_URL`) and 10-second HTTP timeouts for air-gapped CI proxies. |
+| **Correctness** | Fixed Go AST metrics leaking complexity from inner closures and fixed error swallowing during initializations. |
 
 ---
 
 ## 🚧 Known Issues & Technical Debt
 
-All major technical debt has been resolved. The remaining items represent minor optimizations or ecosystem constraints.
+Despite recent enterprise hardening, several deep systemic flaws were identified during a multi-persona meta-review that require future attention:
 
-### Low Priority
-
+### Security & Resource Governance
 | Issue | Impact | Notes |
 |---|---|---|
-| **`ParseCSharp` always returns error** | None | Intentional stub; kept for API compatibility until native parsing is viable. |
+| **Missing POSIX `--` Delimiters** | High | Only implemented for StandardRB; missing in ESLint, PyLint, Ruff, etc., leaving them vulnerable to command/flag injection. |
+| **Missing Subprocess Timeouts** | High | Linter executions (`runLintCommandJSON`) lack `context.WithTimeout`, meaning stalled linters will hang the CI runner indefinitely. |
+| **Untracked File OOM Risk** | High | `git ls-files` bypasses the `WalkDir` 2MB file size limit, meaning massive untracked generated files can still cause OOM crashes. |
+
+### Architecture & Agent-UX (DevEx)
+| Issue | Impact | Notes |
+|---|---|---|
+| **Serial Chunking Bottleneck** | Medium | The 300-file chunking processes sequentially. On massive monorepos, this severely impacts execution time. |
+| **Stdout Pollution / JSON Corruption** | High | Human-readable diagnostics (`fmt.Println`) are mixed into standard output, instantly corrupting the payload if an agent expects pure JSON. |
+| **Persona Mismatch & Context Bloat** | Medium | Hardcoded "Tell your agent..." messages confuse autonomous tools, and leftover `DEBUG:` prints in `check-diff` aggressively bloat LLM context windows. |
+| **Regex String Parsing** | Low | Tier 2 wrappers still rely on regex against English message strings (e.g., "complexity of 15"). |
 
 ---
 
 ## 🌐 Supported Languages
 
-| Language | Native Parsing | Orchestrated Tool | Bootstrap Config |
+| Language | Native Parsing (Tier 1) | Orchestrated Plugin (Tier 2) | Bootstrap Config |
 |---|---|---|---|
-| **Go** | ✅ AST parser | golangci-lint | `.golangci.yml` |
-| **TypeScript/JS** | ❌ | ESLint, Biome | `.eslintrc.json`, `eslint.config.js`, `biome.json` |
+| **Go** | ✅ AST parser (`go-tree-sitter`) | - | `.golangci.yml` (with revive) |
+| **Java** | ✅ AST parser (`go-tree-sitter`) | - | `checkstyle.xml` |
+| **C#** | ✅ AST parser (`go-tree-sitter`) | - | `.editorconfig` |
+| **TypeScript/JS** | ❌ | ESLint, Biome | `eslint.config.js`, `biome.json` |
 | **Python** | ❌ | PyLint, Ruff | `.pylintrc`, `ruff.toml` |
 | **Ruby** | ❌ | RuboCop, StandardRB | `.rubocop.yml`, `.standard.yml` |
-| **Java** | ❌ | Checkstyle | `checkstyle.xml` |
-| **C#** | ❌ | Roslyn analyzers | `.editorconfig` |
 
 ---
 
@@ -105,29 +85,9 @@ All major technical debt has been resolved. The remaining items represent minor 
 
 | Metric | Value |
 |---|---|
-| **Binary Architecture**| Static Go Binary (stdlib only) |
+| **Binary Architecture**| Static Go Binary (Hybrid Tier 1/2 Plugins) |
 | **Supported Languages** | 6 |
-| **Case Studies** | 6 real-world repos |
-| **CLI Test Coverage** | Comprehensive (pipeline boundaries, error handling, formatting) |
-| **Subprocess Coverage** | Extensive (exit codes, missing tools, parsing crashes) |
+| **Security Bounding**  | Workspace Jail + POSIX Injection Blocks |
+| **Test Coverage**      | 100% Green (Unit, E2E Subprocess, Golden Snapshots) |
 
 ---
-
-*This file is auto-generated. Update after significant changes.*va** | ❌ | Checkstyle | `checkstyle.xml` |
-| **C#** | ❌ | Roslyn analyzers | `.editorconfig` |
-
----
-
-## 📈 Metrics
-
-| Metric | Value |
-|---|---|
-| **Binary Architecture**| Static Go Binary (stdlib only) |
-| **Supported Languages** | 6 |
-| **Case Studies** | 6 real-world repos |
-| **CLI Test Coverage** | Comprehensive (pipeline boundaries, error handling, formatting) |
-| **Subprocess Coverage** | Extensive (exit codes, missing tools, parsing crashes) |
-
----
-
-*This file is auto-generated. Update after significant changes.*

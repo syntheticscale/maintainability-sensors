@@ -46,29 +46,39 @@ mv bin/maintainability-sensors /usr/local/bin/
 
 ## 🚦 Usage & Commands
 
-### 1. `run` (Scan & Gatekeep)
-Scan a specific file or your entire repository. The CLI checks for local static analysis configurations. If code exceeds the complexity limits, the CLI outputs self-correction prompts and exits with code `1`.
+### 1. `check-diff` (Delta Mode: The Agent Skill)
+The primary operational mode for AI agents. It analyzes `git diff HEAD` (or a specific branch) and cross-references it with maintainability violations, only alerting on code the agent actively modified. This catches new architectural rot instantly without punishing the agent for legacy debt.
+
+```bash
+# Analyze uncommitted changes in the working tree
+maintainability-sensors check-diff
+
+# Analyze changes against a specific base branch
+maintainability-sensors check-diff origin/main
+```
+
+### 2. `run` (Audit Mode: Legacy Analysis)
+Scan a specific file or your entire repository. Used by Tech Leads to generate a one-time scorecard or map out the existing legacy debt of the codebase.
 
 ```bash
 # Scan a specific file
 maintainability-sensors run src/components/MyComponent.tsx
 
-# Scan the entire repository and fail if code is too complex
+# Scan the entire repository
 maintainability-sensors run .
 
 # Write visual reports for humans
 maintainability-sensors run . --markdown-out=report.md --html-out=report.html
 ```
 
-### 2. `bootstrap` (Environment-Hardening)
-Auto-detects the languages in your codebase and writes pristine, ready-to-use maintainability configurations enforcing strict thresholds to prevent agent-driven decay:
+### 3. `bootstrap` (Environment-Hardening)
+Auto-detects the languages in your codebase and writes pristine, ready-to-use maintainability configurations enforcing strict thresholds:
 * **File Length:** max 300 lines
 * **Function Length:** max 50 lines
 * **Argument Count:** max 4 parameters
 * **Cyclomatic Complexity:** max 8 limit
 
 ```bash
-# Bootstrap local maintainability configurations for all languages in the repo
 maintainability-sensors bootstrap /path/to/repo
 ```
 
