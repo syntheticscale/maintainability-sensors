@@ -145,7 +145,7 @@ func OrchestratedScanBatch(filePaths []string, lang string) ([]OrchestratorResul
 
 		toolMetrics := make(map[string][]Violation)
 		var mu sync.Mutex
-		var eg errgroup.Group
+		eg, _ := errgroup.WithContext(context.Background())
 
 		for i := 0; i < len(pathsForPlugin); i += 300 {
 			start := i
@@ -324,7 +324,7 @@ func ScanDeltaBatch(filePaths []string, originalPaths map[string]string, lang st
 
 		toolMetrics := make(map[string][]Violation)
 		var mu sync.Mutex
-		var eg errgroup.Group
+		eg, _ := errgroup.WithContext(context.Background())
 
 		for i := 0; i < len(pathsForPlugin); i += 300 {
 			start := i
@@ -523,6 +523,7 @@ func (p ESLintPlugin) Analyze(filePaths []string) (map[string][]Violation, error
 			RuleID   string `json:"ruleId"`
 			Message  string `json:"message"`
 			Line     int    `json:"line"`
+			EndLine  int    `json:"endLine"`
 			Severity int    `json:"severity"`
 		} `json:"messages"`
 	}
@@ -551,21 +552,33 @@ func (p ESLintPlugin) Analyze(filePaths []string) (map[string][]Violation, error
 						} else if m := reFallback.FindStringSubmatch(msg.Message); len(m) > 1 {
 							fmt.Sscanf(m[1], "%d", &val)
 						}
-						violations = append(violations, Violation{RuleName: "Complexity", Value: val, StartLine: msg.Line, EndLine: msg.Line, Message: msg.Message})
+						endLine := msg.EndLine
+						if endLine == 0 {
+							endLine = msg.Line + 100
+						}
+						violations = append(violations, Violation{RuleName: "Complexity", Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
 					} else if msg.RuleID == "max-params" {
 						if m := reParameters.FindStringSubmatch(msg.Message); len(m) > 1 {
 							fmt.Sscanf(m[1], "%d", &val)
 						} else if m := reFallback.FindStringSubmatch(msg.Message); len(m) > 1 {
 							fmt.Sscanf(m[1], "%d", &val)
 						}
-						violations = append(violations, Violation{RuleName: "ArgumentCount", Value: val, StartLine: msg.Line, EndLine: msg.Line, Message: msg.Message})
+						endLine := msg.EndLine
+						if endLine == 0 {
+							endLine = msg.Line + 100
+						}
+						violations = append(violations, Violation{RuleName: "ArgumentCount", Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
 					} else if msg.RuleID == "max-lines-per-function" {
 						if m := reLines.FindStringSubmatch(msg.Message); len(m) > 1 {
 							fmt.Sscanf(m[1], "%d", &val)
 						} else if m := reFallback.FindStringSubmatch(msg.Message); len(m) > 1 {
 							fmt.Sscanf(m[1], "%d", &val)
 						}
-						violations = append(violations, Violation{RuleName: "FunctionLength", Value: val, StartLine: msg.Line, EndLine: msg.Line, Message: msg.Message})
+						endLine := msg.EndLine
+						if endLine == 0 {
+							endLine = msg.Line + 100
+						}
+						violations = append(violations, Violation{RuleName: "FunctionLength", Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
 					}
 				}
 				metricsMap[result.FilePath] = violations
@@ -592,6 +605,8 @@ func (p PyLintPlugin) Analyze(filePaths []string) (map[string][]Violation, error
 		Path    string `json:"path"`
 		Message string `json:"message"`
 		Symbol  string `json:"symbol"`
+		Line    int    `json:"line"`
+		EndLine int    `json:"endLine"`
 	}
 	exitCode, output, err := runLintCommandJSON("pylint", &list, args...)
 	if err != nil {
@@ -624,7 +639,11 @@ func (p PyLintPlugin) Analyze(filePaths []string) (map[string][]Violation, error
 					}
 				}
 				if rule != "" {
-					metricsMap[msg.Path] = append(metricsMap[msg.Path], Violation{RuleName: rule, Value: val, Message: msg.Message})
+					endLine := msg.EndLine
+					if endLine == 0 {
+						endLine = msg.Line + 100
+					}
+					metricsMap[msg.Path] = append(metricsMap[msg.Path], Violation{RuleName: rule, Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
 				}
 			}
 		}
@@ -658,6 +677,10 @@ func (p RuboCopPlugin) Analyze(filePaths []string) (map[string][]Violation, erro
 			Offenses []struct {
 				CopName string `json:"cop_name"`
 				Message string `json:"message"`
+				Location struct {
+					Line int `json:"line"`
+					LastLine int `json:"last_line"`
+				} `json:"location"`
 			} `json:"offenses"`
 		} `json:"files"`
 	}
@@ -687,11 +710,23 @@ func (p RuboCopPlugin) Analyze(filePaths []string) (map[string][]Violation, erro
 					}
 					switch off.CopName {
 					case "Metrics/CyclomaticComplexity":
-						violations = append(violations, Violation{RuleName: "Complexity", Value: val, Message: off.Message})
+						endLine := off.Location.LastLine
+					if endLine == 0 {
+						endLine = off.Location.Line + 100
+					}
+					violations = append(violations, Violation{RuleName: "Complexity", Value: val, StartLine: off.Location.Line, EndLine: endLine, Message: off.Message})
 					case "Metrics/MethodLength":
-						violations = append(violations, Violation{RuleName: "FunctionLength", Value: val, Message: off.Message})
+						endLine := off.Location.LastLine
+					if endLine == 0 {
+						endLine = off.Location.Line + 100
+					}
+					violations = append(violations, Violation{RuleName: "FunctionLength", Value: val, StartLine: off.Location.Line, EndLine: endLine, Message: off.Message})
 					case "Metrics/ParameterLists":
-						violations = append(violations, Violation{RuleName: "ArgumentCount", Value: val, Message: off.Message})
+						endLine := off.Location.LastLine
+					if endLine == 0 {
+						endLine = off.Location.Line + 100
+					}
+					violations = append(violations, Violation{RuleName: "ArgumentCount", Value: val, StartLine: off.Location.Line, EndLine: endLine, Message: off.Message})
 					}
 				}
 				metricsMap[file.Path] = violations
@@ -756,6 +791,12 @@ func (p RuffPlugin) Analyze(filePaths []string) (map[string][]Violation, error) 
 		Filename string `json:"filename"`
 		Message  string `json:"message"`
 		Code     string `json:"code"`
+		Location struct {
+			Row int `json:"row"`
+		} `json:"location"`
+		EndLocation struct {
+			Row int `json:"row"`
+		} `json:"end_location"`
 	}
 	exitCode, output, err := runLintCommandJSON("ruff", &list, args...)
 	if err != nil {
@@ -794,7 +835,11 @@ func (p RuffPlugin) Analyze(filePaths []string) (map[string][]Violation, error) 
 					}
 				}
 				if rule != "" {
-					metricsMap[msg.Filename] = append(metricsMap[msg.Filename], Violation{RuleName: rule, Value: val, Message: msg.Message})
+					endLine := msg.EndLocation.Row
+					if endLine == 0 {
+						endLine = msg.Location.Row + 100
+					}
+					metricsMap[msg.Filename] = append(metricsMap[msg.Filename], Violation{RuleName: rule, Value: val, StartLine: msg.Location.Row, EndLine: endLine, Message: msg.Message})
 				}
 			}
 		}
@@ -818,6 +863,7 @@ func (p BiomePlugin) Name() string {
 
 func (p BiomePlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
 	args := []string{"lint", "--formatter-enabled=false", "--output-format=json"}
+	args = append(args, "--")
 	args = append(args, filePaths...)
 
 	var result struct {
@@ -827,6 +873,10 @@ func (p BiomePlugin) Analyze(filePaths []string) (map[string][]Violation, error)
 				Path struct {
 					File string `json:"file"`
 				} `json:"path"`
+				Span struct {
+					Start int `json:"start"`
+					End int `json:"end"`
+				} `json:"span"`
 			} `json:"location"`
 			Description string `json:"description"`
 		} `json:"diagnostics"`
@@ -857,7 +907,12 @@ func (p BiomePlugin) Analyze(filePaths []string) (map[string][]Violation, error)
 					if val == 0 {
 						val = 2
 					} // Fallback if parse fails but issue exists
-					metricsMap[path] = append(metricsMap[path], Violation{RuleName: "Complexity", Value: val, Message: diag.Description})
+					startLine := diag.Location.Span.Start
+					endLine := diag.Location.Span.End
+					if endLine == 0 {
+						endLine = startLine + 100
+					}
+					metricsMap[path] = append(metricsMap[path], Violation{RuleName: "Complexity", Value: val, StartLine: startLine, EndLine: endLine, Message: diag.Description})
 				}
 				if strings.Contains(diag.Category, "maxParameters") || strings.Contains(diag.Description, "parameters") {
 					if m := reVal.FindStringSubmatch(diag.Description); len(m) > 1 {
@@ -866,7 +921,12 @@ func (p BiomePlugin) Analyze(filePaths []string) (map[string][]Violation, error)
 					if val == 0 {
 						val = 2
 					} // Fallback
-					metricsMap[path] = append(metricsMap[path], Violation{RuleName: "ArgumentCount", Value: val, Message: diag.Description})
+					startLine := diag.Location.Span.Start
+					endLine := diag.Location.Span.End
+					if endLine == 0 {
+						endLine = startLine + 100
+					}
+					metricsMap[path] = append(metricsMap[path], Violation{RuleName: "ArgumentCount", Value: val, StartLine: startLine, EndLine: endLine, Message: diag.Description})
 				}
 			}
 		}
@@ -896,6 +956,10 @@ func (p StandardRBPlugin) Analyze(filePaths []string) (map[string][]Violation, e
 			Offenses []struct {
 				CopName string `json:"cop_name"`
 				Message string `json:"message"`
+				Location struct {
+					Line int `json:"line"`
+					LastLine int `json:"last_line"`
+				} `json:"location"`
 			} `json:"offenses"`
 		} `json:"files"`
 	}
@@ -923,11 +987,23 @@ func (p StandardRBPlugin) Analyze(filePaths []string) (map[string][]Violation, e
 
 					switch off.CopName {
 					case "Metrics/CyclomaticComplexity":
-						violations = append(violations, Violation{RuleName: "Complexity", Value: val, Message: off.Message})
+						endLine := off.Location.LastLine
+					if endLine == 0 {
+						endLine = off.Location.Line + 100
+					}
+					violations = append(violations, Violation{RuleName: "Complexity", Value: val, StartLine: off.Location.Line, EndLine: endLine, Message: off.Message})
 					case "Metrics/MethodLength":
-						violations = append(violations, Violation{RuleName: "FunctionLength", Value: val, Message: off.Message})
+						endLine := off.Location.LastLine
+					if endLine == 0 {
+						endLine = off.Location.Line + 100
+					}
+					violations = append(violations, Violation{RuleName: "FunctionLength", Value: val, StartLine: off.Location.Line, EndLine: endLine, Message: off.Message})
 					case "Metrics/ParameterLists":
-						violations = append(violations, Violation{RuleName: "ArgumentCount", Value: val, Message: off.Message})
+						endLine := off.Location.LastLine
+					if endLine == 0 {
+						endLine = off.Location.Line + 100
+					}
+					violations = append(violations, Violation{RuleName: "ArgumentCount", Value: val, StartLine: off.Location.Line, EndLine: endLine, Message: off.Message})
 					}
 				}
 				metricsMap[file.Path] = violations

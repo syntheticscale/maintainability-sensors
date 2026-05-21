@@ -648,9 +648,3 @@ func printSelfCorrectionGuidance(res sensors.OrchestratorResult) {
 		fmt.Fprintf(os.Stderr, "\nIf refactoring is impossible, AI WARNING: suppress the warning with standard inline annotations (e.g. // eslint-disable-next-line -- reason).\n")
 	}
 }
-	for _, g := range guidance {
-			fmt.Fprintln(os.Stderr, g)
-		}
-		fmt.Fprintf(os.Stderr, "\nIf refactoring is impossible, AI WARNING: suppress the warning with standard inline annotations (e.g. // eslint-disable-next-line -- reason).\n")
-	}
-}

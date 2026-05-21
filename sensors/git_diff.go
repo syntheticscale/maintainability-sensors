@@ -3,6 +3,7 @@ package sensors
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // LineRange represents a range of modified lines in a file.
@@ -109,7 +111,9 @@ func GetModifiedLines(targetBranch string, repoPath string) (map[string][]LineRa
 	        }
 	}
 	// Get untracked files
-	untrackedCmd := exec.Command("git", "ls-files", "--others", "--exclude-standard")
+	ctxUntracked, cancelUntracked := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelUntracked()
+	untrackedCmd := exec.CommandContext(ctxUntracked, "git", "ls-files", "--others", "--exclude-standard")
 	untrackedCmd.Dir = repoPath
 	untrackedOut, err := untrackedCmd.Output()
 	if err != nil {
@@ -126,9 +130,10 @@ func GetModifiedLines(targetBranch string, repoPath string) (map[string][]LineRa
 			}
 			info, err := os.Stat(fullPath)
 			if err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
-			        fmt.Fprintf(os.Stderr, "Warning: skipping large or non-regular untracked file %s\n", file)
-			        continue
-			}			result[file] = []LineRange{{Start: 1, End: 999999999}}
+				fmt.Fprintf(os.Stderr, "Warning: skipping large or non-regular untracked file %s\n", file)
+				continue
+			}
+			result[file] = []LineRange{{Start: 1, End: 999999999}}
 		}
 	}
 
@@ -138,11 +143,6 @@ func GetModifiedLines(targetBranch string, repoPath string) (map[string][]LineRa
 
 	if err := untrackedCmd.Wait(); err != nil {
 		return nil, fmt.Errorf("git ls-files failed: %w", err)
-	}
-
-	return result, nil
-}
-s failed: %w", err)
 	}
 
 	return result, nil
