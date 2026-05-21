@@ -13,21 +13,21 @@ If you just give an agent a feature request and walk away, it will almost always
 
 In an AI-augmented software development lifecycle, **generating code is no longer the bottleneck—enforcing architectural boundaries is.**
 
-## 🛡️ The Solution: Active Guardrails
+## 🛡️ The Solution: Active Guardrails & Skills
 
 **Maintainability Sensors** are active, automated feedback loops designed specifically to keep AI agents in check. 
 
-Instead of passive `README` guides that agents ignore, sensors act as **hard CI/CD gatekeepers**. They measure code health (cyclomatic complexity, function length, parameter counts) in real-time. Crucially, when an agent writes a monolithic block of code, the sensor fails the build and returns a **highly structured self-correction prompt**, forcing the AI to refactor its own code *before* a human ever has to review it.
+Instead of passive `README` guides that agents ignore, or blunt CI pipelines that frustrate humans, sensors act as **real-time AI Skills**. They measure code health (cyclomatic complexity, function length, parameter counts) during the active coding phase. Crucially, when an agent writes a monolithic block of code, the sensor returns a **highly structured self-correction prompt**, nudging the AI to refactor its own code or explicitly declare an exception *before* a human ever has to review it.
 
 ---
 
 ## 🚀 Key Features
 
-* **Ultra-Fast Static Binary:** Built as a single, static Go binary. No databases, no telemetry, no warm-up times. Runs in microseconds (<15ms per file).
-* **CI/CD Gatekeeping:** Returns a non-zero exit code (`exit 1`) when code violates maintainability baselines, ensuring unmaintainable code never merges.
-* **Orchestration Architecture:** Auto-detects and orchestrates your local static analysis tools (ESLint, Biome, PyLint, Ruff, Go Vet, RuboCop, StandardRB). It respects your project's custom linting rules rather than forcing a proprietary model.
-* **Agent Self-Correction Formatter:** Converts standard linter outputs into rich, high-context prompts. When the build fails, the CLI tells the agent exactly *why* and *how* to refactor (e.g., *"Nudge coding agent to extract nested conditionals into separate, single-responsibility helper functions"*).
-* **The `bootstrap` Accelerator:** If your repo has no existing rules (Level 0), `bootstrap` programmatically writes pristine linter configs for **TypeScript, Python, Go, and Ruby** enforcing strict maintainability thresholds directly to your project root.
+* **Ultra-Fast Static Binary:** Built as a single, static Go binary. No databases, no telemetry, no warm-up times. 
+* **Dual-Purpose Architecture:** Operates in *Audit Mode* to map legacy debt, and *Delta Mode* to act as an active, localized Skill for AI coding assistants.
+* **Orchestration Architecture:** Auto-detects and orchestrates your local static analysis tools (ESLint, Biome, PyLint, Ruff, Go Vet, RuboCop, StandardRB) alongside native `tree-sitter` parsing for compiled languages (Java, C#, Go).
+* **Agent Self-Correction Formatter:** Converts standard linter outputs into rich, high-context prompts. It tells the agent exactly *why* and *how* to refactor (e.g., *"Nudge coding agent to extract nested conditionals into separate, single-responsibility helper functions"*).
+* **The `bootstrap` Accelerator:** If your repo has no existing rules (Level 0), `bootstrap` programmatically writes pristine linter configs for **TypeScript, Python, Go, Java, C#, and Ruby** enforcing strict maintainability thresholds directly to your project root.
 
 ---
 
