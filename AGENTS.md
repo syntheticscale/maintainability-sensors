@@ -87,3 +87,4 @@ When modifying existing sensors or adding a new language bootstrap:
 4. **Compile & Verify:** Confirm that `go test ./...` passes beautifully in milliseconds and the compiled binary functions as expected.
 5. **Subagent Protocol (Stop & Report):** If you encounter any blocking issues, ambiguous requirements, or areas that warrant architectural questions during execution, you MUST stop and report back to the orchestrating agent immediately. Do not guess or force a fragile solution.
 6. **Multi-Persona Self-Review:** For any significant architectural changes or large features, you MUST pause and conduct a rigorous self-review using the multi-persona protocols defined in `docs/AI_REVIEW_PROTOCOLS.md`. Do not simply accept the "happy path" completion.
+7. **Commit Often:** Always commit changes after each significant step, rather than waiting until the end of a long feature or refactoring session. Ensure changes are checkpoints safely along the way.
