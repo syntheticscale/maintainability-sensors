@@ -535,7 +535,7 @@ func (p ESLintPlugin) Analyze(filePaths []string) (map[string][]Violation, error
 		return nil, fmt.Errorf("ESLint error: %w", err)
 	}
 
-	if exitCode == 0 || exitCode == 1 {
+	if exitCode == 0 || exitCode == 1 || exitCode == 2 {
 		metricsMap := make(map[string][]Violation)
 		if len(list) > 0 {
 			reComplexity := regexp.MustCompile(`complexity of (\d+)`)

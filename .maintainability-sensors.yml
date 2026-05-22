@@ -1,0 +1,7 @@
+version: "1"
+
+check-diff:
+  default-severity: warn
+  rules:
+    - name: ArgumentCount
+      severity: error

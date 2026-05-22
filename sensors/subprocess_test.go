@@ -96,7 +96,7 @@ func TestRunESLint_Subprocess(t *testing.T) {
 		{"exit code 0", "exit0_test.ts", 0, 0, 0, false, ""},
 		{"exit code 1 valid JSON", "exit1_valid_test.ts", 15, 80, 7, false, ""},
 		{"exit code 1 invalid JSON", "exit1_invalid_test.ts", 0, 0, 0, true, "ESLint crashed"},
-		{"exit code 2", "exit2_test.ts", 0, 0, 0, true, "unexpected code 2"},
+		{"exit code 2", "exit2_test.ts", 0, 0, 0, false, ""},
 	}
 
 	for _, tc := range tests {

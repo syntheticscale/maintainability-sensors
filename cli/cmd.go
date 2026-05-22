@@ -62,21 +62,16 @@ func (c *bootstrapCmd) Run() error {
 }
 
 type CheckDiffCmd struct {
-	TargetBranch string `optional:"" default:"HEAD" help:"Target branch to diff against."`
-	TargetPath   string `arg:"" optional:"" default:"." help:"Target path to diff."`
+	TargetBranch    string   `optional:"" default:"HEAD" help:"Target branch to diff against."`
+	TargetPath      string   `arg:"" optional:"" default:"." help:"Target path to diff."`
+	Config          string   `optional:"" help:"Path to .maintainability-sensors.yml config file."`
+	DefaultSeverity string   `optional:"" help:"Default severity level for rules not explicitly configured (error|warn|ignore). Defaults to error."`
+	Severity        []string `optional:"" name:"severity" help:"Per-rule severity overrides (format: Rule:level)."`
 }
 
-func isTrueViolation(v sensors.Violation) bool {
-	if v.RuleName == "Complexity" && v.Value <= sensors.BaselineComplexity {
-		return false
-	}
-	if v.RuleName == "FunctionLength" && v.Value <= sensors.BaselineFunctionLength {
-		return false
-	}
-	if v.RuleName == "ArgumentCount" && v.Value <= sensors.BaselineArgumentCount {
-		return false
-	}
-	return true
+func isTrueViolation(v sensors.Violation, policy *CheckDiffPolicy) bool {
+	limit := getThresholdForRule(policy, v.RuleName)
+	return v.Value > limit
 }
 
 func hasOverlap(v sensors.Violation, ranges []sensors.LineRange) bool {
@@ -122,8 +117,10 @@ func groupFilesByLanguage(files []string, absModifiedLines map[string][]sensors.
 	return groups, originalPaths
 }
 
-func processViolationsMap(violationsMap map[string][]sensors.Violation, absModifiedLines map[string][]sensors.LineRange) bool {
-	hasDeltaViolations := false
+func processViolationsMap(violationsMap map[string][]sensors.Violation, absModifiedLines map[string][]sensors.LineRange, policy *CheckDiffPolicy) (bool, []string) {
+	hasErrors := false
+	var warnings []string
+
 	for file, violations := range violationsMap {
 		absPath, err := filepath.Abs(filepath.Clean(file))
 		if err != nil {
@@ -136,20 +133,47 @@ func processViolationsMap(violationsMap map[string][]sensors.Violation, absModif
 		}
 
 		for _, v := range violations {
-			if !isTrueViolation(v) {
+			if !isTrueViolation(v, policy) {
 				continue
 			}
 
 			if hasOverlap(v, ranges) {
-				fmt.Fprintf(os.Stderr, "AI WARNING: %s:%d - %s - %s\n", file, v.StartLine, v.RuleName, v.Message)
-				hasDeltaViolations = true
+				sev := getSeverityForRule(policy, v.RuleName)
+				msg := fmt.Sprintf("AI WARNING: %s:%d - %s - %s", file, v.StartLine, v.RuleName, v.Message)
+				if sev == SeverityIgnore {
+					continue
+				} else if sev == SeverityWarn {
+					// Backward-compatible output: same format as before.
+					fmt.Fprintf(os.Stderr, "%s\n", msg)
+					warnings = append(warnings, msg)
+				} else {
+					// error or default
+					fmt.Fprintf(os.Stderr, "%s\n", msg)
+					hasErrors = true
+				}
 			}
 		}
 	}
-	return hasDeltaViolations
+	return hasErrors, warnings
 }
 
 func (c *CheckDiffCmd) Run() error {
+	policy, err := LoadPolicy(c.Config, c.DefaultSeverity, c.Severity)
+	if err != nil {
+		return fmt.Errorf("[ERROR] Failed to load policy: %v", err)
+	}
+
+	// If no config path is specified, try to find one in the target path.
+	if c.Config == "" {
+		foundConfig := findConfigFile(c.TargetPath)
+		if foundConfig != "" {
+			policy, err = LoadPolicy(foundConfig, c.DefaultSeverity, c.Severity)
+			if err != nil {
+				return fmt.Errorf("[ERROR] Failed to load policy: %v", err)
+			}
+		}
+	}
+
 	modifiedLines, err := sensors.GetModifiedLines(c.TargetBranch, c.TargetPath)
 	if err != nil {
 		return fmt.Errorf("[ERROR] Failed to get modified lines: %v", err)
@@ -160,7 +184,7 @@ func (c *CheckDiffCmd) Run() error {
 		return fmt.Errorf("[ERROR] Failed to find files: %v", err)
 	}
 
-	hasDeltaViolations := false
+	hasErrors := false
 	absModifiedLines := mapModifiedLinesToAbsPaths(modifiedLines, c.TargetPath)
 	groups, originalPaths := groupFilesByLanguage(files, absModifiedLines)
 
@@ -175,12 +199,12 @@ func (c *CheckDiffCmd) Run() error {
 			continue
 		}
 
-		if processViolationsMap(violationsMap, absModifiedLines) {
-			hasDeltaViolations = true
+		if langErrs, _ := processViolationsMap(violationsMap, absModifiedLines, policy); langErrs {
+			hasErrors = true
 		}
 	}
 
-	if hasDeltaViolations {
+	if hasErrors {
 		return fmt.Errorf("Delta violations found")
 	}
 

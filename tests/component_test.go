@@ -60,7 +60,7 @@ func TestPolyglotComponent(t *testing.T) {
 	}
 
 	// Verify all config files were created
-	expectedConfigs := []string{".golangci.yml", ".pylintrc", ".eslintrc.json"}
+	expectedConfigs := []string{".golangci.yml", ".pylintrc", "eslint.config.mjs"}
 	for _, cfg := range expectedConfigs {
 		if _, err := os.Stat(filepath.Join(workspace, cfg)); os.IsNotExist(err) {
 			t.Errorf("bootstrap failed to create %s in polyglot repo", cfg)

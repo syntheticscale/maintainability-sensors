@@ -8,17 +8,27 @@ import (
 )
 
 const (
-	eslintTemplate = `{
-  "parser": "@typescript-eslint/parser",
-  "plugins": ["@typescript-eslint"],
-  "rules": {
-    "complexity": ["error", %d],
-    "max-params": ["error", %d],
-    "max-lines-per-function": ["error", { "max": %d, "skipBlankLines": true, "skipComments": true }],
-    "max-lines": ["error", { "max": %d, "skipBlankLines": true, "skipComments": true }],
-    "@typescript-eslint/no-explicit-any": "warn"
+	eslintFlatTemplate = `import typescriptEslint from "@typescript-eslint/eslint-plugin";
+import tsParser from "@typescript-eslint/parser";
+
+export default [
+  {
+    files: ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
+    languageOptions: {
+      parser: tsParser,
+    },
+    plugins: {
+      "@typescript-eslint": typescriptEslint,
+    },
+    rules: {
+      "complexity": ["error", %d],
+      "max-params": ["error", %d],
+      "max-lines-per-function": ["error", { "max": %d, "skipBlankLines": true, "skipComments": true }],
+      "max-lines": ["error", { "max": %d, "skipBlankLines": true, "skipComments": true }],
+      "@typescript-eslint/no-explicit-any": "warn"
+    }
   }
-}
+];
 `
 
 	pylintTemplate = `[MASTER]
@@ -175,18 +185,34 @@ func bootstrapLanguage(lang, absPath string) error {
 }
 
 func bootstrapTSJS(absPath string) error {
-	eslintPath := filepath.Join(absPath, ".eslintrc.json")
-	if _, err := os.Stat(eslintPath); err == nil {
-		printExistingConfigBanner(".eslintrc.json", fmt.Sprintf(`
+	anchors := ESLintConfigParser{}.Anchors()
+	var existingConfig string
+	for _, anchor := range anchors {
+		if _, err := os.Stat(filepath.Join(absPath, anchor)); err == nil {
+			if anchor == "package.json" {
+				content, _ := os.ReadFile(filepath.Join(absPath, anchor))
+				if !strings.Contains(string(content), `"eslintConfig"`) {
+					continue
+				}
+			}
+			existingConfig = anchor
+			break
+		}
+	}
+
+	if existingConfig != "" {
+		printExistingConfigBanner(existingConfig, fmt.Sprintf(`
 - "complexity": ["error", %d]
 - "max-params": ["error", %d]
 - "max-lines-per-function": ["error", { "max": %d }]
 - "max-lines": ["error", { "max": %d }]`, BaselineComplexity, BaselineArgumentCount, BaselineFunctionLength, BaselineFileLength))
 	} else {
-		if err := os.WriteFile(eslintPath, []byte(fmt.Sprintf(eslintTemplate, BaselineComplexity, BaselineArgumentCount, BaselineFunctionLength, BaselineFileLength)), 0644); err != nil {
-			return fmt.Errorf("failed to write .eslintrc.json: %w", err)
+		eslintPath := filepath.Join(absPath, "eslint.config.mjs")
+		content := fmt.Sprintf(eslintFlatTemplate, BaselineComplexity, BaselineArgumentCount, BaselineFunctionLength, BaselineFileLength)
+		if err := os.WriteFile(eslintPath, []byte(content), 0644); err != nil {
+			return fmt.Errorf("failed to write eslint.config.mjs: %w", err)
 		}
-		fmt.Fprintf(os.Stderr, "- [CREATED] .eslintrc.json (Pristine Maintainability Rule Suite)\n\n")
+		fmt.Fprintf(os.Stderr, "- [CREATED] eslint.config.mjs (Pristine Maintainability Rule Suite)\n\n")
 	}
 	printInstallerInstructions("tsjs")
 	return nil
