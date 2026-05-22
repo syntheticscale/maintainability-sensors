@@ -29,6 +29,13 @@ Instead of passive `README` guides that agents ignore, or blunt CI pipelines tha
 * **Agent Self-Correction Formatter:** Converts standard linter outputs into rich, high-context prompts. It tells the agent exactly *why* and *how* to refactor (e.g., *"Nudge coding agent to extract nested conditionals into separate, single-responsibility helper functions"*).
 * **The `bootstrap` Accelerator:** If your repo has no existing rules (Level 0), `bootstrap` programmatically writes pristine linter configs for **TypeScript, Python, Go, Java, C#, and Ruby** enforcing strict maintainability thresholds directly to your project root.
 
+## 🛡️ The 3-Layer Defense System
+
+To prevent AI coding agents from generating tangled, unmaintainable control flow, this tool enforces a **3-Layer Defense System** (especially via native AST parsing):
+1. **Cyclomatic Complexity (Max 8):** Prevents functions from having too many independent execution paths.
+2. **Cognitive Complexity (Max 8):** Penalizes deeply nested structures (like `if` inside `for` inside `if`), forcing agents to return early and flatten control flow.
+3. **Max Case Length (Max 10 lines):** Safely handles `switch` statements. Instead of penalizing a flat `switch` with 20 cases (which is highly readable), we strictly limit the *length* of each individual `case` block. This forces agents to extract complex case logic into well-named helper methods without breaking the switch structure itself.
+
 ---
 
 ## 📦 Installation
@@ -158,6 +165,19 @@ This CLI is designed around three strict architectural rules:
 1. **Statelessness (Local-First):** Inputs are your local files and git; outputs are stdout. No external telemetry or remote databases.
 2. **Orchestration over Re-implementation:** Leverage standard local compilers and AST tools rather than re-writing syntax parsers.
 3. **Deterministic Feedback Loop:** Errors and warnings are structured to provide explicit refactoring guidance specifically formatted for LLM coding agents.
+
+## 🤝 Guidance for Human Developers: The "Honest Exception"
+
+While this tool enforces strict metrics (like Cyclomatic Complexity <= 8), it is crucial to recognize that **classic metrics heavily penalize highly cohesive structures like `switch` statements**. A flat `switch` mapping 20 JSON codes is highly readable to humans but generates a complexity score of 20+.
+
+We do NOT want you to fracture readable code into disjointed pieces just to appease a metric.
+
+If you encounter a violation caused by highly cohesive logic (or an unavoidable legacy integration), follow the **Honest Exception Protocol**:
+1. Do not fragment the code.
+2. Add a standard linter suppression comment (e.g., `//nolint:gocognit` for Go, `# pylint: disable=too-many-branches` for Python) right above the offending logic.
+3. **Crucially:** Add an inline comment briefly explaining *why* the suppression exists (e.g., `//nolint:gocognit // Highly cohesive mapping logic, splitting hurts readability`).
+
+This acts as a transparent flare during PR reviews, allowing humans to verify that the exception is justified while still preventing AI agents from generating tangled, unreadable code elsewhere in the repository.
 
 ---
 

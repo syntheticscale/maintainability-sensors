@@ -4,7 +4,9 @@
   "tooling_detected": true,
   "metrics": {
     "complexity": 37,
+    "cognitive_complexity": 110,
     "function_length": 146,
-    "argument_count": 4
+    "argument_count": 4,
+    "max_case_length": 0
   }
 }

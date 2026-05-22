@@ -161,6 +161,27 @@ The middleware conflates routing decisions, policy enforcement, and pipeline dis
 
 ---
 
+## 🪞 7. `maintainability-sensors` (Self-Dogfooding)
+*   **Sensor Telemetry:** The legacy monoliths `orchestrator.go`, `git_diff.go`, and `cmd.go`
+
+### Why is it written this way? (The Prototype Force)
+When building the `maintainability-sensors` CLI, the initial implementation prioritized rapid prototyping. Complex nested structures, large parameter lists, and monolithic switch statements emerged naturally as we integrated multiple linters and parsed diverse AST outputs.
+*   **The Evolutionary Path:** Functions like `cmd.go` grew to over 150 lines with cyclomatic complexities exceeding 15. The `orchestrator.go` became a bottleneck with massive switch statements mapping rules to metrics.
+*   **The Problem with Classic Metrics:** When we pointed the sensor at itself, it flagged these massive switch statements. However, breaking a clean, 20-case `switch` statement into 5 separate functions artificially fractures the code and makes it *harder* to read. We needed a way to measure complexity without penalizing cohesive mapping logic.
+
+### Is it a Real Smell?
+**Yes, but it required a more sophisticated defense.**
+
+The complexity was real, but classic Cyclomatic Complexity was an insufficient tool to measure it, leading us to build the **3-Layer Defense System** natively into the `go_ast` sensor.
+*   **The Refactoring Recipe:**
+    Rather than blindly suppressing the warnings or breaking the switch statements, we introduced a 3-tiered metric system to safely manage complexity:
+    1.  **Cyclomatic Complexity (Max 8):** Still enforced to catch too many independent paths.
+    2.  **Cognitive Complexity (Max 8):** Penalizes deeply nested structures (e.g., `if` inside `for` inside `if`), forcing developers to return early and flatten control flow.
+    3.  **Max Case Length (Max 10 lines):** This was the silver bullet for the `switch` statement problem. Instead of penalizing the *number* of cases, the sensor enforces that no single `case` block exceeds 10 lines. This allows a flat, 50-case switch statement to pass perfectly, provided each case is concise and delegates complex logic to well-named helper methods.
+*   **The Result:** We successfully refactored `orchestrator.go`, `git_diff.go`, and `cmd.go` to meet these strict thresholds (without relaxing the limits). The codebase became inherently safe for AI agents to modify, proving that strict maintainability is possible even in highly polymorphic routing logic.
+
+---
+
 ## 📈 Key Advisory Takeaways for the "Maintainability Sensors" Paradigm
 
 1.  **We don't count assets; we measure cognitive load:** Counting lines or parameters is a lazy metric. We use AST metrics to identify **cognitive overhead**—the exact points where a human or an AI agent will experience a "reasoning freeze."

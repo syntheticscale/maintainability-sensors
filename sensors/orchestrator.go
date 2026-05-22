@@ -20,9 +20,11 @@ import (
 
 // MaintainabilityMetrics holds precise maintainability scores.
 type MaintainabilityMetrics struct {
-	Complexity     int `json:"complexity"`
-	FunctionLength int `json:"function_length"`
-	ArgumentCount  int `json:"argument_count"`
+	Complexity          int `json:"complexity"`
+	CognitiveComplexity int `json:"cognitive_complexity"`
+	FunctionLength      int `json:"function_length"`
+	ArgumentCount       int `json:"argument_count"`
+	MaxCaseLength       int `json:"max_case_length"`
 }
 
 // RelaxedLimit represents a threshold that has been configured to be looser than our standard.
@@ -316,6 +318,10 @@ func updateMetricsForPath(p string, outMetrics []Violation, metricsMap map[strin
 		case "Complexity":
 			if v.Value > metrics.Complexity {
 				metrics.Complexity = v.Value
+			}
+		case "CognitiveComplexity":
+			if v.Value > metrics.CognitiveComplexity {
+				metrics.CognitiveComplexity = v.Value
 			}
 		case "FunctionLength":
 			if v.Value > metrics.FunctionLength {
@@ -683,6 +689,7 @@ type PyLintMessage struct {
 //nolint:gocognit // Highly cohesive mapping logic for PyLint symbols. Splitting this hurts readability.
 func parsePyLintMessages(list []PyLintMessage) map[string][]Violation {
 	metricsMap := make(map[string][]Violation)
+
 	for _, msg := range list {
 		var val int
 		var rule string

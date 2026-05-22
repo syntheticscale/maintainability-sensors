@@ -76,6 +76,40 @@ func ParseGoAST(filePath string) ([]Violation, error) {
 			StartLine: startLine,
 			EndLine:   endLine,
 		})
+
+		// Calculate Cognitive Complexity of the function
+		cognitiveComplexity := calculateGoCognitiveComplexity(fn)
+		violations = append(violations, Violation{
+			RuleName:  "CognitiveComplexity",
+			Value:     cognitiveComplexity,
+			StartLine: startLine,
+			EndLine:   endLine,
+		})
+
+		// Calculate Max Case Length
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			var caseStartLine, caseEndLine int
+			switch node := n.(type) {
+			case *ast.CaseClause:
+				caseStartLine = fset.Position(node.Pos()).Line
+				caseEndLine = fset.Position(node.End()).Line
+			case *ast.CommClause:
+				caseStartLine = fset.Position(node.Pos()).Line
+				caseEndLine = fset.Position(node.End()).Line
+			default:
+				return true
+			}
+			length := caseEndLine - caseStartLine + 1
+			if length > BaselineCaseLength {
+				violations = append(violations, Violation{
+					RuleName:  "CaseBlockLength",
+					Value:     length,
+					StartLine: caseStartLine,
+					EndLine:   caseEndLine,
+				})
+			}
+			return true
+		})
 	}
 
 	return violations, nil
@@ -111,6 +145,44 @@ func calculateGoComplexity(fn *ast.FuncDecl) int {
 		return true
 	})
 
+	return complexity
+}
+
+type cogVisitor struct {
+	complexity *int
+	nesting    int
+}
+
+func (v *cogVisitor) Visit(node ast.Node) ast.Visitor {
+	if node == nil {
+		return nil
+	}
+
+	switch n := node.(type) {
+	case *ast.IfStmt, *ast.ForStmt, *ast.RangeStmt, *ast.SelectStmt, *ast.SwitchStmt, *ast.TypeSwitchStmt:
+		*v.complexity += 1 + v.nesting
+		return &cogVisitor{
+			complexity: v.complexity,
+			nesting:    v.nesting + 1,
+		}
+	case *ast.BinaryExpr:
+		if n.Op == token.LAND || n.Op == token.LOR {
+			*v.complexity++
+		}
+	case *ast.FuncLit:
+		return nil // Do not leak complexity from nested closures
+	}
+	return v
+}
+
+// calculateGoCognitiveComplexity calculates cognitive complexity based on nesting depth.
+func calculateGoCognitiveComplexity(fn *ast.FuncDecl) int {
+	complexity := 0
+	v := &cogVisitor{
+		complexity: &complexity,
+		nesting:    0,
+	}
+	ast.Walk(v, fn.Body)
 	return complexity
 }
 

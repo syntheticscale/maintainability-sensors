@@ -28,9 +28,13 @@ var validSeverities = map[Severity]bool{
 
 // Valid rule names for validation.
 var validRuleNames = map[string]bool{
-	"Complexity":     true,
-	"FunctionLength": true,
-	"ArgumentCount":  true,
+	"Complexity":           true,
+	"FunctionLength":       true,
+	"ArgumentCount":        true,
+	"Cognitive Complexity": true,
+	"CognitiveComplexity":  true,
+	"Max Case Length":      true,
+	"CaseBlockLength":      true,
 }
 
 // RulePolicy holds the configuration for a single rule.
@@ -147,7 +151,7 @@ func applyConfigDefaultSeverity(policy *CheckDiffPolicy, config *CheckDiffConfig
 func applyConfigRules(policy *CheckDiffPolicy, config *CheckDiffConfigFile) error {
 	for _, rule := range config.CheckDiff.Rules {
 		if !isValidRuleName(rule.Name) {
-			return fmt.Errorf("invalid rule name %q in config file, expected Complexity, FunctionLength, or ArgumentCount", rule.Name)
+			return fmt.Errorf("invalid rule name %q in config file", rule.Name)
 		}
 		sev := policy.DefaultSeverity
 		if rule.Severity != "" {
@@ -184,7 +188,7 @@ func applyCLISeverityOverrides(policy *CheckDiffPolicy, severityOverrides []stri
 		}
 		name, sevStr := parts[0], parts[1]
 		if !isValidRuleName(name) {
-			return fmt.Errorf("invalid rule name %q in --severity, expected Complexity, FunctionLength, or ArgumentCount", name)
+			return fmt.Errorf("invalid rule name %q in --severity", name)
 		}
 		sev := Severity(sevStr)
 		if !isValidSeverity(sev) {

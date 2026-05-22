@@ -207,6 +207,8 @@ check-diff:
   rules:
     - name: Complexity
       threshold: 12
+    - name: CognitiveComplexity
+      threshold: 12
 `)
 	writeGoFile(t, dir, "main.go", simpleGoFile)
 	runGit(t, dir, "add", ".")
