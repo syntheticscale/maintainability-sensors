@@ -32,9 +32,9 @@ This tool will analyze your `git diff` and cross-reference the lines you modifie
 ### Golden Rule
 Never ignore an AI WARNING. You must either refactor until `check-diff` is clean, or explicitly suppress the warning with a documented inline comment.
 
-**CRITICAL:** Your behavior regarding global thresholds depends entirely on your current operational mode:
-- **During Routine Coding (Delta Mode):** NEVER relax or increase the global thresholds in the repository's configuration files (e.g., `.golangci.yml`, `.eslintrc.json`, `.pylintrc`) to bypass a violation you just introduced. You must fix the code or use targeted inline suppressions (The Honest Exception Protocol).
-- **During Legacy Audits (Audit Mode):** If you are explicitly tasked by a human to audit an existing, legacy codebase, the goal is to establish a truthful baseline. In this scenario, you **MAY** relax the global thresholds in the configuration files to match the existing legacy debt, **BUT ONLY IF** you have explicitly proposed this to the human engineer and received their approval. Human judgment is required to ensure we do not overfit to the metric.
+**CRITICAL (Human-in-the-Loop):** Your behavior regarding global thresholds depends entirely on your current operational mode:
+- **During Routine Coding (Delta Mode):** NEVER unilaterally relax or increase the global thresholds in the repository's configuration files (e.g., `.golangci.yml`, `.eslintrc.json`, `.pylintrc`) to bypass a violation you just introduced. You must fix the code or use targeted inline suppressions (The Honest Exception Protocol).
+- **During Legacy Audits (Audit Mode):** If you are auditing legacy code and believe that refactoring it to pass the strict baseline would constitute "metric overfitting" (i.e. breaking a highly coherent, battle-tested structure), you **MUST stop and ask the human user for explicit permission** before adjusting any global thresholds. Use the `ask_user` tool or simply pause and present your architectural reasoning. Do NOT sweep technical debt under the rug without human approval.
 
 > **Note:** If your repository has `.maintainability-sensors.yml` configured with `default-severity: warn`, warnings are expected and you should not try to fix them unless they indicate actual issues. The `check-diff` command will exit cleanly (0) for warnings.
 

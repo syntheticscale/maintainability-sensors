@@ -311,43 +311,50 @@ func isPathForPlugin(p string, pathsForPlugin []string) bool {
 	return false
 }
 
+func updateSingleMetric(v Violation, metrics *MaintainabilityMetrics) {
+	switch v.RuleName {
+	case "Complexity":
+		if v.Value > metrics.Complexity {
+			metrics.Complexity = v.Value
+		}
+	case "CognitiveComplexity":
+		if v.Value > metrics.CognitiveComplexity {
+			metrics.CognitiveComplexity = v.Value
+		}
+	case "FunctionLength":
+		if v.Value > metrics.FunctionLength {
+			metrics.FunctionLength = v.Value
+		}
+	case "ArgumentCount":
+		if v.Value > metrics.ArgumentCount {
+			metrics.ArgumentCount = v.Value
+		}
+	}
+}
+
 func updateMetricsForPath(p string, outMetrics []Violation, metricsMap map[string]MaintainabilityMetrics) {
 	metrics := metricsMap[p]
 	for _, v := range outMetrics {
-		switch v.RuleName {
-		case "Complexity":
-			if v.Value > metrics.Complexity {
-				metrics.Complexity = v.Value
-			}
-		case "CognitiveComplexity":
-			if v.Value > metrics.CognitiveComplexity {
-				metrics.CognitiveComplexity = v.Value
-			}
-		case "FunctionLength":
-			if v.Value > metrics.FunctionLength {
-				metrics.FunctionLength = v.Value
-			}
-		case "ArgumentCount":
-			if v.Value > metrics.ArgumentCount {
-				metrics.ArgumentCount = v.Value
-			}
-		}
+		updateSingleMetric(v, &metrics)
 	}
 	metricsMap[p] = metrics
+}
+
+func findAndUpdateMetrics(p string, absP string, ctx UpdateMetricsCtx) bool {
+	for outPath, outMetrics := range ctx.ToolMetrics {
+		if pathsMatch(p, absP, outPath) {
+			updateMetricsForPath(p, outMetrics, ctx.MetricsMap)
+			return true
+		}
+	}
+	return false
 }
 
 func updateMetricsMap(ctx UpdateMetricsCtx) []string {
 	var nextRemaining []string
 	for _, p := range ctx.PathsRemaining {
 		absP, _ := filepath.Abs(p)
-		found := false
-		for outPath, outMetrics := range ctx.ToolMetrics {
-			if pathsMatch(p, absP, outPath) {
-				updateMetricsForPath(p, outMetrics, ctx.MetricsMap)
-				found = true
-				break
-			}
-		}
+		found := findAndUpdateMetrics(p, absP, ctx)
 		if !found {
 			if !isPathForPlugin(p, ctx.PathsForPlugin) {
 				nextRemaining = append(nextRemaining, p)
@@ -365,22 +372,25 @@ type UpdateDeltaCtx struct {
 	PathsForPlugin []string
 }
 
+func findAndUpdateDeltaMetrics(p string, absP string, ctx UpdateDeltaCtx) bool {
+	for outPath, outMetrics := range ctx.ToolMetrics {
+		if pathsMatch(p, absP, outPath) {
+			origPath := ctx.OriginalPaths[p]
+			if origPath == "" {
+				origPath = p
+			}
+			ctx.MetricsMap[origPath] = append(ctx.MetricsMap[origPath], outMetrics...)
+			return true
+		}
+	}
+	return false
+}
+
 func updateDeltaMetricsMap(ctx UpdateDeltaCtx) []string {
 	var nextRemaining []string
 	for _, p := range ctx.PathsRemaining {
 		absP, _ := filepath.Abs(p)
-		found := false
-		for outPath, outMetrics := range ctx.ToolMetrics {
-			if pathsMatch(p, absP, outPath) {
-				origPath := ctx.OriginalPaths[p]
-				if origPath == "" {
-					origPath = p
-				}
-				ctx.MetricsMap[origPath] = append(ctx.MetricsMap[origPath], outMetrics...)
-				found = true
-				break
-			}
-		}
+		found := findAndUpdateDeltaMetrics(p, absP, ctx)
 		if !found {
 			if !isPathForPlugin(p, ctx.PathsForPlugin) {
 				nextRemaining = append(nextRemaining, p)
@@ -502,6 +512,19 @@ func getParsersForLang(lang string) []ConfigParser {
 	return nil
 }
 
+func findConfigInDir(absDir string, parsers []ConfigParser) (string, ConfigParser) {
+	for _, parser := range parsers {
+		anchors := parser.Anchors()
+		for _, anchor := range anchors {
+			p := filepath.Join(absDir, anchor)
+			if _, err := os.Stat(p); err == nil {
+				return p, parser
+			}
+		}
+	}
+	return "", nil
+}
+
 func detectConfigAndParser(filePath string, lang string) (string, ConfigParser) {
 	parsers := getParsersForLang(lang)
 	if len(parsers) == 0 {
@@ -515,14 +538,8 @@ func detectConfigAndParser(filePath string, lang string) (string, ConfigParser) 
 	}
 
 	for {
-		for _, parser := range parsers {
-			anchors := parser.Anchors()
-			for _, anchor := range anchors {
-				p := filepath.Join(absDir, anchor)
-				if _, err := os.Stat(p); err == nil {
-					return p, parser
-				}
-			}
+		if p, parser := findConfigInDir(absDir, parsers); p != "" {
+			return p, parser
 		}
 		parent := filepath.Dir(absDir)
 		if parent == absDir {
@@ -613,6 +630,7 @@ func extractESLintValue(msg string, primaryRe *regexp.Regexp, fallbackRe *regexp
 	return val
 }
 
+//nolint:gocognit,cyclop // Highly cohesive mapping logic for linters. Splitting this hurts readability.
 func parseESLintMessages(messages []ESLintMessage) []Violation {
 	var violations []Violation
 	reComplexity := regexp.MustCompile(`complexity of (\d+)`)
@@ -686,7 +704,7 @@ type PyLintMessage struct {
 	EndLine int    `json:"endLine"`
 }
 
-//nolint:gocognit // Highly cohesive mapping logic for PyLint symbols. Splitting this hurts readability.
+//nolint:gocognit,cyclop // Highly cohesive mapping logic, splitting hurts readability
 func parsePyLintMessages(list []PyLintMessage) map[string][]Violation {
 	metricsMap := make(map[string][]Violation)
 
@@ -778,6 +796,7 @@ type RuboCopResult struct {
 	Files []RuboCopFile `json:"files"`
 }
 
+//nolint:gocognit,cyclop // Highly cohesive mapping logic, splitting hurts readability
 func parseSingleRuboCopOffense(off RuboCopOffense, reVal *regexp.Regexp, fileViolations *[]Violation) {
 	var val int
 	if strings.Contains(off.Message, "[") {
@@ -804,6 +823,7 @@ func parseSingleRuboCopOffense(off RuboCopOffense, reVal *regexp.Regexp, fileVio
 	}
 }
 
+//nolint:gocognit,cyclop // Highly cohesive mapping logic, splitting hurts readability
 func parseRuboCopMessages(files []RuboCopFile) map[string][]Violation {
 	metricsMap := make(map[string][]Violation)
 	reVal := regexp.MustCompile(`\[(\d+)/`)
@@ -964,6 +984,7 @@ func parseSingleRuffMessage(msg RuffMessage, reVal *regexp.Regexp, fileViolation
 	}
 }
 
+//nolint:gocognit,cyclop // Highly cohesive mapping logic, splitting hurts readability
 func parseRuffMessages(list []RuffMessage) map[string][]Violation {
 	metricsMap := make(map[string][]Violation)
 	reVal := regexp.MustCompile(`\((\d+)\s*>`)
@@ -1055,6 +1076,7 @@ func parseSingleStandardRBOffense(off StandardRBOffense, fileViolations *[]Viola
 	}
 }
 
+//nolint:gocognit,cyclop // Highly cohesive mapping logic, splitting hurts readability
 func parseStandardRBMessages(files []StandardRBFile) map[string][]Violation {
 	metricsMap := make(map[string][]Violation)
 	for _, file := range files {
@@ -1118,6 +1140,7 @@ func parseSingleBiomeDiagnostic(diag BiomeDiagnostic, reVal *regexp.Regexp, file
 	*fileViolations = append(*fileViolations, Violation{RuleName: rule, Value: val, StartLine: startLine, EndLine: endLine, Message: diag.Description})
 }
 
+//nolint:gocognit,cyclop // Highly cohesive mapping logic, splitting hurts readability
 func parseBiomeMessages(diagnostics []BiomeDiagnostic) map[string][]Violation {
 	metricsMap := make(map[string][]Violation)
 	reVal := regexp.MustCompile(`(\d+)`)

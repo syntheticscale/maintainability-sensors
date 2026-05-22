@@ -28,98 +28,90 @@ func ParseCSharp(filePath string) ([]Violation, error) {
 		return violations, nil
 	}
 
-	var walk func(n *sitter.Node)
-	walk = func(n *sitter.Node) {
-		if n == nil {
-			return
-		}
-
-		t := n.Type()
-		if t == "method_declaration" || t == "local_function_statement" || t == "constructor_declaration" {
-			startLine := int(n.StartPoint().Row) + 1
-			endLine := int(n.EndPoint().Row) + 1
-
-			// Length
-			length := int(n.EndPoint().Row-n.StartPoint().Row) + 1
-			violations = append(violations, Violation{
-				RuleName:  "FunctionLength",
-				Value:     length,
-				StartLine: startLine,
-				EndLine:   endLine,
-			})
-
-			// Params
-			params := 0
-			var countParams func(c *sitter.Node)
-			countParams = func(c *sitter.Node) {
-				if c == nil {
-					return
-				}
-				if c.Type() == "parameter" || c.Type() == "parameter_array" {
-					params++
-				}
-				for i := 0; i < int(c.NamedChildCount()); i++ {
-					countParams(c.NamedChild(i))
-				}
-			}
-			countParams(n)
-			violations = append(violations, Violation{
-				RuleName:  "ArgumentCount",
-				Value:     params,
-				StartLine: startLine,
-				EndLine:   endLine,
-			})
-
-			// Complexity
-			complexity := 1
-			var countComplexity func(c *sitter.Node)
-			countComplexity = func(c *sitter.Node) {
-				if c == nil {
-					return
-				}
-				ct := c.Type()
-				if ct == "if_statement" || ct == "for_statement" || ct == "foreach_statement" || ct == "while_statement" || ct == "do_statement" || ct == "switch_statement" || ct == "catch_clause" {
-					complexity++
-				}
-				if ct == "binary_expression" {
-					for i := 0; i < int(c.ChildCount()); i++ {
-						child := c.Child(i)
-						if !child.IsNamed() {
-							start := child.StartByte()
-							end := child.EndByte()
-							if start < end && end <= uint32(len(content)) {
-								op := string(content[start:end])
-								if op == "&&" || op == "||" {
-									complexity++
-								}
-							}
-						}
-					}
-				}
-				if ct == "conditional_expression" {
-					complexity++
-				}
-				for i := 0; i < int(c.NamedChildCount()); i++ {
-					countComplexity(c.NamedChild(i))
-				}
-			}
-			countComplexity(n)
-			violations = append(violations, Violation{
-				RuleName:  "Complexity",
-				Value:     complexity,
-				StartLine: startLine,
-				EndLine:   endLine,
-			})
-		}
-
-		for i := 0; i < int(n.NamedChildCount()); i++ {
-			walk(n.NamedChild(i))
-		}
-	}
-
-	walk(tree.RootNode())
+	walkCSharpNodes(tree.RootNode(), content, &violations)
 
 	return violations, nil
+}
+
+func walkCSharpNodes(n *sitter.Node, content []byte, violations *[]Violation) {
+	if n == nil {
+		return
+	}
+
+	t := n.Type()
+	if t == "method_declaration" || t == "local_function_statement" || t == "constructor_declaration" {
+		startLine := int(n.StartPoint().Row) + 1
+		endLine := int(n.EndPoint().Row) + 1
+		length := endLine - startLine + 1
+
+		*violations = append(*violations, Violation{RuleName: "FunctionLength", Value: length, StartLine: startLine, EndLine: endLine})
+		*violations = append(*violations, Violation{RuleName: "ArgumentCount", Value: countCSharpParams(n), StartLine: startLine, EndLine: endLine})
+		*violations = append(*violations, Violation{RuleName: "Complexity", Value: countCSharpComplexity(n, content), StartLine: startLine, EndLine: endLine})
+	}
+
+	for i := 0; i < int(n.NamedChildCount()); i++ {
+		walkCSharpNodes(n.NamedChild(i), content, violations)
+	}
+}
+
+func countCSharpParams(c *sitter.Node) int {
+	if c == nil {
+		return 0
+	}
+	params := 0
+	if c.Type() == "parameter" || c.Type() == "parameter_array" {
+		params++
+	}
+	for i := 0; i < int(c.NamedChildCount()); i++ {
+		params += countCSharpParams(c.NamedChild(i))
+	}
+	return params
+}
+
+func countCSharpComplexity(n *sitter.Node, content []byte) int {
+	return 1 + sumCSharpComplexity(n, content)
+}
+
+func sumCSharpComplexity(c *sitter.Node, content []byte) int {
+	if c == nil {
+		return 0
+	}
+	complexity := 0
+	ct := c.Type()
+	switch ct {
+	case "if_statement", "for_statement", "foreach_statement", "while_statement", "do_statement", "switch_statement", "catch_clause", "conditional_expression":
+		complexity++
+	case "binary_expression":
+		complexity += countCSharpBinaryComplexity(c, content)
+	}
+	for i := 0; i < int(c.NamedChildCount()); i++ {
+		complexity += sumCSharpComplexity(c.NamedChild(i), content)
+	}
+	return complexity
+}
+
+func countCSharpBinaryComplexity(c *sitter.Node, content []byte) int {
+	complexity := 0
+	for i := 0; i < int(c.ChildCount()); i++ {
+		complexity += checkCSharpBinaryOp(c.Child(i), content)
+	}
+	return complexity
+}
+
+func checkCSharpBinaryOp(child *sitter.Node, content []byte) int {
+	if child == nil || child.IsNamed() {
+		return 0
+	}
+	start := child.StartByte()
+	end := child.EndByte()
+	if start >= end || end > uint32(len(content)) {
+		return 0
+	}
+	op := string(content[start:end])
+	if op == "&&" || op == "||" {
+		return 1
+	}
+	return 0
 }
 
 // CSharpPlugin implements the Plugin interface for C#.
