@@ -134,6 +134,13 @@ dotnet_sort_system_directives_first = true
 // BootstrapRepo detects the languages/frameworks of a repository
 // and boots up pristine, non-overwriting configs with maintainability thresholds.
 func BootstrapRepo(repoPath string) error {
+	return BootstrapRepoWithPolicy(repoPath, false)
+}
+
+// BootstrapRepoWithPolicy detects the languages/frameworks of a repository
+// and boots up pristine, non-overwriting configs. If warnPolicy is true,
+// it also generates a .maintainability-sensors.yml with default-severity: warn.
+func BootstrapRepoWithPolicy(repoPath string, warnPolicy bool) error {
 	absPath, err := filepath.Abs(repoPath)
 	if err != nil {
 		absPath = repoPath
@@ -163,6 +170,31 @@ func BootstrapRepo(repoPath string) error {
 		}
 	}
 
+	// 2. Generate .maintainability-sensors.yml with gradual adoption policy if requested
+	if warnPolicy {
+		if err := bootstrapMaintainabilitySensors(absPath); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func bootstrapMaintainabilitySensors(absPath string) error {
+	configPath := filepath.Join(absPath, ".maintainability-sensors.yml")
+	if _, err := os.Stat(configPath); err == nil {
+		fmt.Fprintf(os.Stderr, "- [SKIP] '.maintainability-sensors.yml' already exists in repository root. Protecting existing setup.\n")
+		return nil
+	}
+	content := `version: "1"
+check-diff:
+  default-severity: warn
+`
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+		return fmt.Errorf("failed to write .maintainability-sensors.yml: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "- [CREATED] .maintainability-sensors.yml (Gradual Adoption Policy)\n")
+	fmt.Fprintf(os.Stderr, "  default-severity: warn\n\n")
 	return nil
 }
 

@@ -108,15 +108,6 @@ For CI pipelines or one-off runs, `check-diff` gains three repeatable flags:
 - If `--severity` is specified, it wins over both the YAML and the default.
 - If `--default-severity` is specified, it overrides the `default-severity` key in the YAML.
 
-Additionally, the existing `bootstrap` command gains:
-
-```bash
-maintainability-sensors bootstrap /path/to/repo --with-warn-policy
-```
-
-When `--with-warn-policy` is provided, `bootstrap` writes both the language-native linter configs (e.g., `.eslintrc.json`, `.golangci.yml`) **and** a `.maintainability-sensors.yml` with `default-severity: warn`. This gives new adopters a zero-friction onboarding path without weakening the tool's default behavior for existing users.
-- If `--config` is omitted, the tool searches for `.maintainability-sensors.yml` in the target path; if not found, all defaults apply.
-
 ---
 
 ## 5. Per-Rule vs. Global Configuration
@@ -315,7 +306,7 @@ If no config file exists and no flags are passed, `check-diff` blocks on everyth
 3. Update `isTrueViolation()` and `processViolationsMap()` to accept policy.
 4. Add table-driven unit tests for policy resolution, severity classification, and exit-code contracts.
 5. Update `docs/GITHUB_ACTIONS_GUIDE.md` and `docs/AI_AGENT_FEEDBACK_LOOP.md` to document the new `warn` mode.
-6. (Optional) Update the `bootstrap` command to generate a starter `.maintainability-sensors.yml` with `default-severity: warn`.
+6. (Future) Add `--with-warn-policy` flag to the `bootstrap` command to generate a starter `.maintainability-sensors.yml` with `default-severity: warn`. **Not yet implemented.**
 
 ---
 

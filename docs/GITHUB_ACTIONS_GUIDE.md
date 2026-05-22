@@ -41,6 +41,32 @@ jobs:
 
 ---
 
+### Gradual Adoption with Severity Configuration
+
+For legacy codebases, add a `.maintainability-sensors.yml` instead of blocking immediately:
+
+```yaml
+version: "1"
+check-diff:
+  default-severity: warn
+  rules:
+    - name: ArgumentCount
+      severity: error
+```
+
+Then CI stays green while the team observes patterns:
+```yaml
+- run: maintainability-sensors check-diff origin/main
+```
+
+You can also override severity directly from the CLI without a config file:
+```bash
+--default-severity warn
+--severity Complexity:warn
+```
+
+---
+
 ## 3. Advanced: Inline PR Review Comments (`--github-pr`)
 
 To have the CLI **directly review your active Pull Requests** (posting inline comments on the exact lines of code that exceed complexity limits), enable the `--github-pr` flag and provide the `GITHUB_TOKEN` secret. 

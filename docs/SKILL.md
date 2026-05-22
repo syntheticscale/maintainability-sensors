@@ -28,5 +28,9 @@ This tool will analyze your `git diff` and cross-reference the lines you modifie
 
 ### Golden Rule
 Never ignore an AI WARNING. You must either refactor until `check-diff` is clean, or explicitly suppress the warning with a documented inline comment.
+
+> **Note:** If your repository has `.maintainability-sensors.yml` configured with `default-severity: warn`, warnings are expected and you should not try to fix them unless they indicate actual issues. The `check-diff` command will exit cleanly (0) for warnings.
+
+> **To confirm your repo's policy:** Check if `.maintainability-sensors.yml` exists and what `default-severity` it sets.
 </instructions>
 </activated_skill>

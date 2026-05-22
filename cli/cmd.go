@@ -53,11 +53,12 @@ func (c *generateCmd) Run() error {
 }
 
 type bootstrapCmd struct {
-	Path string `arg:"" optional:"" default:"." help:"Target path to bootstrap."`
+	Path           string `arg:"" optional:"" default:"." help:"Target path to bootstrap."`
+	WithWarnPolicy bool   `optional:"" name:"with-warn-policy" help:"Generate a .maintainability-sensors.yml with default-severity: warn."`
 }
 
 func (c *bootstrapCmd) Run() error {
-	executeBootstrap(c.Path)
+	executeBootstrap(c.Path, c.WithWarnPolicy)
 	return nil
 }
 
@@ -537,8 +538,8 @@ func executeRun(opts RunOptions) {
 	}
 }
 
-func executeBootstrap(targetPath string) {
-	err := sensors.BootstrapRepo(targetPath)
+func executeBootstrap(targetPath string, withWarnPolicy bool) {
+	err := sensors.BootstrapRepoWithPolicy(targetPath, withWarnPolicy)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] Bootstrap failed: %v\n", err)
 		os.Exit(1)

@@ -76,6 +76,8 @@ go build -o bin/maintainability-sensors main.go
 ./bin/maintainability-sensors bootstrap /path/to/repo
 ```
 
+Repositories can add a `.maintainability-sensors.yml` at the root to configure `check-diff` severity levels (e.g., `default-severity: warn`) for gradual adoption without modifying CI pipelines.
+
 ---
 
 ## 📋 Standard PR Checklists for AI Agents
