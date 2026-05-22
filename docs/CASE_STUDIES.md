@@ -178,7 +178,8 @@ The complexity was real, but classic Cyclomatic Complexity was an insufficient t
     1.  **Cyclomatic Complexity (Max 8):** Still enforced to catch too many independent paths.
     2.  **Cognitive Complexity (Max 8):** Penalizes deeply nested structures (e.g., `if` inside `for` inside `if`), forcing developers to return early and flatten control flow.
     3.  **Max Case Length (Max 10 lines):** This was the silver bullet for the `switch` statement problem. Instead of penalizing the *number* of cases, the sensor enforces that no single `case` block exceeds 10 lines. This allows a flat, 50-case switch statement to pass perfectly, provided each case is concise and delegates complex logic to well-named helper methods.
-*   **The Result:** We successfully refactored `orchestrator.go`, `git_diff.go`, and `cmd.go` to meet these strict thresholds (without relaxing the limits). The codebase became inherently safe for AI agents to modify, proving that strict maintainability is possible even in highly polymorphic routing logic.
+    4.  **Human-in-the-Loop & The Honest Exception:** For those few cohesive mapping statements that naturally exceeded the boundaries (even with cognitive metrics), we introduced the **Honest Exception Protocol**. AI agents are now instructed to pause and request human permission before altering global thresholds, and instead use localized suppression comments (e.g., `//nolint:gocognit`) with explicit justifications.
+*   **The Result:** We successfully refactored `orchestrator.go`, `git_diff.go`, and `cmd.go` to meet these strict thresholds. The codebase became inherently safe for AI agents to modify, proving that strict maintainability is possible even in highly polymorphic routing logic when paired with a robust Human-in-the-Loop strategy.
 
 ---
 
