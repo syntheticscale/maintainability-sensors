@@ -136,6 +136,33 @@ func groupFilesByLanguage(files []string, absModifiedLines map[string][]sensors.
 	return groups, originalPaths
 }
 
+type ViolationCtx struct {
+	File       string
+	Violations []sensors.Violation
+	Ranges     []sensors.LineRange
+	Policy     *CheckDiffPolicy
+	HasErrors  *bool
+	Warnings   *[]string
+}
+
+func processSingleViolationFile(ctx ViolationCtx) {
+	for _, v := range ctx.Violations {
+		if !isTrueViolation(v, ctx.Policy) || !hasOverlap(v, ctx.Ranges) {
+			continue
+		}
+
+		isErr, msg := formatViolationMessage(v, ctx.File, ctx.Policy)
+		if msg != "" {
+			fmt.Fprintf(os.Stderr, "%s\n", msg)
+			if isErr {
+				*ctx.HasErrors = true
+			} else {
+				*ctx.Warnings = append(*ctx.Warnings, msg)
+			}
+		}
+	}
+}
+
 func processViolationsMap(violationsMap map[string][]sensors.Violation, absModifiedLines map[string][]sensors.LineRange, policy *CheckDiffPolicy) (bool, []string) {
 	hasErrors := false
 	var warnings []string
@@ -151,46 +178,34 @@ func processViolationsMap(violationsMap map[string][]sensors.Violation, absModif
 			continue
 		}
 
-		for _, v := range violations {
-			if !isTrueViolation(v, policy) {
-				continue
-			}
-
-			if hasOverlap(v, ranges) {
-				sev := getSeverityForRule(policy, v.RuleName)
-				msg := fmt.Sprintf("REFACTORING PROMPT: %s:%d - %s - %s", file, v.StartLine, v.RuleName, v.Message)
-				if sev == SeverityIgnore {
-					continue
-				} else if sev == SeverityWarn {
-					// Backward-compatible output: same format as before.
-					fmt.Fprintf(os.Stderr, "%s\n", msg)
-					warnings = append(warnings, msg)
-				} else {
-					// error or default
-					fmt.Fprintf(os.Stderr, "%s\n", msg)
-					hasErrors = true
-				}
-			}
-		}
+		processSingleViolationFile(ViolationCtx{
+			File:       file,
+			Violations: violations,
+			Ranges:     ranges,
+			Policy:     policy,
+			HasErrors:  &hasErrors,
+			Warnings:   &warnings,
+		})
 	}
 	return hasErrors, warnings
 }
 
-func (c *CheckDiffCmd) Run() error {
-	policy, err := LoadPolicy(c.Config, c.DefaultSeverity, c.Severity)
-	if err != nil {
-		return fmt.Errorf("[ERROR] Failed to load policy: %v", err)
+func formatViolationMessage(v sensors.Violation, file string, policy *CheckDiffPolicy) (bool, string) {
+	sev := getSeverityForRule(policy, v.RuleName)
+	if sev == SeverityIgnore {
+		return false, ""
 	}
+	msg := fmt.Sprintf("REFACTORING PROMPT: %s:%d - %s - %s", file, v.StartLine, v.RuleName, v.Message)
+	if sev == SeverityWarn {
+		return false, msg
+	}
+	return true, msg
+}
 
-	// If no config path is specified, try to find one in the target path.
-	if c.Config == "" {
-		foundConfig := findConfigFile(c.TargetPath)
-		if foundConfig != "" {
-			policy, err = LoadPolicy(foundConfig, c.DefaultSeverity, c.Severity)
-			if err != nil {
-				return fmt.Errorf("[ERROR] Failed to load policy: %v", err)
-			}
-		}
+func (c *CheckDiffCmd) Run() error {
+	policy, err := loadCheckDiffPolicy(c)
+	if err != nil {
+		return err
 	}
 
 	modifiedLines, err := sensors.GetModifiedLines(c.TargetBranch, c.TargetPath)
@@ -203,10 +218,39 @@ func (c *CheckDiffCmd) Run() error {
 		return fmt.Errorf("[ERROR] Failed to find files: %v", err)
 	}
 
-	hasErrors := false
 	absModifiedLines := mapModifiedLinesToAbsPaths(modifiedLines, c.TargetPath)
 	groups, originalPaths := groupFilesByLanguage(files, absModifiedLines)
 
+	hasErrors := processDeltaGroups(groups, originalPaths, absModifiedLines, policy)
+
+	if hasErrors {
+		return fmt.Errorf("Delta violations found")
+	}
+
+	logStderrLn("Delta clean.")
+	return nil
+}
+
+func loadCheckDiffPolicy(c *CheckDiffCmd) (*CheckDiffPolicy, error) {
+	policy, err := LoadPolicy(c.Config, c.DefaultSeverity, c.Severity)
+	if err != nil {
+		return nil, fmt.Errorf("[ERROR] Failed to load policy: %v", err)
+	}
+
+	if c.Config == "" {
+		foundConfig := findConfigFile(c.TargetPath)
+		if foundConfig != "" {
+			policy, err = LoadPolicy(foundConfig, c.DefaultSeverity, c.Severity)
+			if err != nil {
+				return nil, fmt.Errorf("[ERROR] Failed to load policy: %v", err)
+			}
+		}
+	}
+	return policy, nil
+}
+
+func processDeltaGroups(groups map[string][]string, originalPaths map[string]string, absModifiedLines map[string][]sensors.LineRange, policy *CheckDiffPolicy) bool {
+	hasErrors := false
 	for lang, langFiles := range groups {
 		if len(langFiles) == 0 {
 			continue
@@ -222,13 +266,7 @@ func (c *CheckDiffCmd) Run() error {
 			hasErrors = true
 		}
 	}
-
-	if hasErrors {
-		return fmt.Errorf("Delta violations found")
-	}
-
-	logStderrLn( "Delta clean.")
-	return nil
+	return hasErrors
 }
 
 // Execute runs the main CLI command-line parser.
@@ -242,6 +280,78 @@ func Execute() {
 	ctx.FatalIfErrorf(err)
 }
 
+func isSkippedDir(dirName string) bool {
+	switch dirName {
+	case "node_modules", ".git", "vendor", "bin", ".cache", ".venv", "venv", "env":
+		return true
+	}
+	return false
+}
+
+func isValidExtension(ext string) bool {
+	switch ext {
+	case ".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rb", ".cs":
+		return true
+	}
+	return false
+}
+
+func checkWalkDirPath(path string, absTargetDir string) string {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return ""
+	}
+	if resolvedPath, err := filepath.EvalSymlinks(absPath); err == nil {
+		absPath = resolvedPath
+	}
+	if !strings.HasPrefix(absPath, absTargetDir) {
+		return ""
+	}
+	return path
+}
+
+func processWalkDirFile(path string, d os.DirEntry, absTargetDir string) (string, error) {
+	if d.IsDir() {
+		if isSkippedDir(d.Name()) {
+			return "", filepath.SkipDir
+		}
+		return "", nil
+	}
+
+	info, err := d.Info()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[WARNING] Cannot get info for %s: %v\n", path, err)
+		return "", nil
+	}
+	if !info.Mode().IsRegular() {
+		return "", nil
+	}
+	if info.Size() > 2*1024*1024 {
+		fmt.Fprintf(os.Stderr, "[WARNING] Skipping file %s: exceeds 2MB limit\n", path)
+		return "", nil
+	}
+
+	if !isValidExtension(filepath.Ext(path)) {
+		return "", nil
+	}
+
+	return checkWalkDirPath(path, absTargetDir), nil
+}
+
+func resolveSingleFile(cleanPath string, absTargetDir string) []string {
+	var files []string
+	absPath, err := filepath.Abs(cleanPath)
+	if err == nil {
+		if resolvedPath, err := filepath.EvalSymlinks(absPath); err == nil {
+			absPath = resolvedPath
+		}
+		if strings.HasPrefix(absPath, absTargetDir+string(filepath.Separator)) || absPath == absTargetDir {
+			files = append(files, cleanPath)
+		}
+	}
+	return files
+}
+
 func FindFiles(targetPath string) ([]string, bool, error) {
 	cleanPath := filepath.Clean(targetPath)
 
@@ -249,7 +359,7 @@ func FindFiles(targetPath string) ([]string, bool, error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("[ERROR] Failed to get absolute path of target directory: %v", err)
 	}
-	
+
 	if resolvedTargetDir, err := filepath.EvalSymlinks(absTargetDir); err == nil {
 		absTargetDir = resolvedTargetDir
 	}
@@ -259,66 +369,22 @@ func FindFiles(targetPath string) ([]string, bool, error) {
 		return nil, false, fmt.Errorf("[ERROR] Path does not exist: %s", targetPath)
 	}
 
-	var files []string
 	isDir := info.IsDir()
-
 	if !isDir {
-		absPath, err := filepath.Abs(cleanPath)
-		if err == nil {
-			if resolvedPath, err := filepath.EvalSymlinks(absPath); err == nil {
-				absPath = resolvedPath
-			}
-			if strings.HasPrefix(absPath, absTargetDir+string(filepath.Separator)) || absPath == absTargetDir {
-				files = append(files, cleanPath)
-			}
-		}
-		return files, false, nil
+		return resolveSingleFile(cleanPath, absTargetDir), false, nil
 	}
 
+	var files []string
 	err = filepath.WalkDir(cleanPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[WARNING] Cannot access %s: %v\n", path, err)
 			return nil
 		}
-		if d.IsDir() {
-			dirName := d.Name()
-			if dirName == "node_modules" || dirName == ".git" || dirName == "vendor" || dirName == "bin" || dirName == ".cache" || dirName == ".venv" || dirName == "venv" || dirName == "env" {
-				return filepath.SkipDir
-			}
-			return nil
+		file, walkErr := processWalkDirFile(path, d, absTargetDir)
+		if file != "" {
+			files = append(files, file)
 		}
-
-		info, err := d.Info()
-		if err != nil {
-		        fmt.Fprintf(os.Stderr, "[WARNING] Cannot get info for %s: %v\n", path, err)
-		        return nil
-		}
-		if !info.Mode().IsRegular() {
-		        return nil
-		}
-		if info.Size() > 2*1024*1024 {			fmt.Fprintf(os.Stderr, "[WARNING] Skipping file %s: exceeds 2MB limit\n", path)
-			return nil
-		}
-
-		// Skip files without recognized extension
-		ext := filepath.Ext(path)
-		if ext != ".ts" && ext != ".tsx" && ext != ".js" && ext != ".jsx" && ext != ".py" && ext != ".go" && ext != ".rb" && ext != ".cs" {
-			return nil
-		}
-
-		absPath, err := filepath.Abs(path)
-		if err != nil {
-			return nil
-		}
-		if resolvedPath, err := filepath.EvalSymlinks(absPath); err == nil {
-			absPath = resolvedPath
-		}
-		if !strings.HasPrefix(absPath, absTargetDir) {
-			return nil
-		}
-
-		files = append(files, path)
-		return nil
+		return walkErr
 	})
 
 	if err != nil {
@@ -491,7 +557,7 @@ func printExceptionsList(results []sensors.OrchestratorResult) {
 		fmt.Fprintf(os.Stderr, "=========================================\n")
 		fmt.Fprintf(os.Stderr, "⚠️  The following files have relaxed rules configured in their linters:\n\n")
 		for _, excStr := range allExceptions {
-			logStderrLn( excStr)
+			logStderrLn(excStr)
 		}
 		fmt.Fprintf(os.Stderr, "\nNOTE: These relaxed thresholds must be manually verified by a human during code review.\n")
 		fmt.Fprintf(os.Stderr, "(\"Looking at the exceptions AI created was a good point to start my code review.\")\n")
@@ -501,12 +567,12 @@ func printExceptionsList(results []sensors.OrchestratorResult) {
 func executeRun(opts RunOptions) {
 	files, isDir, err := FindFiles(opts.TargetPath)
 	if err != nil {
-		logStderrLn( err)
+		logStderrLn(err)
 		os.Exit(1)
 	}
 
 	if isDir && len(files) == 0 {
-		logStderrLn( "No supported source files (TS/JS, Python, Go) found in target directory.")
+		logStderrLn("No supported source files (TS/JS, Python, Go) found in target directory.")
 		return
 	}
 
@@ -517,30 +583,19 @@ func executeRun(opts RunOptions) {
 	}
 
 	if isDir && len(results) == 0 {
-		logStderrLn( "No supported source files (TS/JS, Python, Go) found in target directory.")
+		logStderrLn("No supported source files (TS/JS, Python, Go) found in target directory.")
 		return
 	}
 
 	hasV := FormatResultsCLI(results, opts.JSONOutput, isDir)
 
-	if os.Getenv("GITHUB_ACTIONS") == "true" {
-		scorecard := GenerateMarkdownScorecard(results)
-		if err := WriteGitHubStepSummary(scorecard); err != nil {
-			fmt.Fprintf(os.Stderr, "[WARNING] Failed to write GitHub Step Summary: %v\n", err)
-		}
-	}
+	postGitHubResults(results, opts.GithubPR)
 
-	isCI_PR := os.Getenv("GITHUB_TOKEN") != "" && (os.Getenv("GITHUB_EVENT_PATH") != "" || os.Getenv("GITHUB_REF") != "")
-	if opts.GithubPR || isCI_PR {
-		logStderrLn( "Posting inline review to GitHub PR...")
-		if err := PostGitHubReview(results); err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Failed to post GitHub inline review: %v\n", err)
-		} else {
-			logStderrLn( "Successfully posted inline review to GitHub PR!")
-		}
-	}
+	saveReportsAndExit(results, opts, hasV)
+}
 
-	err = writeReports(results, ReportOptions{
+func saveReportsAndExit(results []sensors.OrchestratorResult, opts RunOptions, hasV bool) {
+	err := writeReports(results, ReportOptions{
 		MarkdownOut: opts.MarkdownOut,
 		JSONOut:     opts.JSONOutFile,
 		HTMLOut:     opts.HTMLOut,
@@ -553,6 +608,25 @@ func executeRun(opts RunOptions) {
 
 	if hasV {
 		os.Exit(1)
+	}
+}
+
+func postGitHubResults(results []sensors.OrchestratorResult, forcePR bool) {
+	if os.Getenv("GITHUB_ACTIONS") == "true" {
+		scorecard := GenerateMarkdownScorecard(results)
+		if err := WriteGitHubStepSummary(scorecard); err != nil {
+			fmt.Fprintf(os.Stderr, "[WARNING] Failed to write GitHub Step Summary: %v\n", err)
+		}
+	}
+
+	isCI_PR := os.Getenv("GITHUB_TOKEN") != "" && (os.Getenv("GITHUB_EVENT_PATH") != "" || os.Getenv("GITHUB_REF") != "")
+	if forcePR || isCI_PR {
+		logStderrLn("Posting inline review to GitHub PR...")
+		if err := PostGitHubReview(results); err != nil {
+			fmt.Fprintf(os.Stderr, "[ERROR] Failed to post GitHub inline review: %v\n", err)
+		} else {
+			logStderrLn("Successfully posted inline review to GitHub PR!")
+		}
 	}
 }
 
@@ -593,31 +667,10 @@ func writeReports(results []sensors.OrchestratorResult, opts ReportOptions) erro
 }
 
 func executeGenerate(jsonIn string, markdownOut string, htmlOut string) {
-	if info, err := os.Stat(jsonIn); err == nil && (!info.Mode().IsRegular() || info.Size() > 10*1024*1024) {
-		fmt.Fprintf(os.Stderr, "[ERROR] JSON input file is too large or not a regular file (limit 10MB)\n")
-		os.Exit(1)
-	}
-	data, err := os.ReadFile(jsonIn)
+	results, err := parseJSONScorecard(jsonIn)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Failed to read JSON input file: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
 		os.Exit(1)
-	}
-
-	var results []sensors.OrchestratorResult
-	if err := json.Unmarshal(data, &results); err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Failed to parse JSON input scorecard: %v\n", err)
-		os.Exit(1)
-	}
-
-	for i, res := range results {
-		if res.FilePath == "" {
-			fmt.Fprintf(os.Stderr, "[ERROR] Validation failed: Missing 'file_path' in result at index %d\n", i)
-			os.Exit(1)
-		}
-		if res.Language == "" {
-			fmt.Fprintf(os.Stderr, "[ERROR] Validation failed: Missing 'language' in result at index %d\n", i)
-			os.Exit(1)
-		}
 	}
 
 	hasV := false
@@ -640,6 +693,38 @@ func executeGenerate(jsonIn string, markdownOut string, htmlOut string) {
 	if hasV {
 		os.Exit(1)
 	}
+}
+
+func validateScorecardResults(results []sensors.OrchestratorResult) error {
+	for i, res := range results {
+		if res.FilePath == "" {
+			return fmt.Errorf("Validation failed: Missing 'file_path' in result at index %d", i)
+		}
+		if res.Language == "" {
+			return fmt.Errorf("Validation failed: Missing 'language' in result at index %d", i)
+		}
+	}
+	return nil
+}
+
+func parseJSONScorecard(jsonIn string) ([]sensors.OrchestratorResult, error) {
+	if info, err := os.Stat(jsonIn); err == nil && (!info.Mode().IsRegular() || info.Size() > 10*1024*1024) {
+		return nil, fmt.Errorf("JSON input file is too large or not a regular file (limit 10MB)")
+	}
+	data, err := os.ReadFile(jsonIn)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read JSON input file: %v", err)
+	}
+
+	var results []sensors.OrchestratorResult
+	if err := json.Unmarshal(data, &results); err != nil {
+		return nil, fmt.Errorf("Failed to parse JSON input scorecard: %v", err)
+	}
+
+	if err := validateScorecardResults(results); err != nil {
+		return nil, err
+	}
+	return results, nil
 }
 
 func printScanResult(res sensors.OrchestratorResult, jsonOutput bool) {
@@ -688,10 +773,7 @@ func printScanResult(res sensors.OrchestratorResult, jsonOutput bool) {
 	}
 }
 
-func printSelfCorrectionGuidance(res sensors.OrchestratorResult) {
-	hasViolation := false
-	var guidance []string
-
+func getLimitsForFile(res sensors.OrchestratorResult) (int, int, int) {
 	limitComplexity := sensors.BaselineComplexity
 	limitLength := sensors.BaselineFunctionLength
 	limitArgs := sensors.BaselineArgumentCount
@@ -705,45 +787,51 @@ func printSelfCorrectionGuidance(res sensors.OrchestratorResult) {
 			limitArgs = exc.ConfiguredVal
 		}
 	}
+	return limitComplexity, limitLength, limitArgs
+}
+
+func getSuppressionExample(lang string) string {
+	switch lang {
+	case "python":
+		return "# pylint: disable=... or # noqa"
+	case "go":
+		return "//nolint:..."
+	case "ruby":
+		return "# rubocop:disable ..."
+	case "javascript", "typescript":
+		return "// eslint-disable-next-line ..."
+	case "csharp":
+		return "#pragma warning disable ..."
+	case "java":
+		return "@SuppressWarnings(\"...\")"
+	default:
+		return "// disable-linter-rule ..."
+	}
+}
+
+func printSelfCorrectionGuidance(res sensors.OrchestratorResult) {
+	var guidance []string
+	limitComplexity, limitLength, limitArgs := getLimitsForFile(res)
 
 	if res.Metrics.Complexity > limitComplexity {
-		hasViolation = true
 		guidance = append(guidance, fmt.Sprintf("  * Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, limitComplexity))
 	}
 	if res.Metrics.FunctionLength > limitLength {
-		hasViolation = true
 		guidance = append(guidance, fmt.Sprintf("  * Function lines is %d (Max %d). Modularize this block into separate functional components.", res.Metrics.FunctionLength, limitLength))
 	}
 	if res.Metrics.ArgumentCount > limitArgs {
-		hasViolation = true
 		guidance = append(guidance, fmt.Sprintf("  * Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, limitArgs))
 	}
 
-	if hasViolation {
+	if len(guidance) > 0 {
 		fmt.Fprintf(os.Stderr, "\n-----------------------------------------\n")
 		fmt.Fprintf(os.Stderr, " Actionable Refactoring Prompts:\n")
 		fmt.Fprintf(os.Stderr, "-----------------------------------------\n")
 		fmt.Fprintf(os.Stderr, "REFACTORING PROMPT: Refactor these violations:\n\n")
 		for _, g := range guidance {
-			logStderrLn( g)
+			logStderrLn(g)
 		}
-		var suppressionExample string
-		switch res.Language {
-		case "python":
-			suppressionExample = "# pylint: disable=... or # noqa"
-		case "go":
-			suppressionExample = "//nolint:..."
-		case "ruby":
-			suppressionExample = "# rubocop:disable ..."
-		case "javascript", "typescript":
-			suppressionExample = "// eslint-disable-next-line ..."
-		case "csharp":
-			suppressionExample = "#pragma warning disable ..."
-		case "java":
-			suppressionExample = "@SuppressWarnings(\"...\")"
-		default:
-			suppressionExample = "// disable-linter-rule ..."
-		}
+		suppressionExample := getSuppressionExample(res.Language)
 		fmt.Fprintf(os.Stderr, "\nIf refactoring is impossible, REFACTORING PROMPT: suppress the warning with standard inline annotations (e.g. %s).\n", suppressionExample)
 	}
 }

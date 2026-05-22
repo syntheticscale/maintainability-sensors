@@ -63,82 +63,10 @@ func GenerateHTMLScorecard(results []sensors.OrchestratorResult) string {
 	}
 
 	for _, res := range results {
-		fileBase := filepath.Base(res.FilePath)
-		upperLang := strings.ToUpper(res.Language)
-
 		if res.ToolingDetected {
-			data.OrchestratedCount++
-			data.TotalExceptions += len(res.Exceptions)
-
-			// Check for violations in this file
-			var filePrompts []string
-			if res.Metrics.Complexity > sensors.BaselineComplexity {
-				data.TotalViolations++
-				filePrompts = append(filePrompts, fmt.Sprintf("Complexity is %d (Max %d limit). Nudge agent to extract nested conditionals into separate helper functions.", res.Metrics.Complexity, sensors.BaselineComplexity))
-			}
-			if res.Metrics.FunctionLength > sensors.BaselineFunctionLength {
-				if len(filePrompts) == 0 {
-					data.TotalViolations++
-				}
-				filePrompts = append(filePrompts, fmt.Sprintf("Function lines is %d (Max %d limit). Nudge agent to modularize this block into separate functional components.", res.Metrics.FunctionLength, sensors.BaselineFunctionLength))
-			}
-			if res.Metrics.ArgumentCount > sensors.BaselineArgumentCount {
-				if len(filePrompts) == 0 {
-					data.TotalViolations++
-				}
-				filePrompts = append(filePrompts, fmt.Sprintf("Parameter count is %d (Max %d limit). Nudge agent to bundle parameters into a structured configuration object.", res.Metrics.ArgumentCount, sensors.BaselineArgumentCount))
-			}
-
-			// Compute CSS classes
-			compClass := ""
-			if res.Metrics.Complexity > sensors.BaselineComplexity {
-				compClass = "text-error font-bold"
-			}
-			linesClass := ""
-			if res.Metrics.FunctionLength > sensors.BaselineFunctionLength {
-				linesClass = "text-error font-bold"
-			}
-			paramsClass := ""
-			if res.Metrics.ArgumentCount > sensors.BaselineArgumentCount {
-				paramsClass = "text-error font-bold"
-			}
-
-			data.Rows = append(data.Rows, FileRow{
-				BaseName:       fileBase,
-				FilePath:       res.FilePath,
-				Language:       upperLang,
-				IsOrchestrated: true,
-				Complexity:     res.Metrics.Complexity,
-				FunctionLength: res.Metrics.FunctionLength,
-				ArgumentCount:  res.Metrics.ArgumentCount,
-				CompClass:      compClass,
-				LinesClass:     linesClass,
-				ParamsClass:    paramsClass,
-			})
-
-			if len(filePrompts) > 0 {
-				data.FilePrompts = append(data.FilePrompts, FilePromptData{
-					BaseName:   fileBase,
-					Prompts:    filePrompts,
-					FullPrompt: fmt.Sprintf("Refactor %s. Violations:\n%s", fileBase, strings.Join(filePrompts, "\n")),
-				})
-			}
-
-			if len(res.Exceptions) > 0 {
-				data.FileExceptions = append(data.FileExceptions, FileExceptionData{
-					BaseName:   fileBase,
-					Exceptions: res.Exceptions,
-				})
-			}
-
+			processOrchestratedResult(&data, res)
 		} else {
-			data.BlindCount++
-			data.Rows = append(data.Rows, FileRow{
-				BaseName:       fileBase,
-				FilePath:       res.FilePath,
-				Language:       upperLang,
-				IsOrchestrated: false,
-			})
+			processBlindResult(&data, res)
 		}
 	}
 
@@ -151,4 +79,89 @@ func GenerateHTMLScorecard(results []sensors.OrchestratorResult) string {
 	}
 
 	return buf.String()
+}
+
+func processBlindResult(data *ReportData, res sensors.OrchestratorResult) {
+	data.BlindCount++
+	data.Rows = append(data.Rows, FileRow{
+		BaseName:       filepath.Base(res.FilePath),
+		FilePath:       res.FilePath,
+		Language:       strings.ToUpper(res.Language),
+		IsOrchestrated: false,
+	})
+}
+
+func processOrchestratedResult(data *ReportData, res sensors.OrchestratorResult) {
+	data.OrchestratedCount++
+	data.TotalExceptions += len(res.Exceptions)
+	
+	fileBase := filepath.Base(res.FilePath)
+	filePrompts := getHTMLFilePrompts(data, res)
+
+	compClass, linesClass, paramsClass := getCSSClasses(res)
+
+	data.Rows = append(data.Rows, FileRow{
+		BaseName:       fileBase,
+		FilePath:       res.FilePath,
+		Language:       strings.ToUpper(res.Language),
+		IsOrchestrated: true,
+		Complexity:     res.Metrics.Complexity,
+		FunctionLength: res.Metrics.FunctionLength,
+		ArgumentCount:  res.Metrics.ArgumentCount,
+		CompClass:      compClass,
+		LinesClass:     linesClass,
+		ParamsClass:    paramsClass,
+	})
+
+	if len(filePrompts) > 0 {
+		data.FilePrompts = append(data.FilePrompts, FilePromptData{
+			BaseName:   fileBase,
+			Prompts:    filePrompts,
+			FullPrompt: fmt.Sprintf("Refactor %s. Violations:\n%s", fileBase, strings.Join(filePrompts, "\n")),
+		})
+	}
+
+	if len(res.Exceptions) > 0 {
+		data.FileExceptions = append(data.FileExceptions, FileExceptionData{
+			BaseName:   fileBase,
+			Exceptions: res.Exceptions,
+		})
+	}
+}
+
+func getHTMLFilePrompts(data *ReportData, res sensors.OrchestratorResult) []string {
+	var filePrompts []string
+	if res.Metrics.Complexity > sensors.BaselineComplexity {
+		data.TotalViolations++
+		filePrompts = append(filePrompts, fmt.Sprintf("Complexity is %d (Max %d limit). Nudge agent to extract nested conditionals into separate helper functions.", res.Metrics.Complexity, sensors.BaselineComplexity))
+	}
+	if res.Metrics.FunctionLength > sensors.BaselineFunctionLength {
+		if len(filePrompts) == 0 {
+			data.TotalViolations++
+		}
+		filePrompts = append(filePrompts, fmt.Sprintf("Function lines is %d (Max %d limit). Nudge agent to modularize this block into separate functional components.", res.Metrics.FunctionLength, sensors.BaselineFunctionLength))
+	}
+	if res.Metrics.ArgumentCount > sensors.BaselineArgumentCount {
+		if len(filePrompts) == 0 {
+			data.TotalViolations++
+		}
+		filePrompts = append(filePrompts, fmt.Sprintf("Parameter count is %d (Max %d limit). Nudge agent to bundle parameters into a structured configuration object.", res.Metrics.ArgumentCount, sensors.BaselineArgumentCount))
+	}
+	return filePrompts
+}
+
+func getCSSClasses(res sensors.OrchestratorResult) (string, string, string) {
+	compClass := ""
+	if res.Metrics.Complexity > sensors.BaselineComplexity {
+		compClass = "text-error font-bold"
+	}
+	linesClass := ""
+	if res.Metrics.FunctionLength > sensors.BaselineFunctionLength {
+		linesClass = "text-error font-bold"
+	}
+	paramsClass := ""
+	if res.Metrics.ArgumentCount > sensors.BaselineArgumentCount {
+		paramsClass = "text-error font-bold"
+	}
+	return compClass, linesClass, paramsClass
 }

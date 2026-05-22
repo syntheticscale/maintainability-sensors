@@ -9,13 +9,13 @@ import (
 )
 
 func ParseJava(filePath string) ([]Violation, error) {
-        var violations []Violation
+	var violations []Violation
 
-        if info, err := os.Stat(filePath); err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
-                return violations, nil
-        }
+	if info, err := os.Stat(filePath); err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
+		return violations, nil
+	}
 
-        content, err := os.ReadFile(filePath)
+	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return violations, err
 	}

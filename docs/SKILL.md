@@ -24,7 +24,10 @@ This tool will analyze your `git diff` and cross-reference the lines you modifie
 3. **Self-Correction (The Nudge):**
    If you receive an AI WARNING, you must immediately pause and reconsider your approach.
    - **Attempt to Refactor:** Can you extract a helper function? Can you simplify the boolean logic? Can you use early returns? Refactor your code and run `check-diff` again.
-   - **Declare an Exception:** If refactoring is impossible due to tight legacy coupling or strict domain requirements, you must explicitly declare an exception. Add a standard linter suppression comment (e.g., `//nolint:gocognit` for Go, `// eslint-disable-next-line complexity` for JS, `# pylint: disable=too-many-branches` for Python) right above the offending code. You MUST also add a brief comment explaining *why* you had to bypass the limit so the human reviewer understands your decision.
+   - **Declare an Exception (The Honest Exception Protocol):** If refactoring is impossible due to tight legacy coupling, strict domain requirements, or because the logic is **highly cohesive** (e.g., a centralized router, a massive `switch` statement mapping values, or deeply coupled network protocol logic), DO NOT fragment the code into unreadable helpers just to appease the metric. Instead, add a standard linter suppression comment (e.g., `//nolint:gocognit` for Go, `// eslint-disable-next-line complexity` for JS, `# pylint: disable=too-many-branches` for Python) right above the offending code. You MUST also add a brief comment explaining *why* you had to bypass the limit so the human reviewer understands your decision.
+
+### AI Engineering Best Practices (When Refactoring)
+*   **The Parameter Object Pattern:** If a function exceeds the Argument Count threshold (usually 4), do NOT attempt to shuffle data awkwardly. Always introduce a **Parameter Object** (a dedicated struct/interface) to encapsulate the arguments. This is an AI "Super-Pattern" that drastically reduces parameter hallucination and keeps code robust against future API expansions.
 
 ### Golden Rule
 Never ignore an AI WARNING. You must either refactor until `check-diff` is clean, or explicitly suppress the warning with a documented inline comment.

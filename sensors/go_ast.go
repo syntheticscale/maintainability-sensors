@@ -1,6 +1,7 @@
 package sensors
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -16,13 +17,13 @@ type GoMetrics struct {
 
 // ParseGoAST reads a Go file and extracts maintainability metrics natively.
 func ParseGoAST(filePath string) ([]Violation, error) {
-        var violations []Violation
+	var violations []Violation
 
-        if info, err := os.Stat(filePath); err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
-                return violations, nil
-        }
+	if info, err := os.Stat(filePath); err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
+		return violations, nil
+	}
 
-        fset := token.NewFileSet()
+	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
 		return violations, err

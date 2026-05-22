@@ -21,6 +21,16 @@ func GenerateMarkdownScorecard(results []sensors.OrchestratorResult) string {
 	var sb strings.Builder
 
 	sb.WriteString("# 📡 Maintainability Sensors Scorecard\n\n")
+	sb.WriteString(generateSummaryTable(results))
+	sb.WriteString("\n---\n\n")
+	sb.WriteString(generatePromptsSection(results))
+	sb.WriteString(generateExceptionsSection(results))
+
+	return sb.String()
+}
+
+func generateSummaryTable(results []sensors.OrchestratorResult) string {
+	var sb strings.Builder
 	sb.WriteString("## 📊 Scan Summary\n\n")
 	sb.WriteString("| File | Language | Max Complexity | Max Func Lines | Max Params | Status |\n")
 	sb.WriteString("| :--- | :--- | :---: | :---: | :---: | :---: |\n")
@@ -36,34 +46,25 @@ func GenerateMarkdownScorecard(results []sensors.OrchestratorResult) string {
 				fileBase, strings.ToUpper(res.Language), res.Metrics.Complexity, res.Metrics.FunctionLength, res.Metrics.ArgumentCount, status))
 		}
 	}
+	return sb.String()
+}
 
-	sb.WriteString("\n---\n\n")
-
-	// Self-Correction Prompts Section
-	hasViolations := false
+func generatePromptsSection(results []sensors.OrchestratorResult) string {
+	var sb strings.Builder
 	var promptsSB strings.Builder
 	promptsSB.WriteString("## ⚠️ Actionable Refactoring Prompts\n")
 	promptsSB.WriteString("*REFACTORING PROMPT: Refactor these violations:*\n\n")
+	hasViolations := false
 
 	for _, res := range results {
 		if !res.ToolingDetected {
 			continue
 		}
-		var filePrompts []string
-		if res.Metrics.Complexity > sensors.BaselineComplexity {
-			filePrompts = append(filePrompts, fmt.Sprintf("  * Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, sensors.BaselineComplexity))
-		}
-		if res.Metrics.FunctionLength > sensors.BaselineFunctionLength {
-			filePrompts = append(filePrompts, fmt.Sprintf("  * Function lines is %d (Max %d). Modularize this block into separate functional components.", res.Metrics.FunctionLength, sensors.BaselineFunctionLength))
-		}
-		if res.Metrics.ArgumentCount > sensors.BaselineArgumentCount {
-			filePrompts = append(filePrompts, fmt.Sprintf("  * Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, sensors.BaselineArgumentCount))
-		}
-
-		if len(filePrompts) > 0 {
+		prompts := getFilePrompts(res)
+		if len(prompts) > 0 {
 			hasViolations = true
 			promptsSB.WriteString(fmt.Sprintf("### 📄 `%s`:\n", filepath.Base(res.FilePath)))
-			for _, p := range filePrompts {
+			for _, p := range prompts {
 				promptsSB.WriteString(p + "\n")
 			}
 			promptsSB.WriteString("\n")
@@ -74,12 +75,29 @@ func GenerateMarkdownScorecard(results []sensors.OrchestratorResult) string {
 		sb.WriteString(promptsSB.String())
 		sb.WriteString("\n*If refactoring is impossible, REFACTORING PROMPT: suppress the warning with standard inline annotations (e.g. // eslint-disable-next-line -- reason) to keep the baseline clean.*\n\n---\n\n")
 	}
+	return sb.String()
+}
 
-	// Exceptions Section
-	hasExceptions := false
+func getFilePrompts(res sensors.OrchestratorResult) []string {
+	var prompts []string
+	if res.Metrics.Complexity > sensors.BaselineComplexity {
+		prompts = append(prompts, fmt.Sprintf("  * Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, sensors.BaselineComplexity))
+	}
+	if res.Metrics.FunctionLength > sensors.BaselineFunctionLength {
+		prompts = append(prompts, fmt.Sprintf("  * Function lines is %d (Max %d). Modularize this block into separate functional components.", res.Metrics.FunctionLength, sensors.BaselineFunctionLength))
+	}
+	if res.Metrics.ArgumentCount > sensors.BaselineArgumentCount {
+		prompts = append(prompts, fmt.Sprintf("  * Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, sensors.BaselineArgumentCount))
+	}
+	return prompts
+}
+
+func generateExceptionsSection(results []sensors.OrchestratorResult) string {
+	var sb strings.Builder
 	var excSB strings.Builder
 	excSB.WriteString("## 🛠️ Configured Exceptions (Relaxed Constraints)\n")
 	excSB.WriteString("*The following custom limits are set to relaxed values in the configuration. These relaxed thresholds must be manually verified by a human during code review.*\n\n")
+	hasExceptions := false
 
 	for _, res := range results {
 		if len(res.Exceptions) > 0 {
@@ -96,7 +114,6 @@ func GenerateMarkdownScorecard(results []sensors.OrchestratorResult) string {
 		sb.WriteString(excSB.String())
 		sb.WriteString("> 💡 *“Looking at the exceptions AI created was a good point to start my code review.”* - Birgitta Böckeler\n\n")
 	}
-
 	return sb.String()
 }
 
@@ -118,81 +135,120 @@ func WriteGitHubStepSummary(scorecard string) error {
 	return nil
 }
 
+type prComment struct {
+	Path string `json:"path"`
+	Body string `json:"body"`
+	Line int    `json:"line"`
+}
+
 // PostGitHubReview posts inline PR review comments using the GitHub Pull Request Review API.
 func PostGitHubReview(results []sensors.OrchestratorResult) error {
+	token, repo, prNumber, err := getGitHubReviewContext()
+	if err != nil {
+		return err
+	}
+
+	comments := buildPRComments(results)
+	if len(comments) == 0 {
+		return nil
+	}
+
+	return sendGitHubReviewRequest(token, repo, prNumber, comments)
+}
+
+func getGitHubReviewContext() (string, string, string, error) {
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
-		return fmt.Errorf("GITHUB_TOKEN environment variable is not set")
+		return "", "", "", fmt.Errorf("GITHUB_TOKEN environment variable is not set")
 	}
 
 	repo := os.Getenv("GITHUB_REPOSITORY")
 	if repo == "" {
-		return fmt.Errorf("GITHUB_REPOSITORY environment variable is not set (expected 'owner/repo')")
+		return "", "", "", fmt.Errorf("GITHUB_REPOSITORY environment variable is not set (expected 'owner/repo')")
 	}
 
 	prNumber, err := getPRNumber()
 	if err != nil {
-		return fmt.Errorf("failed to detect PR number: %w", err)
+		return "", "", "", fmt.Errorf("failed to detect PR number: %w", err)
 	}
 
-	type prComment struct {
-		Path string `json:"path"`
-		Body string `json:"body"`
-		Line int    `json:"line"`
-	}
+	return token, repo, prNumber, nil
+}
+
+func buildPRComments(results []sensors.OrchestratorResult) []prComment {
 	var comments []prComment
-
 	for _, res := range results {
 		if !hasViolations(res) {
 			continue
 		}
 
-		limitComplexity := sensors.BaselineComplexity
-		limitLength := sensors.BaselineFunctionLength
-		limitArgs := sensors.BaselineArgumentCount
-
-		for _, exc := range res.Exceptions {
-			if exc.RuleName == "Cyclomatic Complexity" {
-				limitComplexity = exc.ConfiguredVal
-			} else if exc.RuleName == "Function Length" {
-				limitLength = exc.ConfiguredVal
-			} else if exc.RuleName == "Argument Count" {
-				limitArgs = exc.ConfiguredVal
-			}
+		body := buildPRCommentBody(res)
+		if body == "" {
+			continue
 		}
 
-		var filePrompts []string
-		if res.Metrics.Complexity > limitComplexity {
-			filePrompts = append(filePrompts, fmt.Sprintf("Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, limitComplexity))
-		}
-		if res.Metrics.FunctionLength > limitLength {
-			filePrompts = append(filePrompts, fmt.Sprintf("Function lines is %d (Max %d). Modularize this block into separate functional components.", res.Metrics.FunctionLength, limitLength))
-		}
-		if res.Metrics.ArgumentCount > limitArgs {
-			filePrompts = append(filePrompts, fmt.Sprintf("Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, limitArgs))
-		}
+		comments = append(comments, prComment{
+			Path: filepath.ToSlash(getRelativePath(res.FilePath)),
+			Body: body,
+			Line: 1,
+		})
+	}
+	return comments
+}
 
-		if len(filePrompts) > 0 {
-			body := strings.Join(filePrompts, "\n\n")
-			relPath := res.FilePath
-			if filepath.IsAbs(relPath) {
-				wd, _ := os.Getwd()
-				if rel, err := filepath.Rel(wd, relPath); err == nil {
-					relPath = rel
-				}
-			}
-			comments = append(comments, prComment{
-				Path: filepath.ToSlash(relPath),
-				Body: body,
-				Line: 1,
-			})
-		}
+func getRelativePath(absPath string) string {
+	if !filepath.IsAbs(absPath) {
+		return absPath
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return absPath
+	}
+	if rel, err := filepath.Rel(wd, absPath); err == nil {
+		return rel
+	}
+	return absPath
+}
+
+func buildPRCommentBody(res sensors.OrchestratorResult) string {
+	limitComplexity, limitLength, limitArgs := getLimits(res)
+
+	var filePrompts []string
+	if res.Metrics.Complexity > limitComplexity {
+		filePrompts = append(filePrompts, fmt.Sprintf("Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, limitComplexity))
+	}
+	if res.Metrics.FunctionLength > limitLength {
+		filePrompts = append(filePrompts, fmt.Sprintf("Function lines is %d (Max %d). Modularize this block into separate functional components.", res.Metrics.FunctionLength, limitLength))
+	}
+	if res.Metrics.ArgumentCount > limitArgs {
+		filePrompts = append(filePrompts, fmt.Sprintf("Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, limitArgs))
 	}
 
-	if len(comments) == 0 {
-		return nil
+	if len(filePrompts) > 0 {
+		return strings.Join(filePrompts, "\n\n")
 	}
+	return ""
+}
 
+func getLimits(res sensors.OrchestratorResult) (int, int, int) {
+	limitComplexity := sensors.BaselineComplexity
+	limitLength := sensors.BaselineFunctionLength
+	limitArgs := sensors.BaselineArgumentCount
+
+	for _, exc := range res.Exceptions {
+		switch exc.RuleName {
+		case "Cyclomatic Complexity":
+			limitComplexity = exc.ConfiguredVal
+		case "Function Length":
+			limitLength = exc.ConfiguredVal
+		case "Argument Count":
+			limitArgs = exc.ConfiguredVal
+		}
+	}
+	return limitComplexity, limitLength, limitArgs
+}
+
+func sendGitHubReviewRequest(token, repo, prNumber string, comments []prComment) error {
 	baseURL := os.Getenv("GITHUB_API_URL")
 	if baseURL == "" {
 		baseURL = "https://api.github.com"

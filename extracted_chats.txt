@@ -1,0 +1,158 @@
+--- File: session-2026-05-20T13-58-ebc2dc9b.jsonl ---
+USER: look at the blog post referenced and see how well it implements the solution mentino and handles the problems it talks about
+
+--- File: session-2026-05-20T23-13-cb54c448.jsonl ---
+USER: do a radically candid review of this repo, what's left from it to be a useful tool for most companies using AI coding agents
+USER: I dont think the promise makes sense, let's drop that unless there's a good reason not to. let's document what we found here and use work out what we should fix first
+USER: use subagents to fix
+USER: Yes, use subagents to fix those in turn
+USER: Is a native go parser actaully the right approach?
+USER: let's try the tree sitter appraoch in a subagent, in a subagent, see if you can find any other incorrect trade offs/approaches like that in this repo
+USER: Use subagents to fix each of these in turn, first document the gaps
+USER: use a sub agent to review the current state of the repo to see what other types of issues should be looked for, I am thinking that it would be worthwhile going through the commit history to capture all the gaps which were found and fixed to get a better idea of what earlier rounds fixed
+USER: let's go up a level, what would an architect focus on? or is there a better "hat" to wear to understand what should be done?
+USER: what are the counter arguments to that?
+USER: what's a good balance between the two? It sounds like the plugins is a good idea either way
+USER: yes, let's capture that properly then use subagents to implement if that makes sense, stage the work to what a single subagent could do
+USER: We still have the 5 issues in "Current Unresolved Issues & Vulnerabilities" let's track those, are they all still valid? give me another review of them
+USER: I prefer component tests instead of having implementation details tested by unit tests, let's capture that in the docs, do add unit tests where there is complex logic. Why would I want to process 1000+ violations, once I have enough to know it fails, why do I need to go through the rest, it should fail early. Dead code should be removed first. The error handling should be fixed. use subagents to fix anything that's clear, otehrwise interview me for details
+USER: use another subagent to do yet another reivew, ask it to be radically candid and to consider the use case for the tool
+USER: does it have java support?
+USER: do another review with a subagent looking again with the enterprise viewpoint, or a more suitable viewpoint
+USER: how should that be fixed? what are the trade offs? should the architecture be updated?
+USER: Ok, use subagents for fixes for those in turn
+USER: document what was done, and do another review with a subagent
+USER: Let's go up a level to see what systemic issues there are, would what a distinguised engineer note and think
+USER: Is this an argument against the original article referenced in the readme?
+USER: So this should be a skill that's used by the agent? Should I set it up for two purposes, a one time audit against a repo, and something to be used by a coding assistant? if it's for a coding assistant then it should focus on the delta instead of the whole repo
+USER: let's document the pivot first
+USER: work out a detailed strategy for the pivot and write that out before we look at using subagents to implement
+USER: Let's sanity check if there are any other flaws or gaps in the approach, also try a few other hats to see if there are any larger concerns over the strategy
+USER: Anything else to consider? write out the strategy and plan and then review it again before we look to implelent it with subagents
+USER: Ok, let's work through it, the subagent should stop and report back if it finds any blocking issues or areas that warrant further questions, that should be captured as stanard practice
+USER: yes, let's go through all the other phases in turn
+USER: Let's do more testing, how can we be confident that this makes sense?
+USER: are all the docs up to date? is the README still up to date?
+USER: use subagents to do the hard pivot
+USER: are all the docs up to date? is the README still up to date? does it explain clearly what the tool is, and the mindset in how it should be used?
+USER: do another review with a subagent looking again with the enterprise viewpoint, then a few other suitable viewpoint
+USER: look at that list of problems and in a subagent see if there is a broader class of problems that are missed beyond what has already been found, then in another subagent, use that info to work out if we take a broader view if there are more problems to be found
+USER: Should I add some skills based on what I've done to this repo based on the approach I've used here of multiple rounds of review and meta review. It seems like 90% of the works was after the first agent working on this said it was done
+USER: what's a good way to capture this in the repo itself that works across this, opencode, claude code etc? is there a common way to make it across the most common ai agents?
+USER: update the status files with what we have found so far on what should be fixed
+USER: I want it to be referenced by agents.md, not there itself so it's only used when reviewing, it should say that large changes should always result in a self review
+USER: let's plan how we should address the issues found by reviewers
+USER: use subagents to do all four phases, one at a time
+USER: run the reviews again
+USER: Are you using subagents for that review? if not do so
+USER: let's fix the security issue
+USER: do another security review
+USER: in a subagent
+USER: Let's use subagents to find and fix problems, let's the agent do a few rounds of this on its own before starting a new agents to start the process agian until we cover all the high and critical issues
+USER: has there been a round of reviews where no further problems found?
+USER: commit what we have so far, why hasn't there been any recent commits?
+USER: and make sure to always commit after each singificant step
+USER: try again
+USER: try again
+USER: try again
+USER: try again
+USER: run another round of checks in a subagent do the reviews again
+USER: yes
+USER: remember to commit and push once it's done then repeat the process with another reivew and fix if required
+USER: let's dogfood our own software, we want our checks to run before we commit each time, use a subagent to implement that and then to fix the tests: Run go test ./...
+go: downloading github.com/alecthomas/kong v1.15.0
+go: downloading golang.org/x/sync v0.20.0
+go: downloading github.com/pelletier/go-toml/v2 v2.3.1
+go: downloading github.com/smacker/go-tree-sitter v0.0.0-20240827094217-dd81d9e9be82
+go: downloading gopkg.in/yaml.v3 v3.0.1
+?   	github.com/syntheticscale/maintainability-sensors	[no test... [TRUNCATED]
+USER: we should update the readme etc. are all the docs up to date? also the precommit hook should run the same test as CI
+USER: let's try making a chnage which should make the hook fail, to see what happens
+
+you didn't commit and push
+USER: run another round of checks in a subagent do the reviews again and fixes if it finds anything important
+USER: consider if any other hats are worth using, also how does this differ from just integrating a few of the normal static analysis tool by hand instead of using this tool? what value does this tool add?
+
+consider what subagents if any should be run again to ensure we get a clean run and confidence that we're done
+
+--- File: session-2026-05-22T03-49-9fe55272.jsonl ---
+
+--- File: session-2026-05-20T12-00-e84cba57.jsonl ---
+USER: reivew this repo and be radically candid
+USER: see the newest files for updates, then write out your own plan
+USER: ok
+USER: Make sure the docs are accurate, especially the dependancies, let's entirely remove that claim as there's no point, commit the changes as you go
+USER: do a full review again
+USER: update the status and plan files, remove what's no longer useful
+
+I want the code to be beautiful,  well designed, architected, etc, as if written by an principal engineer
+USER: Fix the ADR for dependanies
+USER: what's next, is the code quality good enough now?
+USER: yes, use subagents to fix
+USER: continue with subagents
+USER: add tests which is geniunely useful, not just to push for the 80% number, I don't like 80% coverage actually, I prefer component tests rather than many unit tests to avoid overfocus on implementation details
+USER: Let's remove redundant tests
+USER: this was on CI: Run go test ./...
+?   	github.com/paulolai/maintainability-sensors	[no test files]
+[TESTED] Tested markdown report to /tmp/TestWriteReports_WritesMarkdown880682243/001/report.md
+[TESTED] Tested JSON report to /tmp/TestWriteReports_WritesJSON3376149346/001/report.json
+[TESTED] Tested HTML report to /tmp/TestWriteReports_WritesHTML2146571502/001/report.html
+[TESTED] Tested markdown report to /tmp/TestWriteReports_WritesAllFormats1832635837/001/report.md
+[TESTED] Tested JSON report ... [TRUNCATED]
+USER: check for more hardcoding
+USER: yes a subagent to do a radically candid review
+USER: this failed on CI: Run go test ./...
+?   	github.com/paulolai/maintainability-sensors	[no test files]
+# github.com/paulolai/maintainability-sensors/cli [github.com/paulolai/maintainability-sensors/cli.test]
+Error: cli/cli_test.go:556:31: undefined: ReportOptions
+Error: cli/cli_test.go:556:31: not enough arguments in call to writeReports
+	have ([]sensors.OrchestratorResult, unknown type)
+	want ([]sensors.OrchestratorResult, string, string, string, string)
+Error: cli/cli_test.go:570:31: undefined:... [TRUNCATED]
+USER: use subagents to fix those problems, commit after each step
+USER: comntinue
+USER: continue
+USER: are all the docs up to date?
+USER: can the readme be rewritten to be better suited for someoen who had read the blog, or who is using AI coding agents and don't want to end up with a big ball of mud
+
+is the  Production Complexity Validation Matrix still accurate?
+USER: should I clear out some of the git history on github?
+USER: I wonder if I should make it friendly, I don't want to offend too many people without reason
+USER: should I squash all the commits?
+USER: what's next? are all the status files up to date?
+USER: use a subagent to find more feedback and what should be done next
+USER: let's capture that feedback and then use subagents to address the first three points
+USER: use subagents for the fixes
+USER: what's next?
+USER: use subagents to implement those suggestions
+USER: github.com/paulolai/maintainability-sensors/cli is the wrong org, it's github.com/syntheticscale/maintainability-sensors/cli
+
+The pipeline script has this as the path: # Ensure user local bin folders and local venv are in PATH (for isolated pip tools like pylint)
+export PATH="./.venv/bin:$HOME/.local/bin:$HOME/.hermes/home/.local/bin:/usr/local/bin:$PATH" that doesn't makes sense, why is hermes in there?
+USER: use a subagent to find issues like that
+USER: I do want to keep my name in there, where should I put it? how do I claim authorship?
+USER: update all docs that are out of date
+
+--- File: session-2026-05-20T22-48-3ac1c5e0.jsonl ---
+USER: let's use a library for comand line parsing in '/home/paulo/code/maintainability-sensors/cli/cmd.go'
+USER: what are the pros/cons of different options for arg parsing?
+USER: is it popular enough?
+USER: yes
+USER: this is what I see on GHA - Run go test ./...
+go: downloading golang.org/x/sync v0.20.0
+go: downloading github.com/pelletier/go-toml/v2 v2.3.1
+go: downloading gopkg.in/yaml.v3 v3.0.1
+?   	github.com/syntheticscale/maintainability-sensors	[no test files]
+ok  	github.com/syntheticscale/maintainability-sensors/cli	1.252s
+ok  	github.com/syntheticscale/maintainability-sensors/sensors	0.071s
+=========================================
+ Orchestrating Bootstrap for Go (Standard modules)...
+==============... [TRUNCATED]
+
+--- File: session-2026-05-21T07-06-41547e13.jsonl ---
+USER: how can I dump out the full chat history from a session out of here?
+USER: I want to dump out all the chats in this project to json files
+USER: go through the chat logs and pull out the highlights, key summary, as a demo for how to use these tools, what I did well, where I didn't, this is to share with a friend who's hasn't used ai coding agents as much
+USER: write this out to the same folder
+USER: go through the chat logs and pull out the highlights, key summary, as a demo for how to use these tools, what I did well, where I didn't, this is to share with a friend who's hasn't used ai coding agents as much, write out what you find to a new md file
+

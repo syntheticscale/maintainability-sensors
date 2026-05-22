@@ -1,0 +1,8 @@
+[MASTER]
+load-plugins=pylint.extensions.mccabe
+
+[DESIGN]
+max-args=4
+max-statements=50
+max-complexity=8
+max-module-lines=300

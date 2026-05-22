@@ -98,76 +98,97 @@ func LoadPolicy(configPath string, defaultSeverity string, severityOverrides []s
 		Rules:           make(map[string]RulePolicy),
 	}
 
-	// Load from config file if it exists.
-	var config *CheckDiffConfigFile
-	if configPath != "" {
-		if _, err := os.Stat(configPath); err == nil {
-			c, err := loadConfigFile(configPath)
-			if err != nil {
-				return nil, err
-			}
-			config = c
-		}
+	if err := applyConfigFile(policy, configPath); err != nil {
+		return nil, err
 	}
 
-	// Apply config file values.
-	if config != nil {
-		// Default severity from config.
-		if config.CheckDiff.DefaultSeverity != "" {
-			sev := Severity(config.CheckDiff.DefaultSeverity)
-			if !isValidSeverity(sev) {
-				return nil, fmt.Errorf("invalid default-severity %q in config file, expected error, warn, or ignore", config.CheckDiff.DefaultSeverity)
-			}
-			policy.DefaultSeverity = sev
-		}
-
-		// Per-rule settings from config.
-		for _, rule := range config.CheckDiff.Rules {
-			if !isValidRuleName(rule.Name) {
-				return nil, fmt.Errorf("invalid rule name %q in config file, expected Complexity, FunctionLength, or ArgumentCount", rule.Name)
-			}
-			if rule.Severity != "" {
-				sev := Severity(rule.Severity)
-				if !isValidSeverity(sev) {
-					return nil, fmt.Errorf("invalid severity %q for rule %s in config file, expected error, warn, or ignore", rule.Severity, rule.Name)
-				}
-				policy.Rules[rule.Name] = RulePolicy{
-					Name:      rule.Name,
-					Severity:  sev,
-					Threshold: rule.Threshold,
-				}
-			} else {
-				policy.Rules[rule.Name] = RulePolicy{
-					Name:      rule.Name,
-					Severity:  policy.DefaultSeverity,
-					Threshold: rule.Threshold,
-				}
-			}
-		}
+	if err := applyCLIDefaultSeverity(policy, defaultSeverity); err != nil {
+		return nil, err
 	}
 
-	// Apply CLI --default-severity override (takes precedence over config).
-	if defaultSeverity != "" {
-		sev := Severity(defaultSeverity)
+	if err := applyCLISeverityOverrides(policy, severityOverrides); err != nil {
+		return nil, err
+	}
+
+	return policy, nil
+}
+
+func applyConfigFile(policy *CheckDiffPolicy, configPath string) error {
+	if configPath == "" {
+		return nil
+	}
+	if _, err := os.Stat(configPath); err != nil {
+		return nil
+	}
+
+	config, err := loadConfigFile(configPath)
+	if err != nil {
+		return err
+	}
+
+	if err := applyConfigDefaultSeverity(policy, config); err != nil {
+		return err
+	}
+
+	return applyConfigRules(policy, config)
+}
+
+func applyConfigDefaultSeverity(policy *CheckDiffPolicy, config *CheckDiffConfigFile) error {
+	if config.CheckDiff.DefaultSeverity != "" {
+		sev := Severity(config.CheckDiff.DefaultSeverity)
 		if !isValidSeverity(sev) {
-			return nil, fmt.Errorf("invalid --default-severity %q, expected error, warn, or ignore", defaultSeverity)
+			return fmt.Errorf("invalid default-severity %q in config file, expected error, warn, or ignore", config.CheckDiff.DefaultSeverity)
 		}
 		policy.DefaultSeverity = sev
 	}
+	return nil
+}
 
-	// Apply CLI --severity overrides (takes precedence over everything).
+func applyConfigRules(policy *CheckDiffPolicy, config *CheckDiffConfigFile) error {
+	for _, rule := range config.CheckDiff.Rules {
+		if !isValidRuleName(rule.Name) {
+			return fmt.Errorf("invalid rule name %q in config file, expected Complexity, FunctionLength, or ArgumentCount", rule.Name)
+		}
+		sev := policy.DefaultSeverity
+		if rule.Severity != "" {
+			sev = Severity(rule.Severity)
+			if !isValidSeverity(sev) {
+				return fmt.Errorf("invalid severity %q for rule %s in config file, expected error, warn, or ignore", rule.Severity, rule.Name)
+			}
+		}
+		policy.Rules[rule.Name] = RulePolicy{
+			Name:      rule.Name,
+			Severity:  sev,
+			Threshold: rule.Threshold,
+		}
+	}
+	return nil
+}
+
+func applyCLIDefaultSeverity(policy *CheckDiffPolicy, defaultSeverity string) error {
+	if defaultSeverity != "" {
+		sev := Severity(defaultSeverity)
+		if !isValidSeverity(sev) {
+			return fmt.Errorf("invalid --default-severity %q, expected error, warn, or ignore", defaultSeverity)
+		}
+		policy.DefaultSeverity = sev
+	}
+	return nil
+}
+
+func applyCLISeverityOverrides(policy *CheckDiffPolicy, severityOverrides []string) error {
 	for _, override := range severityOverrides {
 		parts := strings.SplitN(override, ":", 2)
 		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid --severity format %q, expected Rule:level", override)
+			return fmt.Errorf("invalid --severity format %q, expected Rule:level", override)
 		}
 		name, sevStr := parts[0], parts[1]
 		if !isValidRuleName(name) {
-			return nil, fmt.Errorf("invalid rule name %q in --severity, expected Complexity, FunctionLength, or ArgumentCount", name)
+			return fmt.Errorf("invalid rule name %q in --severity, expected Complexity, FunctionLength, or ArgumentCount", name)
 		}
 		sev := Severity(sevStr)
 		if !isValidSeverity(sev) {
-			return nil, fmt.Errorf("invalid severity %q for rule %s in --severity, expected error, warn, or ignore", sevStr, name)
+			return fmt.Errorf("invalid severity %q for rule %s in --severity, expected error, warn, or ignore", sevStr, name)
 		}
 
 		// Preserve existing threshold if rule already exists in policy.
@@ -178,8 +199,7 @@ func LoadPolicy(configPath string, defaultSeverity string, severityOverrides []s
 			Threshold: existing.Threshold,
 		}
 	}
-
-	return policy, nil
+	return nil
 }
 
 // loadConfigFile reads and parses the YAML config file.
