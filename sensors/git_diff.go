@@ -40,7 +40,7 @@ func GetModifiedLines(targetBranch string, repoPath string) (map[string][]LineRa
 	// Get modified files using git diff
 	ctxDiff, cancelDiff := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelDiff()
-	diffCmd := exec.CommandContext(ctxDiff, "git", "diff", targetBranch, "--unified=0", "--")
+	diffCmd := exec.CommandContext(ctxDiff, "git", "-c", "core.quotepath=false", "diff", targetBranch, "--unified=0", "--")
 	diffCmd.Dir = repoPath
 
 	stdoutPipe, err := diffCmd.StdoutPipe()
@@ -63,6 +63,11 @@ func GetModifiedLines(targetBranch string, repoPath string) (map[string][]LineRa
 
 		if matches := diffFileHeaderRegex.FindStringSubmatch(line); len(matches) > 1 {
 			currentFile = strings.TrimSpace(matches[1])
+			if strings.HasPrefix(currentFile, `"`) && strings.HasSuffix(currentFile, `"`) {
+				if unquoted, err := strconv.Unquote(currentFile); err == nil {
+					currentFile = unquoted
+				}
+			}
 			// Initialize the slice for this file if it doesn't exist
 			if _, exists := result[currentFile]; !exists {
 				result[currentFile] = []LineRange{}
@@ -115,16 +120,14 @@ func GetModifiedLines(targetBranch string, repoPath string) (map[string][]LineRa
 	// Get untracked files
 	ctxUntracked, cancelUntracked := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancelUntracked()
-	untrackedCmd := exec.CommandContext(ctxUntracked, "git", "ls-files", "--others", "--exclude-standard", "--")
+	untrackedCmd := exec.CommandContext(ctxUntracked, "git", "ls-files", "-z", "--others", "--exclude-standard", "--")
 	untrackedCmd.Dir = repoPath
 	untrackedOut, err := untrackedCmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("git ls-files failed: %w", err)
 	}
 
-	untrackedScanner := bufio.NewScanner(bytes.NewReader(untrackedOut))
-	for untrackedScanner.Scan() {
-		file := strings.TrimSpace(untrackedScanner.Text())
+	for _, file := range strings.Split(string(untrackedOut), "\x00") {
 		if file != "" {
 			fullPath := file
 			if repoPath != "" && repoPath != "." {
@@ -137,10 +140,6 @@ func GetModifiedLines(targetBranch string, repoPath string) (map[string][]LineRa
 			}
 			result[file] = []LineRange{{Start: 1, End: 999999999}}
 		}
-	}
-
-	if err := untrackedScanner.Err(); err != nil {
-		return nil, fmt.Errorf("error parsing untracked files output: %w", err)
 	}
 
 	return result, nil

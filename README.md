@@ -68,6 +68,9 @@ chmod +x .git/hooks/pre-commit
 
 ## 🚦 Usage & Commands
 
+### Global Flags
+* `-q`, `--quiet`: Suppress non-critical diagnostic output (stderr). Useful for CI/CD pipelines to reduce noise.
+
 ### 1. `check-diff` (Delta Mode: The Agent Skill)
 The primary operational mode for AI agents. It analyzes `git diff HEAD` (or a specific branch) and cross-references it with maintainability violations, only alerting on code the agent actively modified. This catches new architectural rot instantly without punishing the agent for legacy debt.
 
@@ -93,7 +96,14 @@ maintainability-sensors run .
 maintainability-sensors run . --markdown-out=report.md --html-out=report.html
 ```
 
-### 3. `bootstrap` (Environment-Hardening)
+### 3. `generate` (Report Reconstruction)
+Reconstruct visual reports from a saved JSON scorecard.
+
+```bash
+maintainability-sensors generate report.json --html-out=report.html --markdown-out=report.md
+```
+
+### 4. `bootstrap` (Environment-Hardening)
 Auto-detects the languages in your codebase and writes pristine, ready-to-use maintainability configurations enforcing strict thresholds:
 * **File Length:** max 300 lines
 * **Function Length:** max 50 lines

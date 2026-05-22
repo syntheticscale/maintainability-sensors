@@ -23,8 +23,8 @@ This document stages the refactoring of `maintainability-sensors` from a monolit
   3. Refactor `runRuboCopBatch` and `runStandardRBBatch` into `RuboCopPlugin` and `StandardRBPlugin`.
   4. Register these in the `PluginRegistry`.
 
-## Phase 3: Refactor Tier 1 (Native Tree-sitter)
-- **Goal:** Port the native AST parsers (Go, C#, Java) to the Plugin interface to unify the execution pipeline.
+## Phase 3: Refactor Tier 1 (Native AST)
+- **Goal:** Port the native AST parsers (`go/ast` for Go, `tree-sitter` for C# and Java) to the Plugin interface to unify the execution pipeline.
 - **Tasks:**
   1. Refactor the `ParseGoAST`, `ParseCSharp`, and `ParseJava` logic to wrap them in `GoPlugin`, `CSharpPlugin`, and `JavaPlugin` structs that implement the `Plugin` interface.
   2. Ensure they accept a batch of files (even if they loop internally) to fulfill the `Analyze(filePaths []string)` contract.

@@ -235,7 +235,7 @@ func (c *CheckDiffCmd) Run() error {
 func Execute() {
 	ctx := kong.Parse(&cli,
 		kong.Name("maintainability-sensors"),
-		kong.Description("Maintainability Sensors for Coding Agents CLI 📡\n\nExamples:\n  maintainability-sensors run .\n  maintainability-sensors run . --markdown-out=report.md --html-out=report.html\n  maintainability-sensors run src/api.py --json\n  maintainability-sensors generate report.json --html-out=report.html --markdown-out=report.md\n  maintainability-sensors bootstrap /path/to/my/project"),
+		kong.Description("Maintainability Sensors for Coding Agents CLI 📡\n\nExamples:\n  maintainability-sensors check-diff\n  maintainability-sensors run .\n  maintainability-sensors run . --markdown-out=report.md --html-out=report.html\n  maintainability-sensors run src/api.py --json\n  maintainability-sensors generate report.json --html-out=report.html --markdown-out=report.md\n  maintainability-sensors bootstrap /path/to/my/project\n  maintainability-sensors -q run ."),
 		kong.UsageOnError(),
 	)
 	err := ctx.Run()
@@ -268,7 +268,7 @@ func FindFiles(targetPath string) ([]string, bool, error) {
 			if resolvedPath, err := filepath.EvalSymlinks(absPath); err == nil {
 				absPath = resolvedPath
 			}
-			if strings.HasPrefix(absPath, absTargetDir) {
+			if strings.HasPrefix(absPath, absTargetDir+string(filepath.Separator)) || absPath == absTargetDir {
 				files = append(files, cleanPath)
 			}
 		}
