@@ -36,7 +36,7 @@ jobs:
 
       # 2. Run the delta scan (only checks changed lines against main)
       - name: Run Maintainability Scan (Delta)
-        run: maintainability-sensors check-diff origin/main
+        run: maintainability-sensors check-diff --target-branch=origin/main
 ```
 
 ---
@@ -97,7 +97,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          maintainability-sensors check-diff origin/main --github-pr
+          maintainability-sensors run . --github-pr
 ```
 
 ---

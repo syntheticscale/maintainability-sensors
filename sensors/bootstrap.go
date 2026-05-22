@@ -220,9 +220,13 @@ func bootstrapTSJS(absPath string) error {
 	anchors := ESLintConfigParser{}.Anchors()
 	var existingConfig string
 	for _, anchor := range anchors {
-		if _, err := os.Stat(filepath.Join(absPath, anchor)); err == nil {
+		p := filepath.Join(absPath, anchor)
+		if info, err := os.Stat(p); err == nil {
 			if anchor == "package.json" {
-				content, _ := os.ReadFile(filepath.Join(absPath, anchor))
+				if !info.Mode().IsRegular() || info.Size() > 2*1024*1024 {
+					continue
+				}
+				content, _ := os.ReadFile(p)
 				if !strings.Contains(string(content), `"eslintConfig"`) {
 					continue
 				}

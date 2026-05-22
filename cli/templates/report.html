@@ -387,7 +387,7 @@
 		<div class="split-layout">
 			<!-- AI Prompts Column -->
 			<section>
-				<h2>🤖 AI Agent Self-Correction Prompts</h2>
+				<h2>🤖 Actionable Refactoring Prompts</h2>
 				<p class="subtitle" style="margin-bottom: 1rem; font-size: 0.9rem;">Copy-paste these instructions directly to your AI agent to trigger auto-refactoring:</p>
 				{{if .HasViolations}}
 					{{range .FilePrompts}}
@@ -411,7 +411,7 @@
 
 			<!-- Exceptions Column -->
 			<section>
-				<h2>🛠️ Exceptions Created by AI (Relaxed Limits)</h2>
+				<h2>🛠️ Configured Exceptions (Relaxed Limits)</h2>
 				<p class="subtitle" style="margin-bottom: 1rem; font-size: 0.9rem;">Manually review relaxed constraints created by agents to prevent architectural decay:</p>
 				{{if .HasExceptions}}
 					{{range .FileExceptions}}
@@ -464,3 +464,4 @@
 	</script>
 </body>
 </html>
+

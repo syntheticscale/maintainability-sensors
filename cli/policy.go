@@ -184,6 +184,9 @@ func LoadPolicy(configPath string, defaultSeverity string, severityOverrides []s
 
 // loadConfigFile reads and parses the YAML config file.
 func loadConfigFile(path string) (*CheckDiffConfigFile, error) {
+	if info, err := os.Stat(path); err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
+		return nil, fmt.Errorf("config file %s is too large or not a regular file", path)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file %s: %w", path, err)

@@ -57,7 +57,7 @@ This writes pristine configurations with strict, deterministic thresholds (e.g.,
 When the AI agent finishes generating a feature or a fix, it must intrinsically run the following command before presenting the code to the user or opening a PR:
 
 ```bash
-maintainability-sensors check-diff origin/main
+maintainability-sensors check-diff --target-branch=origin/main
 ```
 *(Or diffing against the current HEAD if working entirely locally with uncommitted changes)*
 
@@ -79,5 +79,5 @@ A key finding is that we should **not** force a binary "suppress-or-comply" choi
 If the AI agent believes that a threshold should be slightly relaxed for a specific file:
 1.  It edits the local configuration file (e.g., increasing `max-params` from 4 to 5).
 2.  It **must append an inline comment or configuration reason** explaining why.
-3.  Our `maintainability-sensors` scanner will automatically detect this change and flag it under **"Exceptions Created by AI (Relaxed Constraints)"** in the PR scorecard.
+3.  Our `maintainability-sensors` scanner will automatically detect this change and flag it under **"Configured Exceptions (Relaxed Constraints)"** in the PR scorecard.
 4.  This isolates the exact places where the AI struggled to refactor, providing the **perfect starting point for human code reviews**.

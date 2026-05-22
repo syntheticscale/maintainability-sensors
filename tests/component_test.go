@@ -111,7 +111,7 @@ func TestPolyglotComponent(t *testing.T) {
 	}
 
 	// It should flag the relaxed limit we injected
-	if !strings.Contains(outStr, "Exceptions Created by AI (Relaxed Constraints)") {
+	if !strings.Contains(outStr, "Configured Exceptions (Relaxed Constraints)") {
 		t.Error("Failed to detect relaxed constraint section")
 	}
 	if !strings.Contains(outStr, "Cyclomatic Complexity (15 vs baseline 8)") {

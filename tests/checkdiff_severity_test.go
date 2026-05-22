@@ -118,8 +118,8 @@ check-diff:
 	if err != nil {
 		t.Fatalf("unexpected error for warn severity: %v\nOutput: %s", err, output)
 	}
-	if !strings.Contains(output, "AI WARNING") {
-		t.Errorf("expected output to contain 'AI WARNING', got:\n%s", output)
+	if !strings.Contains(output, "REFACTORING PROMPT") {
+		t.Errorf("expected output to contain 'REFACTORING PROMPT', got:\n%s", output)
 	}
 	if strings.Contains(output, "Delta violations found") {
 		t.Errorf("expected no 'Delta violations found' in output, got:\n%s", output)
@@ -155,8 +155,8 @@ check-diff:
 	if exitErr.ExitCode() != 1 {
 		t.Fatalf("expected exit code 1, got %d. Output:\n%s", exitErr.ExitCode(), output)
 	}
-	if !strings.Contains(output, "AI WARNING") {
-		t.Errorf("expected output to contain 'AI WARNING', got:\n%s", output)
+	if !strings.Contains(output, "REFACTORING PROMPT") {
+		t.Errorf("expected output to contain 'REFACTORING PROMPT', got:\n%s", output)
 	}
 	if !strings.Contains(output, "Delta violations found") {
 		t.Errorf("expected output to contain 'Delta violations found', got:\n%s", output)
@@ -188,8 +188,8 @@ check-diff:
 	if err != nil {
 		t.Fatalf("unexpected error when rule is ignored: %v\nOutput: %s", err, output)
 	}
-	if strings.Contains(output, "AI WARNING") {
-		t.Errorf("expected no AI WARNING when ArgumentCount is ignored, got:\n%s", output)
+	if strings.Contains(output, "REFACTORING PROMPT") {
+		t.Errorf("expected no REFACTORING PROMPT when ArgumentCount is ignored, got:\n%s", output)
 	}
 	if strings.Contains(output, "Delta violations found") {
 		t.Errorf("expected no 'Delta violations found', got:\n%s", output)
@@ -221,8 +221,8 @@ check-diff:
 	if err != nil {
 		t.Fatalf("unexpected error when below threshold: %v\nOutput: %s", err, output)
 	}
-	if strings.Contains(output, "AI WARNING") {
-		t.Errorf("expected no AI WARNING when complexity is below threshold, got:\n%s", output)
+	if strings.Contains(output, "REFACTORING PROMPT") {
+		t.Errorf("expected no REFACTORING PROMPT when complexity is below threshold, got:\n%s", output)
 	}
 }
 
@@ -248,8 +248,8 @@ check-diff:
 	if err != nil {
 		t.Fatalf("unexpected error when CLI overrides config: %v\nOutput: %s", err, output)
 	}
-	if !strings.Contains(output, "AI WARNING") {
-		t.Errorf("expected output to contain 'AI WARNING', got:\n%s", output)
+	if !strings.Contains(output, "REFACTORING PROMPT") {
+		t.Errorf("expected output to contain 'REFACTORING PROMPT', got:\n%s", output)
 	}
 	if strings.Contains(output, "Delta violations found") {
 		t.Errorf("expected no 'Delta violations found' when CLI overrides to warn, got:\n%s", output)

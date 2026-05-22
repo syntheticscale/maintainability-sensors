@@ -199,7 +199,7 @@ func TestGenerateMarkdownScorecard(t *testing.T) {
 	}
 
 	// Verify exceptions are printed in markdown
-	if !strings.Contains(scorecard, "Exceptions Created by AI (Relaxed Constraints)") {
+	if !strings.Contains(scorecard, "Configured Exceptions (Relaxed Constraints)") {
 		t.Error("scorecard missing exceptions section header")
 	}
 	if !strings.Contains(scorecard, "Cyclomatic Complexity") || !strings.Contains(scorecard, "15") {
@@ -207,7 +207,7 @@ func TestGenerateMarkdownScorecard(t *testing.T) {
 	}
 
 	// Verify warnings are printed
-	if !strings.Contains(scorecard, "AI Agent Self-Correction Prompts") {
+	if !strings.Contains(scorecard, "Actionable Refactoring Prompts") {
 		t.Error("scorecard missing self-correction prompts header")
 	}
 	if !strings.Contains(scorecard, "Complexity is 12") {

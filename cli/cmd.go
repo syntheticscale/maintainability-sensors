@@ -14,10 +14,28 @@ import (
 )
 
 var cli struct {
+	Quiet     bool         `short:"q" help:"Suppress non-critical diagnostic output (stderr)."`
 	Run       runCmd       `cmd:"" help:"Scan a specific file or folder for maintainability warnings."`
 	Generate  generateCmd  `cmd:"" help:"Reconstruct visual reports from a saved JSON scorecard (the Single Source of Truth)."`
 	Bootstrap bootstrapCmd `cmd:"" help:"Auto-detect repository language and bootstrap pristine, non-overwriting maintainability configuration files (TS, Python, Go, Java, Ruby, C#)."`
 	CheckDiff CheckDiffCmd `cmd:"" name:"check-diff" help:"Check maintainability delta against a target branch."`
+}
+
+func logStderr(format string, a ...interface{}) {
+	if cli.Quiet && !strings.Contains(format, "[ERROR]") && !strings.Contains(format, "[WARNING]") && !strings.Contains(format, "REFACTORING PROMPT") && !strings.Contains(format, "BLIND") {
+		return
+	}
+	fmt.Fprintf(os.Stderr, format, a...)
+}
+
+func logStderrLn(a ...interface{}) {
+	if cli.Quiet {
+		str := fmt.Sprint(a...)
+		if !strings.Contains(str, "[ERROR]") && !strings.Contains(str, "[WARNING]") && !strings.Contains(str, "REFACTORING PROMPT") && !strings.Contains(str, "BLIND") {
+			return
+		}
+	}
+	fmt.Fprintln(os.Stderr, a...)
 }
 
 type runCmd struct {
@@ -140,7 +158,7 @@ func processViolationsMap(violationsMap map[string][]sensors.Violation, absModif
 
 			if hasOverlap(v, ranges) {
 				sev := getSeverityForRule(policy, v.RuleName)
-				msg := fmt.Sprintf("AI WARNING: %s:%d - %s - %s", file, v.StartLine, v.RuleName, v.Message)
+				msg := fmt.Sprintf("REFACTORING PROMPT: %s:%d - %s - %s", file, v.StartLine, v.RuleName, v.Message)
 				if sev == SeverityIgnore {
 					continue
 				} else if sev == SeverityWarn {
@@ -209,7 +227,7 @@ func (c *CheckDiffCmd) Run() error {
 		return fmt.Errorf("Delta violations found")
 	}
 
-	fmt.Fprintln(os.Stderr, "Delta clean.")
+	logStderrLn( "Delta clean.")
 	return nil
 }
 
@@ -469,11 +487,11 @@ func printExceptionsList(results []sensors.OrchestratorResult) {
 
 	if len(allExceptions) > 0 {
 		fmt.Fprintf(os.Stderr, "\n=========================================\n")
-		fmt.Fprintf(os.Stderr, " Exceptions Created by AI (Relaxed Constraints)\n")
+		fmt.Fprintf(os.Stderr, " Configured Exceptions (Relaxed Constraints)\n")
 		fmt.Fprintf(os.Stderr, "=========================================\n")
 		fmt.Fprintf(os.Stderr, "⚠️  The following files have relaxed rules configured in their linters:\n\n")
 		for _, excStr := range allExceptions {
-			fmt.Fprintln(os.Stderr, excStr)
+			logStderrLn( excStr)
 		}
 		fmt.Fprintf(os.Stderr, "\nNOTE: These relaxed thresholds must be manually verified by a human during code review.\n")
 		fmt.Fprintf(os.Stderr, "(\"Looking at the exceptions AI created was a good point to start my code review.\")\n")
@@ -483,12 +501,12 @@ func printExceptionsList(results []sensors.OrchestratorResult) {
 func executeRun(opts RunOptions) {
 	files, isDir, err := FindFiles(opts.TargetPath)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		logStderrLn( err)
 		os.Exit(1)
 	}
 
 	if isDir && len(files) == 0 {
-		fmt.Fprintln(os.Stderr, "No supported source files (TS/JS, Python, Go) found in target directory.")
+		logStderrLn( "No supported source files (TS/JS, Python, Go) found in target directory.")
 		return
 	}
 
@@ -499,7 +517,7 @@ func executeRun(opts RunOptions) {
 	}
 
 	if isDir && len(results) == 0 {
-		fmt.Fprintln(os.Stderr, "No supported source files (TS/JS, Python, Go) found in target directory.")
+		logStderrLn( "No supported source files (TS/JS, Python, Go) found in target directory.")
 		return
 	}
 
@@ -514,11 +532,11 @@ func executeRun(opts RunOptions) {
 
 	isCI_PR := os.Getenv("GITHUB_TOKEN") != "" && (os.Getenv("GITHUB_EVENT_PATH") != "" || os.Getenv("GITHUB_REF") != "")
 	if opts.GithubPR || isCI_PR {
-		fmt.Fprintln(os.Stderr, "Posting inline review to GitHub PR...")
+		logStderrLn( "Posting inline review to GitHub PR...")
 		if err := PostGitHubReview(results); err != nil {
 			fmt.Fprintf(os.Stderr, "[ERROR] Failed to post GitHub inline review: %v\n", err)
 		} else {
-			fmt.Fprintln(os.Stderr, "Successfully posted inline review to GitHub PR!")
+			logStderrLn( "Successfully posted inline review to GitHub PR!")
 		}
 	}
 
@@ -575,6 +593,10 @@ func writeReports(results []sensors.OrchestratorResult, opts ReportOptions) erro
 }
 
 func executeGenerate(jsonIn string, markdownOut string, htmlOut string) {
+	if info, err := os.Stat(jsonIn); err == nil && (!info.Mode().IsRegular() || info.Size() > 10*1024*1024) {
+		fmt.Fprintf(os.Stderr, "[ERROR] JSON input file is too large or not a regular file (limit 10MB)\n")
+		os.Exit(1)
+	}
 	data, err := os.ReadFile(jsonIn)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] Failed to read JSON input file: %v\n", err)
@@ -655,7 +677,7 @@ func printScanResult(res sensors.OrchestratorResult, jsonOutput bool) {
 	// Display Exceptions if any
 	if len(res.Exceptions) > 0 {
 		fmt.Fprintf(os.Stderr, "\n-----------------------------------------\n")
-		fmt.Fprintf(os.Stderr, " Exceptions Created by AI (Relaxed Constraints):\n")
+		fmt.Fprintf(os.Stderr, " Configured Exceptions (Relaxed Constraints):\n")
 		fmt.Fprintf(os.Stderr, "-----------------------------------------\n")
 		fmt.Fprintf(os.Stderr, "⚠️  The following custom limits are set to relaxed values in the configuration:\n\n")
 		for _, exc := range res.Exceptions {
@@ -686,24 +708,24 @@ func printSelfCorrectionGuidance(res sensors.OrchestratorResult) {
 
 	if res.Metrics.Complexity > limitComplexity {
 		hasViolation = true
-		guidance = append(guidance, fmt.Sprintf("  * Complexity is %d (Max %d). Nudge coding agent to extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, limitComplexity))
+		guidance = append(guidance, fmt.Sprintf("  * Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, limitComplexity))
 	}
 	if res.Metrics.FunctionLength > limitLength {
 		hasViolation = true
-		guidance = append(guidance, fmt.Sprintf("  * Function lines is %d (Max %d). Nudge coding agent to modularize this block into separate functional components.", res.Metrics.FunctionLength, limitLength))
+		guidance = append(guidance, fmt.Sprintf("  * Function lines is %d (Max %d). Modularize this block into separate functional components.", res.Metrics.FunctionLength, limitLength))
 	}
 	if res.Metrics.ArgumentCount > limitArgs {
 		hasViolation = true
-		guidance = append(guidance, fmt.Sprintf("  * Parameter count is %d (Max %d). Nudge coding agent to bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, limitArgs))
+		guidance = append(guidance, fmt.Sprintf("  * Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, limitArgs))
 	}
 
 	if hasViolation {
 		fmt.Fprintf(os.Stderr, "\n-----------------------------------------\n")
-		fmt.Fprintf(os.Stderr, " AI Agent Self-Correction Prompts:\n")
+		fmt.Fprintf(os.Stderr, " Actionable Refactoring Prompts:\n")
 		fmt.Fprintf(os.Stderr, "-----------------------------------------\n")
-		fmt.Fprintf(os.Stderr, "AI WARNING: Refactor these violations:\n\n")
+		fmt.Fprintf(os.Stderr, "REFACTORING PROMPT: Refactor these violations:\n\n")
 		for _, g := range guidance {
-			fmt.Fprintln(os.Stderr, g)
+			logStderrLn( g)
 		}
 		var suppressionExample string
 		switch res.Language {
@@ -722,6 +744,6 @@ func printSelfCorrectionGuidance(res sensors.OrchestratorResult) {
 		default:
 			suppressionExample = "// disable-linter-rule ..."
 		}
-		fmt.Fprintf(os.Stderr, "\nIf refactoring is impossible, AI WARNING: suppress the warning with standard inline annotations (e.g. %s).\n", suppressionExample)
+		fmt.Fprintf(os.Stderr, "\nIf refactoring is impossible, REFACTORING PROMPT: suppress the warning with standard inline annotations (e.g. %s).\n", suppressionExample)
 	}
 }

@@ -101,7 +101,11 @@ Auto-detects the languages in your codebase and writes pristine, ready-to-use ma
 * **Cyclomatic Complexity:** max 8 limit
 
 ```bash
+# Bootstrap strict thresholds
 maintainability-sensors bootstrap /path/to/repo
+
+# Bootstrap with a permissive warn-only policy for check-diff
+maintainability-sensors bootstrap /path/to/repo --with-warn-policy
 ```
 
 ---
@@ -142,4 +146,4 @@ This CLI is designed around three strict architectural rules:
 Created by [Paulo Lai](https://github.com/paulolai) for Synthetic Scale.
 
 MIT © 2026 Synthetic Scale & Contributors.  
-*This is an independent open-source community reference implementation and is not affiliated with Thoughtworks or Martin Fowler.*
+*This is an independent open-source community reference implementation and is not affiliated with Thoughtworks or Martin Fowler.*Thoughtworks or Martin Fowler.*

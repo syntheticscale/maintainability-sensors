@@ -75,10 +75,10 @@ func TestGenerateMarkdownScorecard_EmptyResults(t *testing.T) {
 	if !strings.Contains(md, "Scan Summary") {
 		t.Error("expected scan summary section")
 	}
-	if strings.Contains(md, "Self-Correction Prompts") {
+	if strings.Contains(md, "Actionable Refactoring Prompts") {
 		t.Error("should not have self-correction section for empty results")
 	}
-	if strings.Contains(md, "Exceptions Created by AI") {
+	if strings.Contains(md, "Configured Exceptions") {
 		t.Error("should not have exceptions section for empty results")
 	}
 }
@@ -97,7 +97,7 @@ func TestGenerateMarkdownScorecard_AllOrchestrated(t *testing.T) {
 	if strings.Contains(md, "BLIND") {
 		t.Error("should not have BLIND status")
 	}
-	if strings.Contains(md, "Self-Correction Prompts") {
+	if strings.Contains(md, "Actionable Refactoring Prompts") {
 		t.Error("should not have self-correction section when no violations")
 	}
 }
@@ -116,7 +116,7 @@ func TestGenerateMarkdownScorecard_AllBlind(t *testing.T) {
 	if strings.Contains(md, "ORCHESTRATED") {
 		t.Error("should not have ORCHESTRATED status")
 	}
-	if strings.Contains(md, "Self-Correction Prompts") {
+	if strings.Contains(md, "Actionable Refactoring Prompts") {
 		t.Error("should not have self-correction section for blind files")
 	}
 }
@@ -145,7 +145,7 @@ func TestGenerateMarkdownScorecard_WithViolations(t *testing.T) {
 
 	md := GenerateMarkdownScorecard(results)
 
-	if !strings.Contains(md, "Self-Correction Prompts") {
+	if !strings.Contains(md, "Actionable Refactoring Prompts") {
 		t.Error("expected self-correction prompts section")
 	}
 	if !strings.Contains(md, "complex.go") {
@@ -172,7 +172,7 @@ func TestGenerateMarkdownScorecard_WithExceptions(t *testing.T) {
 
 	md := GenerateMarkdownScorecard(results)
 
-	if !strings.Contains(md, "Exceptions Created by AI") {
+	if !strings.Contains(md, "Configured Exceptions") {
 		t.Error("expected exceptions section")
 	}
 	if !strings.Contains(md, "relaxed.go") {
@@ -199,10 +199,10 @@ func TestGenerateMarkdownScorecard_ViolationsAndExceptions(t *testing.T) {
 
 	md := GenerateMarkdownScorecard(results)
 
-	if !strings.Contains(md, "Self-Correction Prompts") {
+	if !strings.Contains(md, "Actionable Refactoring Prompts") {
 		t.Error("expected self-correction prompts section")
 	}
-	if !strings.Contains(md, "Exceptions Created by AI") {
+	if !strings.Contains(md, "Configured Exceptions") {
 		t.Error("expected exceptions section")
 	}
 }
@@ -214,7 +214,7 @@ func TestGenerateMarkdownScorecard_SingleViolation(t *testing.T) {
 
 	md := GenerateMarkdownScorecard(results)
 
-	if !strings.Contains(md, "Self-Correction Prompts") {
+	if !strings.Contains(md, "Actionable Refactoring Prompts") {
 		t.Error("expected self-correction prompts section")
 	}
 	if !strings.Contains(md, "Complexity is 20") {
@@ -296,7 +296,7 @@ func TestGenerateHTMLScorecard_WithViolations(t *testing.T) {
 	if !strings.Contains(html, "text-error") {
 		t.Error("expected error CSS class for violations")
 	}
-	if !strings.Contains(html, "AI Agent Self-Correction Prompts") {
+	if !strings.Contains(html, "Actionable Refactoring Prompts") {
 		t.Error("expected self-correction prompts section")
 	}
 	if !strings.Contains(html, "Complexity is 15") {
@@ -314,7 +314,7 @@ func TestGenerateHTMLScorecard_WithExceptions(t *testing.T) {
 
 	html := GenerateHTMLScorecard(results)
 
-	if !strings.Contains(html, "Exceptions Created by AI") {
+	if !strings.Contains(html, "Configured Exceptions") {
 		t.Error("expected exceptions section")
 	}
 	if !strings.Contains(html, "Cyclomatic Complexity") {
@@ -872,7 +872,7 @@ func TestPrintScanResult_WithExceptions(t *testing.T) {
 		printScanResult(res, false)
 	})
 
-	if !strings.Contains(captured, "Exceptions Created by AI") {
+	if !strings.Contains(captured, "Configured Exceptions") {
 		t.Error("expected exceptions section")
 	}
 	if !strings.Contains(captured, "Cyclomatic Complexity") {
@@ -887,7 +887,7 @@ func TestPrintScanResult_WithViolations(t *testing.T) {
 		printScanResult(res, false)
 	})
 
-	if !strings.Contains(captured, "Self-Correction Prompts") {
+	if !strings.Contains(captured, "Actionable Refactoring Prompts") {
 		t.Error("expected self-correction prompts section")
 	}
 	if !strings.Contains(captured, "Complexity is 15") {

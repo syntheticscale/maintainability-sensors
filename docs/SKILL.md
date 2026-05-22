@@ -15,7 +15,7 @@ This tool will analyze your `git diff` and cross-reference the lines you modifie
    ```bash
    maintainability-sensors check-diff
    ```
-   *(Optional: If your changes are already committed locally but not pushed, you can compare against the main branch: `maintainability-sensors check-diff origin/main`)*
+   *(Optional: If your changes are already committed locally but not pushed, you can compare against the main branch: `maintainability-sensors check-diff --target-branch=origin/main`)*
 
 2. **Interpret the Output:**
    - **"Delta clean."**: Your code changes are structurally sound. You may proceed.
