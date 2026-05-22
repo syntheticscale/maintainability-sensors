@@ -680,46 +680,34 @@ type PyLintMessage struct {
 	EndLine int    `json:"endLine"`
 }
 
-func extractPyLintRuleAndVal(msg PyLintMessage) (string, int) {
-	var val int
-	var rule string
-	if msg.Symbol == "too-many-statements" {
-		if strings.Contains(msg.Message, "Too many statements") {
-			fmt.Sscanf(msg.Message, "Too many statements (%d/%*d)", &val)
-			rule = "FunctionLength"
-		}
-	} else if msg.Symbol == "too-many-arguments" {
-		if strings.Contains(msg.Message, "Too many arguments") {
-			fmt.Sscanf(msg.Message, "Too many arguments (%d/%*d)", &val)
-			rule = "ArgumentCount"
-		}
-	} else if msg.Symbol == "too-many-branches" || msg.Symbol == "too-complex" {
-		if strings.Contains(msg.Message, "McCabe rating is") {
-			fmt.Sscanf(msg.Message, "McCabe rating is %d", &val)
-			rule = "Complexity"
-		}
-	}
-	return rule, val
-}
-
-func parseSinglePyLintMessage(msg PyLintMessage, fileViolations *[]Violation) {
-	rule, val := extractPyLintRuleAndVal(msg)
-	if rule != "" {
-		endLine := msg.EndLine
-		if endLine == 0 {
-			endLine = msg.Line + 100
-		}
-		*fileViolations = append(*fileViolations, Violation{RuleName: rule, Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
-	}
-}
-
+//nolint:gocognit // Highly cohesive mapping logic for PyLint symbols. Splitting this hurts readability.
 func parsePyLintMessages(list []PyLintMessage) map[string][]Violation {
 	metricsMap := make(map[string][]Violation)
 	for _, msg := range list {
-		var violations []Violation
-		parseSinglePyLintMessage(msg, &violations)
-		if len(violations) > 0 {
-			metricsMap[msg.Path] = append(metricsMap[msg.Path], violations...)
+		var val int
+		var rule string
+		if msg.Symbol == "too-many-statements" {
+			if strings.Contains(msg.Message, "Too many statements") {
+				fmt.Sscanf(msg.Message, "Too many statements (%d/%*d)", &val)
+				rule = "FunctionLength"
+			}
+		} else if msg.Symbol == "too-many-arguments" {
+			if strings.Contains(msg.Message, "Too many arguments") {
+				fmt.Sscanf(msg.Message, "Too many arguments (%d/%*d)", &val)
+				rule = "ArgumentCount"
+			}
+		} else if msg.Symbol == "too-many-branches" || msg.Symbol == "too-complex" {
+			if strings.Contains(msg.Message, "McCabe rating is") {
+				fmt.Sscanf(msg.Message, "McCabe rating is %d", &val)
+				rule = "Complexity"
+			}
+		}
+		if rule != "" {
+			endLine := msg.EndLine
+			if endLine == 0 {
+				endLine = msg.Line + 100
+			}
+			metricsMap[msg.Path] = append(metricsMap[msg.Path], Violation{RuleName: rule, Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
 		}
 	}
 	return metricsMap
