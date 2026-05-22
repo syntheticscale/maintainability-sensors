@@ -85,16 +85,26 @@ maintainability-sensors check-diff origin/main
 ### 2. `run` (Audit Mode: Legacy Analysis)
 Scan a specific file or your entire repository. Used by Tech Leads to generate a one-time scorecard or map out the existing legacy debt of the codebase.
 
+Audit Mode will exit with a non-zero status (`Exit Code: 1`) if it finds files without static analysis tooling (Running "Blind") or if files violate the configured thresholds.
+
+**How to run a complete Audit:**
 ```bash
-# Scan a specific file
-maintainability-sensors run src/components/MyComponent.tsx
+# 1. Build the binary (if not already built)
+go build -o bin/maintainability-sensors main.go
 
-# Scan the entire repository
-maintainability-sensors run .
+# 2. Run the audit across the repository
+./bin/maintainability-sensors run .
 
-# Write visual reports for humans
-maintainability-sensors run . --markdown-out=report.md --html-out=report.html
+# 3. If files are running blind, bootstrap configuration files for those languages
+./bin/maintainability-sensors bootstrap .
+
+# 4. Write visual reports to investigate violations
+./bin/maintainability-sensors run . --markdown-out=report.md --html-out=report.html --json-out=report.json
 ```
+
+**Fixing Audit Failures:**
+To get a clean Audit (Exit Code 0), you must either refactor the failing code to pass the strict baseline thresholds (Complexity <= 8, Length <= 50, Params <= 4) or use **Elastic Thresholds** to relax the limits in the corresponding configuration file (e.g., `.golangci.yml`, `.eslintrc.json`, `.pylintrc`). The CLI parser will automatically read these relaxed config values as exceptions and allow the audit to pass, while flagging them for human review.
+
 
 ### 3. `generate` (Report Reconstruction)
 Reconstruct visual reports from a saved JSON scorecard.
