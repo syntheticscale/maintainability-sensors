@@ -32,7 +32,7 @@ func ParseGoAST(filePath string) ([]Violation, error) {
 	// Support file-level //nolint suppression
 	for _, cg := range f.Comments {
 		for _, c := range cg.List {
-			if strings.HasPrefix(c.Text, "//nolint") && (strings.Contains(c.Text, "all") || strings.Contains(c.Text, "maintainability")) {
+			if strings.HasPrefix(c.Text, "//nolint") && strings.Contains(c.Text, "maintainability") {
 				return violations, nil
 			}
 		}
