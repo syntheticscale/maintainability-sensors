@@ -177,6 +177,12 @@ If you encounter a violation caused by highly cohesive logic (or an unavoidable 
 2. Add a standard linter suppression comment (e.g., `//nolint:gocognit` for Go, `# pylint: disable=too-many-branches` for Python) right above the offending logic. Alternatively, if an entire legacy file must be suppressed for maintainability reasons without disabling security/bug linters, place `//nolint:maintainability` at the top of the file.
 3. **Crucially:** Add an inline comment briefly explaining *why* the suppression exists (e.g., `//nolint:gocognit // Highly cohesive mapping logic, splitting hurts readability`).
 
+### 🔒 Legacy Audits & "Ratchet B"
+
+If you are performing an audit on a massive legacy file and an inline suppression is not sufficient, do **not** relax the global repository thresholds. Instead, use **File-Specific Configuration Overrides ("Ratchet B")**.
+
+By adding a per-path override in your linter config (e.g., `.golangci.yml` or `eslint.config.js`), you can lock a specific legacy file to its current complexity score. This creates a "ratchet": the file passes the build today, but if a developer or AI adds even one more point of complexity tomorrow, the build will fail. This quarantines legacy debt and stops the bleeding without compromising the strict global baseline for the rest of the project.
+
 This acts as a transparent flare during PR reviews, allowing humans to verify that the exception is justified while still preventing AI agents from generating tangled, unreadable code elsewhere in the repository.
 
 ---
