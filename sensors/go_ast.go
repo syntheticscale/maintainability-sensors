@@ -5,6 +5,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"strings"
 )
 
 // GoMetrics holds extracted metrics from a Go file.
@@ -26,6 +27,15 @@ func ParseGoAST(filePath string) ([]Violation, error) {
 	f, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
 		return violations, err
+	}
+
+	// Support file-level //nolint suppression
+	for _, cg := range f.Comments {
+		for _, c := range cg.List {
+			if strings.HasPrefix(c.Text, "//nolint") && (strings.Contains(c.Text, "all") || strings.Contains(c.Text, "maintainability")) {
+				return violations, nil
+			}
+		}
 	}
 
 	for _, decl := range f.Decls {
