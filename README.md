@@ -174,7 +174,7 @@ We do NOT want you to fracture readable code into disjointed pieces just to appe
 
 If you encounter a violation caused by highly cohesive logic (or an unavoidable legacy integration), follow the **Honest Exception Protocol**:
 1. Do not fragment the code.
-2. Add a standard linter suppression comment (e.g., `//nolint:gocognit` for Go, `# pylint: disable=too-many-branches` for Python) right above the offending logic.
+2. Add a standard linter suppression comment (e.g., `//nolint:gocognit` for Go, `# pylint: disable=too-many-branches` for Python) right above the offending logic. Alternatively, if an entire legacy file must be suppressed for maintainability reasons without disabling security/bug linters, place `//nolint:maintainability` at the top of the file.
 3. **Crucially:** Add an inline comment briefly explaining *why* the suppression exists (e.g., `//nolint:gocognit // Highly cohesive mapping logic, splitting hurts readability`).
 
 This acts as a transparent flare during PR reviews, allowing humans to verify that the exception is justified while still preventing AI agents from generating tangled, unreadable code elsewhere in the repository.
