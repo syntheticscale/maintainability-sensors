@@ -157,6 +157,9 @@ To prove the necessity of maintainability sensors, we audited six high-profile, 
 For a detailed analysis of how these systems act as AI traps and exactly how they should be refactored to be "agent-friendly", read our:
 👉 **[Architectural Case Studies deep-dive (docs/CASE_STUDIES.md)](docs/CASE_STUDIES.md)**
 
+For a comprehensive playbook on how to audit mature codebases without breaking the build or overfitting to metrics, read our:
+👉 **[Legacy Audit Guide (docs/LEGACY_AUDIT_GUIDE.md)](docs/LEGACY_AUDIT_GUIDE.md)**
+
 ---
 
 ## 🧩 Architectural Philosophy
