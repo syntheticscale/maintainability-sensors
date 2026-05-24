@@ -28,9 +28,38 @@ func ParseTypeScriptTreeSitter(filePath string) ([]Violation, error) {
 	rootNode := tree.RootNode()
 
 	// Walk the tree
+	var imports []ImportInfo
 	var walk func(node *sitter.Node)
 	walk = func(node *sitter.Node) {
 		switch node.Type() {
+		case "import_statement":
+			// Extract string from string node inside import_statement
+			sourceNode := node.ChildByFieldName("source")
+			if sourceNode != nil {
+				startLine := int(sourceNode.StartPoint().Row) + 1
+				sourceVal := string(content[sourceNode.StartByte():sourceNode.EndByte()])
+				// Remove quotes
+				if len(sourceVal) >= 2 {
+					sourceVal = sourceVal[1 : len(sourceVal)-1]
+				}
+				imports = append(imports, ImportInfo{Path: sourceVal, Line: startLine})
+			}
+		case "call_expression":
+			functionNode := node.ChildByFieldName("function")
+			if functionNode != nil && string(content[functionNode.StartByte():functionNode.EndByte()]) == "require" {
+				argsNode := node.ChildByFieldName("arguments")
+				if argsNode != nil && argsNode.NamedChildCount() > 0 {
+					arg := argsNode.NamedChild(0)
+					if arg.Type() == "string" {
+						startLine := int(arg.StartPoint().Row) + 1
+						sourceVal := string(content[arg.StartByte():arg.EndByte()])
+						if len(sourceVal) >= 2 {
+							sourceVal = sourceVal[1 : len(sourceVal)-1]
+						}
+						imports = append(imports, ImportInfo{Path: sourceVal, Line: startLine})
+					}
+				}
+			}
 		case "function_declaration", "method_definition", "arrow_function", "function_expression":
 			startLine := int(node.StartPoint().Row) + 1
 			endLine := int(node.EndPoint().Row) + 1
@@ -106,6 +135,12 @@ func ParseTypeScriptTreeSitter(filePath string) ([]Violation, error) {
 	}
 
 	walk(rootNode)
+
+	archConfig := findArchitectureConfig(filePath)
+	if archConfig != nil {
+		archViolations := CheckArchitectureDependencies(filePath, archConfig, imports)
+		violations = append(violations, archViolations...)
+	}
 
 	return violations, nil
 }

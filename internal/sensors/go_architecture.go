@@ -60,31 +60,6 @@ func CheckGoArchitecture(filePath string, config *ArchitectureConfig) ([]Violati
 		return violations, nil
 	}
 
-	absPath, err := filepath.Abs(filePath)
-	if err != nil {
-		absPath = filePath
-	}
-	absPath = filepath.ToSlash(absPath)
-
-	currentLayer := ""
-	for layerName := range config.Layers {
-		// e.g. path contains /api/
-		if strings.Contains(absPath, "/"+layerName+"/") || strings.HasSuffix(absPath, "/"+layerName) || strings.HasPrefix(absPath, layerName+"/") {
-			currentLayer = layerName
-			break
-		}
-	}
-
-	if currentLayer == "" {
-		return violations, nil
-	}
-
-	allowedImports := config.Layers[currentLayer].AllowedImports
-	allowedMap := make(map[string]bool)
-	for _, imp := range allowedImports {
-		allowedMap[imp] = true
-	}
-
 	if info, err := os.Stat(filePath); err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
 		return violations, nil
 	}
@@ -95,31 +70,18 @@ func CheckGoArchitecture(filePath string, config *ArchitectureConfig) ([]Violati
 		return violations, err
 	}
 
+	var imports []ImportInfo
 	for _, imp := range f.Imports {
 		if imp.Path == nil || imp.Path.Value == "" {
 			continue
 		}
 		importPath := strings.Trim(imp.Path.Value, "\"")
-
-		importedLayer := ""
-		for layerName := range config.Layers {
-			if strings.Contains(importPath, "/"+layerName+"/") || strings.HasSuffix(importPath, "/"+layerName) || importPath == layerName || strings.HasSuffix(importPath, "/"+layerName) {
-				importedLayer = layerName
-				break
-			}
-		}
-
-		if importedLayer != "" && importedLayer != currentLayer && !allowedMap[importedLayer] {
-			pos := fset.Position(imp.Pos())
-			violations = append(violations, Violation{
-				RuleName:  "DependencyBoundary",
-				Message:   "Illegal import: layer '" + currentLayer + "' is not allowed to import layer '" + importedLayer + "'",
-				StartLine: pos.Line,
-				EndLine:   pos.Line,
-				Value:     1,
-			})
-		}
+		pos := fset.Position(imp.Pos())
+		imports = append(imports, ImportInfo{
+			Path: importPath,
+			Line: pos.Line,
+		})
 	}
 
-	return violations, nil
+	return CheckArchitectureDependencies(filePath, config, imports), nil
 }

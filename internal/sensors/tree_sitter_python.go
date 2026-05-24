@@ -3,6 +3,7 @@ package sensors
 import (
 	"context"
 	"os"
+	"strings"
 
 	sitter "github.com/smacker/go-tree-sitter"
 	"github.com/smacker/go-tree-sitter/python"
@@ -28,9 +29,36 @@ func ParsePythonTreeSitter(filePath string) ([]Violation, error) {
 	rootNode := tree.RootNode()
 
 	// Walk the tree
+	var imports []ImportInfo
 	var walk func(node *sitter.Node)
 	walk = func(node *sitter.Node) {
-		if node.Type() == "function_definition" {
+		switch node.Type() {
+		case "import_statement":
+			startLine := int(node.StartPoint().Row) + 1
+			for i := 0; i < int(node.NamedChildCount()); i++ {
+				child := node.NamedChild(i)
+				if child.Type() == "dotted_name" {
+					sourceVal := string(content[child.StartByte():child.EndByte()])
+					sourceVal = strings.ReplaceAll(sourceVal, ".", "/")
+					imports = append(imports, ImportInfo{Path: sourceVal, Line: startLine})
+				} else if child.Type() == "aliased_import" {
+					nameNode := child.ChildByFieldName("name")
+					if nameNode != nil {
+						sourceVal := string(content[nameNode.StartByte():nameNode.EndByte()])
+						sourceVal = strings.ReplaceAll(sourceVal, ".", "/")
+						imports = append(imports, ImportInfo{Path: sourceVal, Line: startLine})
+					}
+				}
+			}
+		case "import_from_statement":
+			startLine := int(node.StartPoint().Row) + 1
+			moduleNameNode := node.ChildByFieldName("module_name")
+			if moduleNameNode != nil {
+				sourceVal := string(content[moduleNameNode.StartByte():moduleNameNode.EndByte()])
+				sourceVal = strings.ReplaceAll(sourceVal, ".", "/")
+				imports = append(imports, ImportInfo{Path: sourceVal, Line: startLine})
+			}
+		case "function_definition":
 			startLine := int(node.StartPoint().Row) + 1
 			endLine := int(node.EndPoint().Row) + 1
 
@@ -106,6 +134,12 @@ func ParsePythonTreeSitter(filePath string) ([]Violation, error) {
 	}
 
 	walk(rootNode)
+
+	archConfig := findArchitectureConfig(filePath)
+	if archConfig != nil {
+		archViolations := CheckArchitectureDependencies(filePath, archConfig, imports)
+		violations = append(violations, archViolations...)
+	}
 
 	return violations, nil
 }
