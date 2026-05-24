@@ -85,8 +85,17 @@ Repositories can add a `.maintainability-sensors.yml` at the root to configure `
 When modifying existing sensors or adding a new language bootstrap:
 1. **Spec First:** Define the language limits and expected linter patterns.
 2. **Test First (TDD):** Implement table-driven tests inside the `tests/` directory and ensure they fail. **Testing Policy:** Prefer component/integration tests over testing implementation details with unit tests. Only add unit tests for highly complex, isolated logic (e.g., metric extraction from ASTs).
-3. **Implement Cleanly:** Write the minimum code inside the `sensors/` package to pass the tests.
+3. **Implement Cleanly:** Write the minimum code inside the `internal/sensors/` package to pass the tests.
 4. **Compile & Verify:** Confirm that `go test ./...` passes beautifully in milliseconds and the compiled binary functions as expected.
 5. **Subagent Protocol (Stop & Report):** If you encounter any blocking issues, ambiguous requirements, or areas that warrant architectural questions during execution, you MUST stop and report back to the orchestrating agent immediately. Do not guess or force a fragile solution.
 6. **Multi-Persona Self-Review:** For any significant architectural changes or large features, you MUST pause and conduct a rigorous self-review using the multi-persona protocols defined in `docs/AI_REVIEW_PROTOCOLS.md`. Do not simply accept the "happy path" completion.
 7. **Commit Often:** Always commit changes after each significant step, rather than waiting until the end of a long feature or refactoring session. Ensure changes are checkpoints safely along the way.
+
+## 🔄 Iterative Subagent Development Loop
+
+When executing new features, extensions, or major refactors, you **MUST** use the following strict iterative subagent loop. Do not attempt to implement large changes in a single monolithic step.
+
+1.  **Break Down the Task:** Identify the first discrete step suitable for a subagent (e.g., the `generalist` agent).
+2.  **Delegate via R-S-T-I:** Invoke the subagent and instruct it to follow the strict **Requirements -> Spec -> Tests -> Implementation** workflow.
+3.  **Verify & Commit:** Upon the subagent's return, review the work, run the test suite, and commit the checkpoint.
+4.  **Repeat:** Find the next logical step and repeat the cycle until the overarching goal is complete or user input is required.
