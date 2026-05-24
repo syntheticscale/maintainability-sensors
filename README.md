@@ -56,6 +56,9 @@ gemini skills install pre-flight-check.skill --scope workspace
 
 # Install the LLM-as-a-judge modularity reviewer
 gemini skills install modularity-reviewer.skill --scope workspace
+
+# Install the empirical performance benchmarker
+gemini skills install performance-benchmarker.skill --scope workspace
 ```
 
 ---
@@ -126,4 +129,4 @@ To prove the necessity of maintainability sensors, we audited six high-profile, 
 Created by [Paulo Lai](https://github.com/paulolai) for Synthetic Scale.
 
 MIT © 2026 Synthetic Scale & Contributors.  
-*This is an independent open-source community reference implementation and is not affiliated with Thoughtworks or Martin Fowler.*
+*This is an independent open-source community reference implementation and is not affiliated with Thoughtworks or Martin Fowler.*nce implementation and is not affiliated with Thoughtworks or Martin Fowler.*
