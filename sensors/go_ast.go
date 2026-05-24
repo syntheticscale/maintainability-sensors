@@ -210,6 +210,13 @@ func (p GoPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
 		if err != nil {
 			return nil, err
 		}
+		
+		if archCfg := findArchitectureConfig(filePath); archCfg != nil {
+			if archViolations, err := CheckGoArchitecture(filePath, archCfg); err == nil && len(archViolations) > 0 {
+				violations = append(violations, archViolations...)
+			}
+		}
+
 		metricsMap[filePath] = violations
 	}
 	return metricsMap, nil
