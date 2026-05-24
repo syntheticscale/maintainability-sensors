@@ -50,11 +50,11 @@ def complex_function(x, y, z, options):
 		return nil
 	}
 
-	// simple_function is at line 2. 
+	// simple_function is at line 2.
 	// FunctionLength: line 2 to line 4 -> 3 lines
 	// ArgumentCount: 2
 	// Complexity: 1 (base)
-	
+
 	if v := findViolation("FunctionLength", 2); v == nil || v.Value != 3 {
 		t.Errorf("Expected simple_function length 3, got: %+v", v)
 	}
@@ -68,10 +68,10 @@ def complex_function(x, y, z, options):
 	// complex_function is at line 6.
 	// FunctionLength: line 6 to line 18 -> 13 lines
 	// ArgumentCount: 4
-	// Complexity: 
-	// 1 (base) + 1 (if) + 1 (for) + 1 (elif doesn't exist explicitly in tree-sitter python, usually it's an if inside elif or just elif block) 
+	// Complexity:
+	// 1 (base) + 1 (if) + 1 (for) + 1 (elif doesn't exist explicitly in tree-sitter python, usually it's an if inside elif or just elif block)
 	// + 1 (while) + 1 (except) = 6
-	
+
 	if v := findViolation("FunctionLength", 6); v == nil || v.Value != 13 {
 		t.Errorf("Expected complex_function length 13, got: %+v", v)
 	}

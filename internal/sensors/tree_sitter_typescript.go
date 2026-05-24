@@ -90,7 +90,7 @@ func ParseTypeScriptTreeSitter(filePath string) ([]Violation, error) {
 					}
 				}
 			}
-			
+
 			violations = append(violations, Violation{
 				RuleName:  "ArgumentCount",
 				Value:     argCount,

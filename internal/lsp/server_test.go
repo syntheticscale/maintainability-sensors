@@ -59,7 +59,7 @@ func highlyComplex() {
 	defer os.Remove(tmpFile.Name())
 
 	uri := "file://" + tmpFile.Name()
-	
+
 	reqJSON := fmt.Sprintf(`{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":%q,"version":2},"contentChanges":[{"text":%q}]}}`, uri, goCode)
 	payload := fmt.Sprintf("Content-Length: %d\r\n\r\n%s", len(reqJSON), reqJSON)
 

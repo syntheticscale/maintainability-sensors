@@ -10,7 +10,7 @@ import (
 
 func setupArchitectureWorkspace(t *testing.T) (string, string, string) {
 	tempDir := t.TempDir()
-	
+
 	archYaml := `
 layers:
   api:
@@ -54,12 +54,12 @@ func Do() {}
 	os.WriteFile(domainFileInvalid, []byte(invalidContent), 0644)
 
 	plugin := sensors.GoPlugin{}
-	
+
 	resValid, err := plugin.Analyze([]string{apiFileValid})
 	if err != nil {
 		t.Fatalf("Analyze failed: %v", err)
 	}
-	
+
 	validViolations := resValid[apiFileValid]
 	for _, v := range validViolations {
 		if v.RuleName == "DependencyBoundary" {
@@ -82,7 +82,7 @@ func Do() {}
 			}
 		}
 	}
-	
+
 	if !foundViolation {
 		t.Errorf("Expected DependencyBoundary violation for domain file importing api")
 	}
@@ -106,12 +106,12 @@ function do() {}
 	os.WriteFile(domainFileInvalid, []byte(invalidContent), 0644)
 
 	plugin := sensors.TypeScriptTreeSitterPlugin{}
-	
+
 	resValid, err := plugin.Analyze([]string{apiFileValid})
 	if err != nil {
 		t.Fatalf("Analyze failed: %v", err)
 	}
-	
+
 	for _, v := range resValid[apiFileValid] {
 		if v.RuleName == "DependencyBoundary" {
 			t.Errorf("Expected no dependency boundary violations for api file, got: %v", v)
@@ -133,7 +133,7 @@ function do() {}
 			}
 		}
 	}
-	
+
 	if violationCount != 2 { // One for import, one for require
 		t.Errorf("Expected 2 DependencyBoundary violations for domain file importing api, got %d", violationCount)
 	}
@@ -157,12 +157,12 @@ def do(): pass
 	os.WriteFile(domainFileInvalid, []byte(invalidContent), 0644)
 
 	plugin := sensors.PythonTreeSitterPlugin{}
-	
+
 	resValid, err := plugin.Analyze([]string{apiFileValid})
 	if err != nil {
 		t.Fatalf("Analyze failed: %v", err)
 	}
-	
+
 	for _, v := range resValid[apiFileValid] {
 		if v.RuleName == "DependencyBoundary" {
 			t.Errorf("Expected no dependency boundary violations for api file, got: %v", v)
@@ -184,7 +184,7 @@ def do(): pass
 			}
 		}
 	}
-	
+
 	if violationCount != 2 { // One for import, one for from import
 		t.Errorf("Expected 2 DependencyBoundary violations for domain file importing api, got %d", violationCount)
 	}

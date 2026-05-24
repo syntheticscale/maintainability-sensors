@@ -187,7 +187,7 @@ func Start(in io.Reader, out io.Writer) error {
 			}
 			newText := didChangeParams.ContentChanges[0].Text
 			uri := didChangeParams.TextDocument.URI
-			
+
 			filePath := strings.TrimPrefix(uri, "file://")
 			lang := sensors.DetectLanguage(filePath)
 			if lang == "" {
@@ -196,7 +196,7 @@ func Start(in io.Reader, out io.Writer) error {
 
 			dir := filepath.Dir(filePath)
 			ext := filepath.Ext(filePath)
-			
+
 			tmpFile, err := os.CreateTemp(dir, fmt.Sprintf(".lsp_temp_*%s", ext))
 			if err != nil {
 				continue
@@ -214,12 +214,12 @@ func Start(in io.Reader, out io.Writer) error {
 				}
 
 				violations := metricsMap[origPath]
-				
+
 				var exceptions []sensors.RelaxedLimit
 				if anchor, parser := sensors.DetectConfigAndParser(origPath, lang); anchor != "" {
 					exceptions = sensors.DetectRelaxedLimits(anchor, parser)
 				}
-				
+
 				var diags []Diagnostic
 				for _, v := range violations {
 					limit := getLimitForRule(v.RuleName, exceptions)

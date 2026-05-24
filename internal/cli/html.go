@@ -94,7 +94,7 @@ func processBlindResult(data *ReportData, res sensors.OrchestratorResult) {
 func processOrchestratedResult(data *ReportData, res sensors.OrchestratorResult) {
 	data.OrchestratedCount++
 	data.TotalExceptions += len(res.Exceptions)
-	
+
 	fileBase := filepath.Base(res.FilePath)
 	filePrompts := getHTMLFilePrompts(data, res)
 

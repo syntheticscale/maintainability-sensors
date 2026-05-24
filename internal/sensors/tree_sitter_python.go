@@ -92,7 +92,7 @@ func ParsePythonTreeSitter(filePath string) ([]Violation, error) {
 
 			// Complexity
 			complexity := 1 // base
-			
+
 			// We need a helper to walk just the function body for complexity
 			bodyNode := node.ChildByFieldName("body")
 			if bodyNode != nil {
@@ -104,7 +104,7 @@ func ParsePythonTreeSitter(filePath string) ([]Violation, error) {
 					case "boolean_operator":
 						// we might want to check if it's 'and' or 'or'
 						// n.ChildByFieldName("operator")?
-						// actually, for standard complexity we count these if we want, but let's see. 
+						// actually, for standard complexity we count these if we want, but let's see.
 						// Our Go test just adds `if`, `for`, `while`, `except` and `elif`.
 						// Let's stick to the basic nodes.
 					}
