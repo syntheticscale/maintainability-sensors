@@ -96,7 +96,8 @@ When modifying existing sensors or adding a new language bootstrap:
 5. **Subagent Protocol (Stop & Report):** If you encounter any blocking issues, ambiguous requirements, or areas that warrant architectural questions during execution, you MUST stop and report back to the orchestrating agent immediately. Do not guess or force a fragile solution.
 6. **Semantic Modularity Review (Tier 2 Skill):** For any significant architectural changes or large features, you MUST invoke the `modularity-reviewer` AI skill to evaluate your code for semantic duplication and misplaced responsibilities. Do not simply accept the "happy path" completion.
 7. **Pre-Flight Check (Tier 2 Skill):** Before reporting task completion to the user, you MUST invoke the `pre-flight-check` AI skill to autonomously run `check-diff` and the test suite. Fix any refactoring prompts generated.
-8. **Commit Often:** Always commit changes after each significant step, rather than waiting until the end of a long feature or refactoring session. Ensure changes are checkpoints safely along the way.
+8. **NFR & Performance Review (Tier 2 Skill):** Whenever refactoring for performance, evaluating Non-Functional Requirements (NFRs), or adding high-frequency features (e.g. LSP handling), you MUST invoke the `performance-benchmarker` AI skill to establish an empirical baseline. Never optimize without microbenchmarks.
+9. **Commit Often:** Always commit changes after each significant step, rather than waiting until the end of a long feature or refactoring session. Ensure changes are checkpoints safely along the way.
 
 ## 🔄 Iterative Subagent Development Loop
 
