@@ -3,10 +3,10 @@
   "language": "typescript",
   "tooling_detected": true,
   "metrics": {
-    "complexity": 0,
+    "complexity": 7,
     "cognitive_complexity": 0,
-    "function_length": 0,
-    "argument_count": 0,
+    "function_length": 73,
+    "argument_count": 8,
     "max_case_length": 0
   }
 }

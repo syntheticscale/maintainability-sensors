@@ -48,9 +48,11 @@ var GlobalRegistry = NewPluginRegistry()
 
 func init() {
 	// Register Javascript/Typescript plugins
+	GlobalRegistry.Register("javascript", TypeScriptTreeSitterPlugin{})
 	GlobalRegistry.Register("javascript", ESLintPlugin{})
-	GlobalRegistry.Register("typescript", ESLintPlugin{})
 	GlobalRegistry.Register("javascript", BiomePlugin{})
+	GlobalRegistry.Register("typescript", TypeScriptTreeSitterPlugin{})
+	GlobalRegistry.Register("typescript", ESLintPlugin{})
 	GlobalRegistry.Register("typescript", BiomePlugin{})
 
 	// Register Python plugins
