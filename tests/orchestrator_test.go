@@ -73,14 +73,14 @@ func ComplexFunc(a, b int, name string, flag bool) int {
 
 func TestOrchestratedScan_WorkingBlindFallback(t *testing.T) {
 	tempDir := t.TempDir()
-	pyFile := filepath.Join(tempDir, "app.py")
+	rbFile := filepath.Join(tempDir, "app.rb")
 
-	if err := os.WriteFile(pyFile, []byte("def hello():\n    pass\n"), 0644); err != nil {
-		t.Fatalf("failed to write mock python file: %v", err)
+	if err := os.WriteFile(rbFile, []byte("def hello\nend\n"), 0644); err != nil {
+		t.Fatalf("failed to write mock ruby file: %v", err)
 	}
 
 	// Scan file in clean temp directory (no lint configs exist)
-	res, err := sensors.OrchestratedScan(pyFile)
+	res, err := sensors.OrchestratedScan(rbFile)
 	if err != nil {
 		t.Fatalf("OrchestratedScan failed: %v", err)
 	}

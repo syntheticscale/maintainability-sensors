@@ -54,6 +54,7 @@ func init() {
 	GlobalRegistry.Register("typescript", BiomePlugin{})
 
 	// Register Python plugins
+	GlobalRegistry.Register("python", PythonTreeSitterPlugin{})
 	GlobalRegistry.Register("python", PyLintPlugin{})
 	GlobalRegistry.Register("python", RuffPlugin{})
 

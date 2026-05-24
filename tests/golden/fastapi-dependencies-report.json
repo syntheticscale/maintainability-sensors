@@ -3,10 +3,10 @@
   "language": "python",
   "tooling_detected": true,
   "metrics": {
-    "complexity": 0,
+    "complexity": 20,
     "cognitive_complexity": 0,
-    "function_length": 0,
-    "argument_count": 0,
+    "function_length": 135,
+    "argument_count": 9,
     "max_case_length": 0
   }
 }
