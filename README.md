@@ -19,6 +19,13 @@ In an AI-augmented software development lifecycle, **generating code is no longe
 
 Instead of passive `README` guides that agents ignore, or blunt CI pipelines that frustrate humans, sensors act as **real-time AI Skills**. They measure code health (cyclomatic complexity, function length, parameter counts) during the active coding phase. Crucially, when an agent writes a monolithic block of code, the sensor returns a **highly structured self-correction prompt**, nudging the AI to refactor its own code or explicitly declare an exception *before* a human ever has to review it.
 
+### The Two-Tier Sensor Strategy
+
+Birgitta Böckeler's original article outlines a comprehensive vision requiring both fast syntactic checks and slow, context-heavy semantic reviews. To prevent scope creep and maintain this CLI as a lightning-fast utility, we employ a **Two-Tier Architecture**:
+
+1. **Tier 1: Syntactic Sensors (This Go CLI):** Operates as the **"Fast Feedback"** loop. It provides sub-millisecond, stateless, local AST analysis continuously during the agent's coding session (via `check-diff`). It enforces boundaries on complexity, length, and layer dependencies without requiring LLM network calls.
+2. **Tier 2: Semantic Sensors (Deferred to AI Skills & CI):** Tasks requiring semantic understanding (e.g., detecting duplicated business logic) or slow test executions (e.g., Mutation Testing) are intentionally excluded from this CLI. They are meant to be implemented as higher-level AI Agent Skills or asynchronous CI pipeline tasks.
+
 ---
 
 ## 🚀 Key Features
