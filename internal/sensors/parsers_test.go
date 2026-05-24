@@ -489,7 +489,7 @@ func TestGetParserForLang(t *testing.T) {
 	}
 }
 
-// ─── detectRelaxedLimits ───
+// ─── DetectRelaxedLimits ───
 
 func TestDetectRelaxedLimits_ESLintJSON(t *testing.T) {
 	tempDir := t.TempDir()
@@ -508,7 +508,7 @@ func TestDetectRelaxedLimits_ESLintJSON(t *testing.T) {
 		t.Fatalf("failed to write config: %v", err)
 	}
 
-	got := detectRelaxedLimits(configPath, ESLintConfigParser{})
+	got := DetectRelaxedLimits(configPath, ESLintConfigParser{})
 
 	if len(got) != 4 {
 		t.Fatalf("expected 4 relaxed limits, got %d: %+v", len(got), got)
@@ -551,7 +551,7 @@ max-module-lines=450
 		t.Fatalf("failed to write config: %v", err)
 	}
 
-	got := detectRelaxedLimits(configPath, PyLintConfigParser{})
+	got := DetectRelaxedLimits(configPath, PyLintConfigParser{})
 
 	if len(got) != 4 {
 		t.Fatalf("expected 4 relaxed limits, got %d: %+v", len(got), got)
@@ -592,7 +592,7 @@ func TestDetectRelaxedLimits_NoRelaxation(t *testing.T) {
 		t.Fatalf("failed to write config: %v", err)
 	}
 
-	got := detectRelaxedLimits(configPath, ESLintConfigParser{})
+	got := DetectRelaxedLimits(configPath, ESLintConfigParser{})
 
 	if len(got) != 0 {
 		t.Errorf("expected 0 relaxed limits when all values are below baseline, got %d: %+v", len(got), got)
@@ -600,7 +600,7 @@ func TestDetectRelaxedLimits_NoRelaxation(t *testing.T) {
 }
 
 func TestDetectRelaxedLimits_EmptyPath(t *testing.T) {
-	got := detectRelaxedLimits("", ESLintConfigParser{})
+	got := DetectRelaxedLimits("", ESLintConfigParser{})
 	if len(got) != 0 {
 		t.Errorf("expected empty slice for empty config path, got %d: %+v", len(got), got)
 	}
@@ -624,7 +624,7 @@ Metrics/MethodLength:
 		t.Fatalf("failed to write config: %v", err)
 	}
 
-	got := detectRelaxedLimits(configPath, RuboCopConfigParser{})
+	got := DetectRelaxedLimits(configPath, RuboCopConfigParser{})
 
 	if len(got) != 2 {
 		t.Fatalf("expected 2 relaxed limits, got %d: %+v", len(got), got)
@@ -668,7 +668,7 @@ linters-settings:
 		t.Fatalf("failed to write config: %v", err)
 	}
 
-	got := detectRelaxedLimits(configPath, GoConfigParser{})
+	got := DetectRelaxedLimits(configPath, GoConfigParser{})
 
 	if len(got) != 2 {
 		t.Fatalf("expected 2 relaxed limits, got %d: %+v", len(got), got)

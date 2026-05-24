@@ -448,7 +448,7 @@ func buildSingleResult(ctx BatchContext, cleanPath string) OrchestratorResult {
 	}
 
 	if anchor := ctx.ConfigAnchors[cleanPath]; anchor != "" {
-		res.Exceptions = detectRelaxedLimits(anchor, ctx.ToolByPath[cleanPath])
+		res.Exceptions = DetectRelaxedLimits(anchor, ctx.ToolByPath[cleanPath])
 	}
 
 	populateResultMessage(ctx, &res, cleanPath)
@@ -468,7 +468,7 @@ func findConfigAndParsers(validPaths []string, lang string) (map[string]string, 
 	toolByPath := make(map[string]ConfigParser)
 
 	for _, cleanPath := range validPaths {
-		anchor, parser := detectConfigAndParser(cleanPath, lang)
+		anchor, parser := DetectConfigAndParser(cleanPath, lang)
 		if anchor != "" {
 			configAnchors[cleanPath] = anchor
 			toolByPath[cleanPath] = parser
@@ -525,7 +525,7 @@ func findConfigInDir(absDir string, parsers []ConfigParser) (string, ConfigParse
 	return "", nil
 }
 
-func detectConfigAndParser(filePath string, lang string) (string, ConfigParser) {
+func DetectConfigAndParser(filePath string, lang string) (string, ConfigParser) {
 	parsers := getParsersForLang(lang)
 	if len(parsers) == 0 {
 		return "", nil
@@ -551,7 +551,7 @@ func detectConfigAndParser(filePath string, lang string) (string, ConfigParser) 
 }
 
 func detectConfig(filePath string, lang string) string {
-	anchor, _ := detectConfigAndParser(filePath, lang)
+	anchor, _ := DetectConfigAndParser(filePath, lang)
 	return anchor
 }
 
@@ -886,7 +886,7 @@ func isValidConfigFile(configPath string) bool {
 	return err == nil && info.Mode().IsRegular() && info.Size() <= 2*1024*1024
 }
 
-func detectRelaxedLimits(configPath string, parser ConfigParser) []RelaxedLimit {
+func DetectRelaxedLimits(configPath string, parser ConfigParser) []RelaxedLimit {
 	var exceptions []RelaxedLimit
 	if configPath == "" || parser == nil || !isValidConfigFile(configPath) {
 		return exceptions
