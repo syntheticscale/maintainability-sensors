@@ -6,6 +6,8 @@ __pycache__/
 
 # Worktrees
 .worktrees/
+worktrees/
+.worktrees/
 
 # IDE and local configurations
 .vscode/
