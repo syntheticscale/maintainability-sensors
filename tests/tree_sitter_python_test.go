@@ -35,7 +35,7 @@ def complex_function(x, y, z, options):
 		t.Fatalf("Failed to write test python file: %v", err)
 	}
 
-	violations, err := sensors.ParsePythonTreeSitter(filePath)
+	violations, err := sensors.ParsePythonTreeSitter(sensors.FileContext{Path: filePath})
 	if err != nil {
 		t.Fatalf("ParsePythonTreeSitter failed: %v", err)
 	}

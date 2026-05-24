@@ -90,7 +90,12 @@ func processRuboCopAnalyzeResult(exitCode int, result RuboCopResult, output []by
 	return nil, fmt.Errorf("rubocop exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 }
 
-func (p RuboCopPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
+func (p RuboCopPlugin) Analyze(files []FileContext) (map[string][]Violation, error) {
+	var filePaths []string
+	for _, f := range files {
+		filePaths = append(filePaths, f.Path)
+	}
+
 	args := []string{"--format", "json"}
 	args = append(args, "--")
 	args = append(args, filePaths...)

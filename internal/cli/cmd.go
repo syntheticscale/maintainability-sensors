@@ -264,7 +264,12 @@ func processDeltaGroups(groups map[string][]string, originalPaths map[string]str
 			continue
 		}
 
-		violationsMap, err := sensors.ScanDeltaBatch(langFiles, originalPaths, lang)
+		fileContexts := make([]sensors.FileContext, len(langFiles))
+		for i, f := range langFiles {
+			fileContexts[i] = sensors.FileContext{Path: f}
+		}
+
+		violationsMap, err := sensors.ScanDeltaBatch(fileContexts, originalPaths, lang)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "[WARNING] Delta scan failed for %s: %v\n", lang, err)
 			continue
@@ -426,7 +431,12 @@ func ScanFiles(filePaths []string, isDir bool) ([]sensors.OrchestratorResult, er
 				return nil
 			}
 
-			res, err := sensors.OrchestratedScanBatch(files, lang)
+			fileContexts := make([]sensors.FileContext, len(files))
+			for i, f := range files {
+				fileContexts[i] = sensors.FileContext{Path: f}
+			}
+
+			res, err := sensors.OrchestratedScanBatch(fileContexts, lang)
 			if err != nil {
 				if !isDir {
 					return fmt.Errorf("Scan failed: %v", err)

@@ -65,7 +65,7 @@ const arrowFunc = (a: string) => {
 	err := os.WriteFile(testFile, []byte(tsContent), 0644)
 	require.NoError(t, err)
 
-	violations, err := sensors.ParseTypeScriptTreeSitter(testFile)
+	violations, err := sensors.ParseTypeScriptTreeSitter(sensors.FileContext{Path: testFile})
 	require.NoError(t, err)
 
 	for _, v := range violations {

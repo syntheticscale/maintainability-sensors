@@ -16,15 +16,22 @@ type GoMetrics struct {
 }
 
 // ParseGoAST reads a Go file and extracts maintainability metrics natively.
-func ParseGoAST(filePath string) ([]Violation, error) {
+func ParseGoAST(file FileContext) ([]Violation, error) {
 	var violations []Violation
 
-	if info, err := os.Stat(filePath); err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
-		return violations, nil
+	if file.Content == nil {
+		if info, err := os.Stat(file.Path); err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
+			return violations, nil
+		}
+	}
+
+	var src interface{}
+	if file.Content != nil {
+		src = file.Content
 	}
 
 	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+	f, err := parser.ParseFile(fset, file.Path, src, 0)
 	if err != nil {
 		return violations, err
 	}
@@ -203,10 +210,11 @@ func (p GoPlugin) Name() string {
 	return "go-ast"
 }
 
-func (p GoPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
+func (p GoPlugin) Analyze(files []FileContext) (map[string][]Violation, error) {
 	metricsMap := make(map[string][]Violation)
-	for _, filePath := range filePaths {
-		violations, err := ParseGoAST(filePath)
+	for _, file := range files {
+		filePath := file.Path
+		violations, err := ParseGoAST(file)
 		if err != nil {
 			return nil, err
 		}
@@ -217,7 +225,7 @@ func (p GoPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
 			}
 		}
 
-		metricsMap[filePath] = violations
+		metricsMap[file.Path] = violations
 	}
 	return metricsMap, nil
 }

@@ -43,7 +43,7 @@ func OrchestratedScan(filePath string) (OrchestratorResult, error) {
 	if lang == "" {
 		return OrchestratorResult{FilePath: filePath}, fmt.Errorf("unsupported or unrecognized language file: %s", filePath)
 	}
-	results, err := OrchestratedScanBatch([]string{filePath}, lang)
+	results, err := OrchestratedScanBatch([]FileContext{{Path: filePath}}, lang)
 	if err != nil {
 		return OrchestratorResult{FilePath: filePath, Language: lang}, err
 	}
@@ -53,9 +53,9 @@ func OrchestratedScan(filePath string) (OrchestratorResult, error) {
 	return OrchestratorResult{FilePath: filePath, Language: lang}, nil
 }
 
-func processPluginsMetrics(plugins []Plugin, toolByPath map[string]ConfigParser, validPaths []string, metricsMap map[string]MaintainabilityMetrics) (string, []string) {
+func processPluginsMetrics(plugins []Plugin, toolByPath map[string]ConfigParser, validFiles []FileContext, metricsMap map[string]MaintainabilityMetrics) (string, []FileContext) {
 	var batchErrorMsg string
-	pathsRemaining := validPaths
+	pathsRemaining := validFiles
 
 	for _, plugin := range plugins {
 		if len(pathsRemaining) == 0 {
@@ -86,14 +86,19 @@ func processPluginsMetrics(plugins []Plugin, toolByPath map[string]ConfigParser,
 }
 
 // OrchestratedScanBatch scans a batch of files for a specific language concurrently.
-func OrchestratedScanBatch(filePaths []string, lang string) ([]OrchestratorResult, error) {
-	if len(filePaths) == 0 {
+func OrchestratedScanBatch(files []FileContext, lang string) ([]OrchestratorResult, error) {
+	if len(files) == 0 {
 		return nil, nil
 	}
 
-	validPaths, originalPaths, err := sanitizeAndMapPaths(filePaths)
+	validFiles, originalPaths, err := sanitizeAndMapFileContexts(files)
 	if err != nil {
 		return nil, err
+	}
+
+	validPaths := make([]string, len(validFiles))
+	for i, f := range validFiles {
+		validPaths[i] = f.Path
 	}
 
 	plugins := GlobalRegistry.GetPlugins(lang)
@@ -112,7 +117,7 @@ func OrchestratedScanBatch(filePaths []string, lang string) ([]OrchestratorResul
 	configAnchors, toolByPath := findConfigAndParsers(validPaths, lang)
 
 	metricsMap := make(map[string]MaintainabilityMetrics)
-	batchErrorMsg, _ := processPluginsMetrics(plugins, toolByPath, validPaths, metricsMap)
+	batchErrorMsg, _ := processPluginsMetrics(plugins, toolByPath, validFiles, metricsMap)
 
 	return buildOrchestratorResults(BatchContext{
 		ValidPaths:    validPaths,
@@ -129,12 +134,12 @@ func OrchestratedScanBatch(filePaths []string, lang string) ([]OrchestratorResul
 type ProcessDeltaCtx struct {
 	Plugins       []Plugin
 	ToolByPath    map[string]ConfigParser
-	ValidPaths    []string
+	ValidPaths    []FileContext
 	OriginalPaths map[string]string
 	MetricsMap    map[string][]Violation
 }
 
-func processPluginsDelta(ctx ProcessDeltaCtx) ([]string, error) {
+func processPluginsDelta(ctx ProcessDeltaCtx) ([]FileContext, error) {
 	pathsRemaining := ctx.ValidPaths
 
 	for _, plugin := range ctx.Plugins {
@@ -166,18 +171,20 @@ func processPluginsDelta(ctx ProcessDeltaCtx) ([]string, error) {
 }
 
 // ScanDeltaBatch scans a batch of files for a specific language concurrently and returns raw violations.
-func ScanDeltaBatch(filePaths []string, originalPaths map[string]string, lang string) (map[string][]Violation, error) {
-	if len(filePaths) == 0 {
+func ScanDeltaBatch(files []FileContext, originalPaths map[string]string, lang string) (map[string][]Violation, error) {
+	if len(files) == 0 {
 		return nil, nil
 	}
 
-	validPaths := make([]string, 0, len(filePaths))
-	for _, p := range filePaths {
-		clean, err := sanitizePath(p)
+	validPaths := make([]FileContext, 0, len(files))
+	validPathsStr := make([]string, 0, len(files))
+	for _, p := range files {
+		clean, err := sanitizePath(p.Path)
 		if err != nil {
 			return nil, err
 		}
-		validPaths = append(validPaths, clean)
+		validPaths = append(validPaths, FileContext{Path: clean, Content: p.Content})
+		validPathsStr = append(validPathsStr, clean)
 	}
 
 	plugins := GlobalRegistry.GetPlugins(lang)
@@ -185,7 +192,7 @@ func ScanDeltaBatch(filePaths []string, originalPaths map[string]string, lang st
 		return nil, nil
 	}
 
-	_, toolByPath := findConfigAndParsers(validPaths, lang)
+	_, toolByPath := findConfigAndParsers(validPathsStr, lang)
 
 	metricsMap := make(map[string][]Violation)
 	_, err := processPluginsDelta(ProcessDeltaCtx{
@@ -202,15 +209,15 @@ func ScanDeltaBatch(filePaths []string, originalPaths map[string]string, lang st
 	return metricsMap, nil
 }
 
-func filterPathsForPlugin(pathsRemaining []string, plugin Plugin, toolByPath map[string]ConfigParser) []string {
+func filterPathsForPlugin(pathsRemaining []FileContext, plugin Plugin, toolByPath map[string]ConfigParser) []FileContext {
 	pluginName := plugin.Name()
 	isNative := strings.HasSuffix(pluginName, "-ast")
-	var pathsForPlugin []string
+	var pathsForPlugin []FileContext
 	for _, p := range pathsRemaining {
 		if isNative {
 			pathsForPlugin = append(pathsForPlugin, p)
 		} else {
-			if toolByPath[p] != nil && toolByPath[p].Name() == pluginName {
+			if toolByPath[p.Path] != nil && toolByPath[p.Path].Name() == pluginName {
 				pathsForPlugin = append(pathsForPlugin, p)
 			}
 		}
@@ -218,7 +225,7 @@ func filterPathsForPlugin(pathsRemaining []string, plugin Plugin, toolByPath map
 	return pathsForPlugin
 }
 
-func analyzeInChunks(plugin Plugin, pathsForPlugin []string) (map[string][]Violation, error) {
+func analyzeInChunks(plugin Plugin, pathsForPlugin []FileContext) (map[string][]Violation, error) {
 	toolMetrics := make(map[string][]Violation)
 	var mu sync.Mutex
 	eg, _ := errgroup.WithContext(context.Background())
@@ -255,13 +262,13 @@ func analyzeInChunks(plugin Plugin, pathsForPlugin []string) (map[string][]Viola
 type UpdateMetricsCtx struct {
 	MetricsMap     map[string]MaintainabilityMetrics
 	ToolMetrics    map[string][]Violation
-	PathsRemaining []string
-	PathsForPlugin []string
+	PathsRemaining []FileContext
+	PathsForPlugin []FileContext
 }
 
-func isPathForPlugin(p string, pathsForPlugin []string) bool {
+func isPathForPlugin(p string, pathsForPlugin []FileContext) bool {
 	for _, pfp := range pathsForPlugin {
-		if p == pfp {
+		if p == pfp.Path {
 			return true
 		}
 	}
@@ -307,14 +314,15 @@ func findAndUpdateMetrics(p string, absP string, ctx UpdateMetricsCtx) bool {
 	return false
 }
 
-func updateMetricsMap(ctx UpdateMetricsCtx) []string {
-	var nextRemaining []string
-	for _, p := range ctx.PathsRemaining {
+func updateMetricsMap(ctx UpdateMetricsCtx) []FileContext {
+	var nextRemaining []FileContext
+	for _, f := range ctx.PathsRemaining {
+		p := f.Path
 		absP, _ := filepath.Abs(p)
 		found := findAndUpdateMetrics(p, absP, ctx)
 		if !found {
 			if !isPathForPlugin(p, ctx.PathsForPlugin) {
-				nextRemaining = append(nextRemaining, p)
+				nextRemaining = append(nextRemaining, f)
 			}
 		}
 	}
@@ -325,8 +333,8 @@ type UpdateDeltaCtx struct {
 	MetricsMap     map[string][]Violation
 	ToolMetrics    map[string][]Violation
 	OriginalPaths  map[string]string
-	PathsRemaining []string
-	PathsForPlugin []string
+	PathsRemaining []FileContext
+	PathsForPlugin []FileContext
 }
 
 func findAndUpdateDeltaMetrics(p string, absP string, ctx UpdateDeltaCtx) bool {
@@ -343,14 +351,15 @@ func findAndUpdateDeltaMetrics(p string, absP string, ctx UpdateDeltaCtx) bool {
 	return false
 }
 
-func updateDeltaMetricsMap(ctx UpdateDeltaCtx) []string {
-	var nextRemaining []string
-	for _, p := range ctx.PathsRemaining {
+func updateDeltaMetricsMap(ctx UpdateDeltaCtx) []FileContext {
+	var nextRemaining []FileContext
+	for _, f := range ctx.PathsRemaining {
+		p := f.Path
 		absP, _ := filepath.Abs(p)
 		found := findAndUpdateDeltaMetrics(p, absP, ctx)
 		if !found {
 			if !isPathForPlugin(p, ctx.PathsForPlugin) {
-				nextRemaining = append(nextRemaining, p)
+				nextRemaining = append(nextRemaining, f)
 			}
 		}
 	}

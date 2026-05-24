@@ -9,12 +9,18 @@ import (
 )
 
 // ParseTypeScriptTreeSitter parses a TypeScript file using tree-sitter and returns violations.
-func ParseTypeScriptTreeSitter(filePath string) ([]Violation, error) {
+func ParseTypeScriptTreeSitter(file FileContext) ([]Violation, error) {
 	var violations []Violation
 
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return violations, err
+	var content []byte
+	var err error
+	if file.Content != nil {
+		content = file.Content
+	} else {
+		content, err = os.ReadFile(file.Path)
+		if err != nil {
+			return violations, err
+		}
 	}
 
 	parser := sitter.NewParser()
@@ -136,9 +142,9 @@ func ParseTypeScriptTreeSitter(filePath string) ([]Violation, error) {
 
 	walk(rootNode)
 
-	archConfig := findArchitectureConfig(filePath)
+	archConfig := findArchitectureConfig(file.Path)
 	if archConfig != nil {
-		archViolations := CheckArchitectureDependencies(filePath, archConfig, imports)
+		archViolations := CheckArchitectureDependencies(file.Path, archConfig, imports)
 		violations = append(violations, archViolations...)
 	}
 
@@ -152,14 +158,14 @@ func (p TypeScriptTreeSitterPlugin) Name() string {
 	return "typescript-ast"
 }
 
-func (p TypeScriptTreeSitterPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
+func (p TypeScriptTreeSitterPlugin) Analyze(files []FileContext) (map[string][]Violation, error) {
 	metricsMap := make(map[string][]Violation)
-	for _, filePath := range filePaths {
-		violations, err := ParseTypeScriptTreeSitter(filePath)
+	for _, file := range files {
+		violations, err := ParseTypeScriptTreeSitter(file)
 		if err != nil {
 			return nil, err
 		}
-		metricsMap[filePath] = violations
+		metricsMap[file.Path] = violations
 	}
 	return metricsMap, nil
 }

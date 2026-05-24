@@ -101,7 +101,7 @@ func TestRunESLint_Subprocess(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			metricsMap, err := ESLintPlugin{}.Analyze([]string{tc.filePath})
+			metricsMap, err := ESLintPlugin{}.Analyze([]FileContext{{Path: tc.filePath}})
 			metrics := metricsMap[tc.filePath]
 			if tc.wantErr {
 				if err == nil {
@@ -136,7 +136,7 @@ func TestRunESLint_Subprocess(t *testing.T) {
 		os.Setenv("PATH", emptyDir)
 		defer os.Setenv("PATH", origPath)
 
-		_, err := ESLintPlugin{}.Analyze([]string{"test.ts"})
+		_, err := ESLintPlugin{}.Analyze([]FileContext{{Path: "test.ts"}})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -168,7 +168,7 @@ func TestRunPyLint_Subprocess(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			metricsMap, err := PyLintPlugin{}.Analyze([]string{tc.filePath})
+			metricsMap, err := PyLintPlugin{}.Analyze([]FileContext{{Path: tc.filePath}})
 			metrics := metricsMap[tc.filePath]
 			if tc.wantErr {
 				if err == nil {
@@ -203,7 +203,7 @@ func TestRunPyLint_Subprocess(t *testing.T) {
 		os.Setenv("PATH", emptyDir)
 		defer os.Setenv("PATH", origPath)
 
-		_, err := PyLintPlugin{}.Analyze([]string{"test.py"})
+		_, err := PyLintPlugin{}.Analyze([]FileContext{{Path: "test.py"}})
 		if err == nil {
 			t.Fatal("expected error")
 		}
@@ -235,7 +235,7 @@ func TestRunRuboCop_Subprocess(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			metricsMap, err := RuboCopPlugin{}.Analyze([]string{tc.filePath})
+			metricsMap, err := RuboCopPlugin{}.Analyze([]FileContext{{Path: tc.filePath}})
 			metrics := metricsMap[tc.filePath]
 			if tc.wantErr {
 				if err == nil {
@@ -270,7 +270,7 @@ func TestRunRuboCop_Subprocess(t *testing.T) {
 		os.Setenv("PATH", emptyDir)
 		defer os.Setenv("PATH", origPath)
 
-		_, err := RuboCopPlugin{}.Analyze([]string{"test.rb"})
+		_, err := RuboCopPlugin{}.Analyze([]FileContext{{Path: "test.rb"}})
 		if err == nil {
 			t.Fatal("expected error")
 		}

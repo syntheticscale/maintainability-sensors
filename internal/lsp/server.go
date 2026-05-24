@@ -1,12 +1,10 @@
 package lsp
-
 import (
 	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -194,29 +192,21 @@ func Start(in io.Reader, out io.Writer) error {
 				continue
 			}
 
-			dir := filepath.Dir(filePath)
-			ext := filepath.Ext(filePath)
-
-			tmpFile, err := os.CreateTemp(dir, fmt.Sprintf(".lsp_temp_*%s", ext))
-			if err != nil {
-				continue
+			fileCtx := sensors.FileContext{
+				Path:    filePath,
+				Content: []byte(newText),
 			}
-			tmpName := tmpFile.Name()
-			tmpFile.Write([]byte(newText))
-			tmpFile.Close()
 
-			func(tmpPath, origPath, uri, lang string) {
-				defer os.Remove(tmpPath)
-
-				metricsMap, err := sensors.ScanDeltaBatch([]string{tmpPath}, map[string]string{tmpPath: origPath}, lang)
+			func(file sensors.FileContext, uri, lang string) {
+				metricsMap, err := sensors.ScanDeltaBatch([]sensors.FileContext{file}, map[string]string{file.Path: file.Path}, lang)
 				if err != nil {
 					return
 				}
 
-				violations := metricsMap[origPath]
+				violations := metricsMap[file.Path]
 
 				var exceptions []sensors.RelaxedLimit
-				if anchor, parser := sensors.DetectConfigAndParser(origPath, lang); anchor != "" {
+				if anchor, parser := sensors.DetectConfigAndParser(file.Path, lang); anchor != "" {
 					exceptions = sensors.DetectRelaxedLimits(anchor, parser)
 				}
 
@@ -249,7 +239,7 @@ func Start(in io.Reader, out io.Writer) error {
 					},
 				}
 				sendNotification(out, notif)
-			}(tmpName, filePath, uri, lang)
+			}(fileCtx, uri, lang)
 		} else if req.Method == "exit" {
 			return nil
 		}

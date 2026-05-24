@@ -54,7 +54,12 @@ func parsePyLintMessages(list []PyLintMessage) map[string][]Violation {
 	return metricsMap
 }
 
-func (p PyLintPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
+func (p PyLintPlugin) Analyze(files []FileContext) (map[string][]Violation, error) {
+	var filePaths []string
+	for _, f := range files {
+		filePaths = append(filePaths, f.Path)
+	}
+
 	args := []string{"--output-format=json"}
 	args = append(args, "--")
 	args = append(args, filePaths...)

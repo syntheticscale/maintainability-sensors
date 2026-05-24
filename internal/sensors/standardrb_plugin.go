@@ -85,7 +85,12 @@ func processStandardRBAnalyzeResult(exitCode int, result StandardRBResult, outpu
 	return nil, fmt.Errorf("standardrb exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 }
 
-func (p StandardRBPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
+func (p StandardRBPlugin) Analyze(files []FileContext) (map[string][]Violation, error) {
+	var filePaths []string
+	for _, f := range files {
+		filePaths = append(filePaths, f.Path)
+	}
+
 	args := []string{"--format", "json"}
 	args = append(args, "--")
 	args = append(args, filePaths...)

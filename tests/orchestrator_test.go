@@ -47,7 +47,7 @@ func ComplexFunc(a, b int, name string, flag bool) int {
 		t.Fatalf("failed to write test Go file: %v", err)
 	}
 
-	metrics, err := sensors.ParseGoAST(goFile)
+	metrics, err := sensors.ParseGoAST(sensors.FileContext{Path: goFile})
 	if err != nil {
 		t.Fatalf("ParseGoAST failed: %v", err)
 	}
@@ -118,7 +118,7 @@ namespace Sample {
 		t.Fatalf("failed to write test C# file: %v", err)
 	}
 
-	metrics, err := sensors.ParseCSharp(csFile)
+	metrics, err := sensors.ParseCSharp(sensors.FileContext{Path: csFile})
 	if err != nil {
 		t.Fatalf("ParseCSharp failed: %v", err)
 	}
@@ -160,7 +160,7 @@ public class Sample {
 		t.Fatalf("failed to write test Java file: %v", err)
 	}
 
-	metrics, err := sensors.ParseJava(javaFile)
+	metrics, err := sensors.ParseJava(sensors.FileContext{Path: javaFile})
 	if err != nil {
 		t.Fatalf("ParseJava failed: %v", err)
 	}

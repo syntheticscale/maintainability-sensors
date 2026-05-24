@@ -10,10 +10,15 @@ type Violation struct {
 	Message   string
 }
 
+type FileContext struct {
+	Path    string
+	Content []byte
+}
+
 // Plugin defines the interface for language parsers and linters.
 type Plugin interface {
 	Name() string
-	Analyze(filePaths []string) (map[string][]Violation, error)
+	Analyze(files []FileContext) (map[string][]Violation, error)
 }
 
 // PluginRegistry manages available plugins.

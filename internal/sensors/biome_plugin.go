@@ -114,7 +114,12 @@ func processBiomeAnalyzeResult(exitCode int, result BiomeResult, output []byte) 
 	return nil, fmt.Errorf("biome exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 }
 
-func (p BiomePlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
+func (p BiomePlugin) Analyze(files []FileContext) (map[string][]Violation, error) {
+	var filePaths []string
+	for _, f := range files {
+		filePaths = append(filePaths, f.Path)
+	}
+
 	args := []string{"lint", "--formatter-enabled=false", "--output-format=json"}
 	args = append(args, "--")
 	args = append(args, filePaths...)

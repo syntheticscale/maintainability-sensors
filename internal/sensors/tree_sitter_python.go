@@ -10,13 +10,20 @@ import (
 )
 
 // ParsePythonTreeSitter parses a Python file using tree-sitter and returns violations.
-func ParsePythonTreeSitter(filePath string) ([]Violation, error) {
+func ParsePythonTreeSitter(file FileContext) ([]Violation, error) {
 	var violations []Violation
 
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return violations, err
+	var content []byte
+	var err error
+	if file.Content != nil {
+		content = file.Content
+	} else {
+		content, err = os.ReadFile(file.Path)
+		if err != nil {
+			return violations, err
+		}
 	}
+	filePath := file.Path
 
 	parser := sitter.NewParser()
 	parser.SetLanguage(python.GetLanguage())
@@ -151,14 +158,14 @@ func (p PythonTreeSitterPlugin) Name() string {
 	return "python-ast"
 }
 
-func (p PythonTreeSitterPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
+func (p PythonTreeSitterPlugin) Analyze(files []FileContext) (map[string][]Violation, error) {
 	metricsMap := make(map[string][]Violation)
-	for _, filePath := range filePaths {
-		violations, err := ParsePythonTreeSitter(filePath)
+	for _, file := range files {
+		violations, err := ParsePythonTreeSitter(file)
 		if err != nil {
 			return nil, err
 		}
-		metricsMap[filePath] = violations
+		metricsMap[file.Path] = violations
 	}
 	return metricsMap, nil
 }

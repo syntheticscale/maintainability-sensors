@@ -55,7 +55,7 @@ func Do() {}
 
 	plugin := sensors.GoPlugin{}
 
-	resValid, err := plugin.Analyze([]string{apiFileValid})
+	resValid, err := plugin.Analyze([]sensors.FileContext{{Path: apiFileValid}})
 	if err != nil {
 		t.Fatalf("Analyze failed: %v", err)
 	}
@@ -67,7 +67,7 @@ func Do() {}
 		}
 	}
 
-	resInvalid, err := plugin.Analyze([]string{domainFileInvalid})
+	resInvalid, err := plugin.Analyze([]sensors.FileContext{{Path: domainFileInvalid}})
 	if err != nil {
 		t.Fatalf("Analyze failed: %v", err)
 	}
@@ -107,7 +107,7 @@ function do() {}
 
 	plugin := sensors.TypeScriptTreeSitterPlugin{}
 
-	resValid, err := plugin.Analyze([]string{apiFileValid})
+	resValid, err := plugin.Analyze([]sensors.FileContext{{Path: apiFileValid}})
 	if err != nil {
 		t.Fatalf("Analyze failed: %v", err)
 	}
@@ -118,7 +118,7 @@ function do() {}
 		}
 	}
 
-	resInvalid, err := plugin.Analyze([]string{domainFileInvalid})
+	resInvalid, err := plugin.Analyze([]sensors.FileContext{{Path: domainFileInvalid}})
 	if err != nil {
 		t.Fatalf("Analyze failed: %v", err)
 	}
@@ -158,7 +158,7 @@ def do(): pass
 
 	plugin := sensors.PythonTreeSitterPlugin{}
 
-	resValid, err := plugin.Analyze([]string{apiFileValid})
+	resValid, err := plugin.Analyze([]sensors.FileContext{{Path: apiFileValid}})
 	if err != nil {
 		t.Fatalf("Analyze failed: %v", err)
 	}
@@ -169,7 +169,7 @@ def do(): pass
 		}
 	}
 
-	resInvalid, err := plugin.Analyze([]string{domainFileInvalid})
+	resInvalid, err := plugin.Analyze([]sensors.FileContext{{Path: domainFileInvalid}})
 	if err != nil {
 		t.Fatalf("Analyze failed: %v", err)
 	}

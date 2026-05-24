@@ -79,7 +79,12 @@ func processESLintAnalyzeResult(exitCode int, list []ESLintResult, output []byte
 	return nil, fmt.Errorf("ESLint exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 }
 
-func (p ESLintPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
+func (p ESLintPlugin) Analyze(files []FileContext) (map[string][]Violation, error) {
+	var filePaths []string
+	for _, f := range files {
+		filePaths = append(filePaths, f.Path)
+	}
+
 	args := []string{"--no-install", "eslint", "-f", "json"}
 	args = append(args, "--")
 	args = append(args, filePaths...)

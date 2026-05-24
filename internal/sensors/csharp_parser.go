@@ -8,16 +8,21 @@ import (
 	"github.com/smacker/go-tree-sitter/csharp"
 )
 
-func ParseCSharp(filePath string) ([]Violation, error) {
+func ParseCSharp(file FileContext) ([]Violation, error) {
 	var violations []Violation
 
-	if info, err := os.Stat(filePath); err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
-		return violations, nil
-	}
-
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		return violations, err
+	var content []byte
+	var err error
+	if file.Content != nil {
+		content = file.Content
+	} else {
+		if info, err := os.Stat(file.Path); err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
+			return violations, nil
+		}
+		content, err = os.ReadFile(file.Path)
+		if err != nil {
+			return violations, err
+		}
 	}
 
 	parser := sitter.NewParser()
@@ -121,14 +126,14 @@ func (p CSharpPlugin) Name() string {
 	return "csharp-ast"
 }
 
-func (p CSharpPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
+func (p CSharpPlugin) Analyze(files []FileContext) (map[string][]Violation, error) {
 	metricsMap := make(map[string][]Violation)
-	for _, filePath := range filePaths {
-		violations, err := ParseCSharp(filePath)
+	for _, file := range files {
+		violations, err := ParseCSharp(file)
 		if err != nil {
 			return nil, err
 		}
-		metricsMap[filePath] = violations
+		metricsMap[file.Path] = violations
 	}
 	return metricsMap, nil
 }

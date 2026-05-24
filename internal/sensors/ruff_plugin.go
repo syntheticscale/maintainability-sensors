@@ -84,7 +84,12 @@ func parseRuffMessages(list []RuffMessage) map[string][]Violation {
 	return metricsMap
 }
 
-func (p RuffPlugin) Analyze(filePaths []string) (map[string][]Violation, error) {
+func (p RuffPlugin) Analyze(files []FileContext) (map[string][]Violation, error) {
+	var filePaths []string
+	for _, f := range files {
+		filePaths = append(filePaths, f.Path)
+	}
+
 	args := []string{"check", "--output-format=json"}
 	args = append(args, "--")
 	args = append(args, filePaths...)
