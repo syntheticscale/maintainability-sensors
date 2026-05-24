@@ -67,7 +67,7 @@ This tool is designed to be a lightweight, ultra-fast Go CLI utility that orches
 /usr/local/go/bin/go test -count=1 ./...
 
 # Build the static binary
-go build -o bin/maintainability-sensors main.go
+go build -o bin/maintainability-sensors ./cmd/maintainability-sensors
 
 # Scan the current folder
 ./bin/maintainability-sensors run .

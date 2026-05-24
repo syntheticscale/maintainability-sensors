@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/alecthomas/kong"
-	"github.com/syntheticscale/maintainability-sensors/sensors"
+	"github.com/syntheticscale/maintainability-sensors/internal/sensors"
 	"golang.org/x/sync/errgroup"
 )
 

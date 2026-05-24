@@ -44,7 +44,7 @@ jobs:
       - name: 🏗️ Compile CLI Binary
         run: |
           mkdir -p bin
-          go build -o bin/maintainability-sensors main.go
+          go build -o bin/maintainability-sensors ./cmd/maintainability-sensors
 
       - name: ⚙️ Setup Pipeline Python Dependencies
         run: |

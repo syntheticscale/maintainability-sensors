@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/syntheticscale/maintainability-sensors/sensors"
+	"github.com/syntheticscale/maintainability-sensors/internal/sensors"
 )
 
 // cliBinary holds the path to the compiled CLI binary (set in TestMain).
@@ -25,9 +25,9 @@ func TestMain(m *testing.M) {
 	cliBinary = filepath.Join(tmpDir, "maintainability-sensors")
 
 	_, thisFile, _, _ := runtime.Caller(0)
-	moduleRoot := filepath.Dir(filepath.Dir(thisFile))
+	moduleRoot := filepath.Dir(filepath.Dir(filepath.Dir(thisFile)))
 
-	cmd := exec.Command("go", "build", "-o", cliBinary, ".")
+	cmd := exec.Command("go", "build", "-o", cliBinary, "./cmd/maintainability-sensors")
 	cmd.Dir = moduleRoot
 	if output, err := cmd.CombinedOutput(); err != nil {
 		panic("failed to build CLI binary: " + err.Error() + "\n" + string(output))
@@ -677,7 +677,7 @@ func TestExecuteGenerate_InvalidJSON(t *testing.T) {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "..", "generate", jsonPath)
+	cmd := exec.Command("go", "run", "../../cmd/maintainability-sensors", "generate", jsonPath)
 	err := cmd.Run()
 	if err == nil {
 		t.Fatal("expected non-zero exit code for invalid JSON")
@@ -692,7 +692,7 @@ func TestExecuteGenerate_InvalidJSON(t *testing.T) {
 func TestExecuteGenerate_MissingFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	cmd := exec.Command("go", "run", "..", "generate", filepath.Join(tmpDir, "nonexistent.json"))
+	cmd := exec.Command("go", "run", "../../cmd/maintainability-sensors", "generate", filepath.Join(tmpDir, "nonexistent.json"))
 	err := cmd.Run()
 	if err == nil {
 		t.Fatal("expected non-zero exit code for missing file")
@@ -738,7 +738,7 @@ func TestExecuteGenerate_MissingFilePath(t *testing.T) {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "..", "generate", jsonPath)
+	cmd := exec.Command("go", "run", "../../cmd/maintainability-sensors", "generate", jsonPath)
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatal("expected non-zero exit code for missing file_path")
@@ -763,7 +763,7 @@ func TestExecuteGenerate_MissingLanguage(t *testing.T) {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
-	cmd := exec.Command("go", "run", "..", "generate", jsonPath)
+	cmd := exec.Command("go", "run", "../../cmd/maintainability-sensors", "generate", jsonPath)
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatal("expected non-zero exit code for missing language")

@@ -40,7 +40,7 @@ With the core architecture stabilized, future work will focus on expanding nativ
 go test -count=1 -race ./...
 
 # 2. Build binary
-go build -o bin/maintainability-sensors main.go
+go build -o bin/maintainability-sensors ./cmd/maintainability-sensors
 
 # 3. Verify no linting issues
 go vet ./...

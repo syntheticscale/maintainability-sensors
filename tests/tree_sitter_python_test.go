@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/syntheticscale/maintainability-sensors/sensors"
+	"github.com/syntheticscale/maintainability-sensors/internal/sensors"
 )
 
 func TestTreeSitterPythonParser(t *testing.T) {

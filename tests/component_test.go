@@ -22,7 +22,7 @@ func TestPolyglotComponent(t *testing.T) {
 
 	// 1. Compile the CLI
 	t.Logf("Compiling CLI to %s...", binPath)
-	cmdBuild := exec.Command("go", "build", "-o", binPath, "main.go")
+	cmdBuild := exec.Command("go", "build", "-o", binPath, "./cmd/maintainability-sensors")
 	cmdBuild.Dir = repoRoot
 	if out, err := cmdBuild.CombinedOutput(); err != nil {
 		t.Fatalf("failed to compile CLI: %v\nOutput: %s", err, out)

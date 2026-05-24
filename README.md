@@ -49,7 +49,7 @@ To prevent AI coding agents from generating tangled, unmaintainable control flow
 
 ```bash
 # Build the binary
-go build -o bin/maintainability-sensors main.go
+go build -o bin/maintainability-sensors ./cmd/maintainability-sensors
 
 # Install to path
 chmod +x bin/maintainability-sensors
@@ -104,7 +104,7 @@ Audit Mode will exit with a non-zero status (`Exit Code: 1`) if it finds files w
 **How to run a complete Audit:**
 ```bash
 # 1. Build the binary (if not already built)
-go build -o bin/maintainability-sensors main.go
+go build -o bin/maintainability-sensors ./cmd/maintainability-sensors
 
 # 2. Run the audit across the repository
 ./bin/maintainability-sensors run .

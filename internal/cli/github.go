@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/syntheticscale/maintainability-sensors/sensors"
+	"github.com/syntheticscale/maintainability-sensors/internal/sensors"
 )
 
 const GitHubApiVersion = "2022-11-28"

@@ -50,7 +50,7 @@ mkdir -p "$OUTPUT_DIR"
 log_info "Ensuring maintainability-sensors CLI is compiled..."
 if [ ! -f "$BINARY_PATH" ]; then
     log_warn "CLI binary not found. Building now..."
-    /usr/local/go/bin/go build -o "$BINARY_PATH" main.go
+    /usr/local/go/bin/go build -o "$BINARY_PATH" ./cmd/maintainability-sensors
 fi
 log_success "CLI binary verified: $($BINARY_PATH --help | head -n 1)"
 
