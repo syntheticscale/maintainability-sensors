@@ -4,19 +4,19 @@
 
 | File | Language | Max Complexity | Max Func Lines | Max Params | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| `server.go` | GO | 72 | 278 | 4 | ORCHESTRATED ✅ |
+| `server.go` | GO | 70 | 268 | 4 | ORCHESTRATED ✅ |
 
 ---
 
-## ⚠️ AI Agent Self-Correction Prompts
-*Pass the following instructions directly to your AI Coding Agent (Cursor/Claude) to refactor the violations:*
+## ⚠️ Actionable Refactoring Prompts
+*REFACTORING PROMPT: Refactor these violations:*
 
 ### 📄 `server.go`:
-  * Complexity is 72 (Max 8). Nudge coding agent to extract nested conditionals into separate, single-responsibility helper functions.
-  * Function lines is 278 (Max 50). Nudge coding agent to modularize this block into separate functional components.
+  * Complexity is 70 (Max 8). Extract nested conditionals into separate, single-responsibility helper functions.
+  * Function lines is 268 (Max 50). Modularize this block into separate functional components.
 
 
-*If refactoring is impossible, instruct the agent to suppress the warning with standard inline annotations (e.g. // eslint-disable-next-line -- reason) to keep the baseline clean.*
+*If refactoring is impossible, REFACTORING PROMPT: suppress the warning with standard inline annotations (e.g. // eslint-disable-next-line -- reason) to keep the baseline clean.*
 
 ---
 

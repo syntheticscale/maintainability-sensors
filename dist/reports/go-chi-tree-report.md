@@ -4,19 +4,19 @@
 
 | File | Language | Max Complexity | Max Func Lines | Max Params | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| `tree.go` | GO | 37 | 143 | 4 | ORCHESTRATED ✅ |
+| `tree.go` | GO | 37 | 146 | 4 | ORCHESTRATED ✅ |
 
 ---
 
-## ⚠️ AI Agent Self-Correction Prompts
-*Pass the following instructions directly to your AI Coding Agent (Cursor/Claude) to refactor the violations:*
+## ⚠️ Actionable Refactoring Prompts
+*REFACTORING PROMPT: Refactor these violations:*
 
 ### 📄 `tree.go`:
-  * Complexity is 37 (Max 8). Nudge coding agent to extract nested conditionals into separate, single-responsibility helper functions.
-  * Function lines is 143 (Max 50). Nudge coding agent to modularize this block into separate functional components.
+  * Complexity is 37 (Max 8). Extract nested conditionals into separate, single-responsibility helper functions.
+  * Function lines is 146 (Max 50). Modularize this block into separate functional components.
 
 
-*If refactoring is impossible, instruct the agent to suppress the warning with standard inline annotations (e.g. // eslint-disable-next-line -- reason) to keep the baseline clean.*
+*If refactoring is impossible, REFACTORING PROMPT: suppress the warning with standard inline annotations (e.g. // eslint-disable-next-line -- reason) to keep the baseline clean.*
 
 ---
 

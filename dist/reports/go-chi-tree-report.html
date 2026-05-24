@@ -71,7 +71,7 @@
 			margin-top: 0.25rem;
 		}
 
-		/* Grid Stats */
+		 
 		.stats-grid {
 			display: grid;
 			grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -106,7 +106,7 @@
 			letter-spacing: 0.05em;
 		}
 
-		/* Main Table */
+		 
 		.section-card {
 			background-color: var(--bg-card);
 			border: 1px solid var(--border);
@@ -149,7 +149,7 @@
 			color: var(--text-muted);
 		}
 
-		/* Badges */
+		 
 		.badge {
 			display: inline-block;
 			padding: 0.25rem 0.6rem;
@@ -177,7 +177,7 @@
 			border: 1px solid rgba(245, 158, 11, 0.3);
 		}
 
-		/* Split Layout */
+		 
 		.split-layout {
 			display: grid;
 			grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
@@ -245,7 +245,7 @@
 			background-color: var(--accent-hover);
 		}
 
-		/* Exceptions style */
+		 
 		.exc-line {
 			display: flex;
 			align-items: center;
@@ -318,10 +318,10 @@
 	<div class="container">
 		<header>
 			<h1>📡 Maintainability Sensors Scorecard</h1>
-			<p class="subtitle">Continuous engineering governance & metrics loop for AI coding agents</p>
+			<p class="subtitle">Continuous engineering governance &amp; metrics loop for AI coding agents</p>
 		</header>
 
-		<!-- Statistics Summary Grid -->
+		
 		<div class="stats-grid">
 			<div class="stat-card">
 				<div class="stat-val">1</div>
@@ -345,7 +345,7 @@
 			</div>
 		</div>
 
-		<!-- Main Scorecard Table -->
+		
 		<section>
 			<h2>📊 Core File Health Scorecard</h2>
 			<div class="section-card">
@@ -362,44 +362,57 @@
 					</thead>
 					<tbody>
 						
-				<tr>
-					<td><span class="file-name">tree.go</span><br><span class="file-path">/workspace/.cache/go-chi/tree.go</span></td>
-					<td><span class="badge badge-lang">GO</span></td>					<td class="text-error font-bold">37</td>
-					<td class="text-error font-bold">143</td>
-					<td class="">4</td>
-					<td><span class="badge badge-success">ORCHESTRATED (L1+)</span></td>
-				</tr>
-			
+						<tr>
+							<td><span class="file-name">tree.go</span><br><span class="file-path">.cache/go-chi/tree.go</span></td>
+							<td><span class="badge badge-lang">GO</span></td>
+							
+							<td class="text-error font-bold">37</td>
+							<td class="text-error font-bold">146</td>
+							<td class="">4</td>
+							<td><span class="badge badge-success">ORCHESTRATED (L1+)</span></td>
+							
+						</tr>
+						
 					</tbody>
 				</table>
 			</div>
 		</section>
 
-		<!-- Dynamic Double Column Details -->
+		
 		<div class="split-layout">
-			<!-- AI Prompts Column -->
+			
 			<section>
-				<h2>🤖 AI Agent Self-Correction Prompts</h2>
+				<h2>🤖 Actionable Refactoring Prompts</h2>
 				<p class="subtitle" style="margin-bottom: 1rem; font-size: 0.9rem;">Copy-paste these instructions directly to your AI agent to trigger auto-refactoring:</p>
 				
+					
 					<div class="card-viol">
 						<h4>📄 tree.go</h4>
-						<ul><li>Complexity is 37 (Max 8 limit). Nudge agent to extract nested conditionals into separate helper functions.</li><li>Function lines is 143 (Max 50 limit). Nudge agent to modularize this block into separate functional components.</li></ul>
+						<ul>
+							
+							<li>Complexity is 37 (Max 8 limit). Nudge agent to extract nested conditionals into separate helper functions.</li>
+							
+							<li>Function lines is 146 (Max 50 limit). Nudge agent to modularize this block into separate functional components.</li>
+							
+						</ul>
 						<div class="copy-box">
 							<pre id="prompt-tree.go">Refactor tree.go. Violations:
 Complexity is 37 (Max 8 limit). Nudge agent to extract nested conditionals into separate helper functions.
-Function lines is 143 (Max 50 limit). Nudge agent to modularize this block into separate functional components.</pre>
+Function lines is 146 (Max 50 limit). Nudge agent to modularize this block into separate functional components.</pre>
 							<button onclick="copyToClipboard('prompt-tree.go')">Copy Prompt</button>
 						</div>
 					</div>
+					
 				
 			</section>
 
-			<!-- Exceptions Column -->
+			
 			<section>
-				<h2>🛠️ Exceptions Created by AI (Relaxed Limits)</h2>
+				<h2>🛠️ Configured Exceptions (Relaxed Limits)</h2>
 				<p class="subtitle" style="margin-bottom: 1rem; font-size: 0.9rem;">Manually review relaxed constraints created by agents to prevent architectural decay:</p>
+				
 				<div class="empty-state">No relaxed limits detected. The codebase is strictly conforming to standard baselines.</div>
+				
 			</section>
 		</div>
 	</div>
@@ -431,3 +444,4 @@ Function lines is 143 (Max 50 limit). Nudge agent to modularize this block into 
 	</script>
 </body>
 </html>
+
