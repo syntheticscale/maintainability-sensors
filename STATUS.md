@@ -1,14 +1,14 @@
 # Project Status 📡
 
-**Last Updated:** 2026-05-21  
+**Last Updated:** 2026-05-24  
 **Branch:** `main`  
-**State:** 🟢 Stable (Enterprise Hardening & Hybrid Plugin Architecture Complete)
+**State:** 🟡 Technical Debt Accumulating (Two-Tier Architecture Complete, but needs refactoring)
 
 ---
 
-## 🏗️ Current Architecture (Hybrid Plugin Model)
+## 🏗️ Current Architecture (Two-Tier Ecosystem)
 
-The codebase has transitioned to a highly scalable **Hybrid Plugin Architecture**. The CLI acts purely as the gatekeeping framework, while metrics extraction is delegated through a strict Plugin Interface (`Analyze(filePaths []string)`).
+The codebase has transitioned to a "Two-Tier Ecosystem" separating fast syntactic CLI checks from slow semantic AI Agent Skills.
 
 ```
 maintainability-sensors/
@@ -40,6 +40,25 @@ maintainability-sensors/
 
 ---
 
+## 🚨 Radically Candid Review Findings (May 2026)
+
+A rigorous architectural review of the recent sprint uncovered significant technical debt that must be addressed:
+
+### 1. Critical Flaws (Fix Immediately)
+*   **Memory Leaks:** `tree_sitter_python.go` and `tree_sitter_typescript.go` allocate C memory for ASTs but **never call `Close()`** on the `Tree` or `Parser`. Because the LSP server runs as a daemon parsing on every keystroke, this will rapidly OOM the IDE.
+*   **Constraint Violation (Statelessness):** `go_architecture.go` introduced a global `archConfigCache` map. `AGENTS.md` strictly mandates: *"The CLI must remain completely stateless... no filesystem caches."* This breaks thread safety and the core architectural philosophy.
+
+### 2. Architectural Debt (Refactor Soon)
+*   **The God File:** `internal/sensors/orchestrator.go` is over 900 lines long. It mixes high-level orchestration, plugin registry logic, subprocess execution, and specific linter implementations (`ESLintPlugin`, `PyLintPlugin`). It desperately needs to be broken up.
+*   **Naive LSP:** `internal/lsp/server.go` processes requests sequentially (blocking on large files). Worse, on every `didChange` keystroke, it creates a temporary file on disk just so `OrchestratedScan` can read it. It needs an in-memory buffer system.
+*   **CGO Dependency:** By adding `go-tree-sitter`, we broke the "Minimal External Dependencies" constraint. Compiling the CLI now requires a C compiler (gcc/clang), breaking the simple `go build` cross-compilation story.
+
+### 3. Code Smells
+*   **Brittle Parsing:** `internal/sensors/config_parsers.go` uses massive, fragile regular expressions to parse JavaScript (`.eslintrc.js`) configuration files.
+*   **Naive Architecture Matching:** Layer matching in `CheckArchitectureDependencies` uses `strings.Contains(absPath, "/" + layerName + "/")`, which will easily yield false positives if a folder happens to share a name with a layer.
+
+---
+
 ## ✅ Completed Work (Enterprise Hardening Sprint)
 
 This sprint focused on making the tool robust enough for strictly regulated, massive-scale CI/CD pipelines.
@@ -53,50 +72,3 @@ This sprint focused on making the tool robust enough for strictly regulated, mas
 | **Security Bounding**| Enforced a strict Workspace Jail to prevent absolute path traversal and added POSIX `--` delimiters to prevent command injection. |
 | **Compliance** | Added GitHub API URL overrides (`GITHUB_API_URL`) and 10-second HTTP timeouts for air-gapped CI proxies. |
 | **Correctness** | Fixed Go AST metrics leaking complexity from inner closures and fixed error swallowing during initializations. |
-
----
-
-## 🚧 Known Issues & Technical Debt
-
-Despite recent enterprise hardening, several deep systemic flaws were identified during a multi-persona meta-review that require future attention:
-
-### Security & Resource Governance
-| Issue | Impact | Notes |
-|---|---|---|
-| **Missing POSIX `--` Delimiters** | High | Only implemented for StandardRB; missing in ESLint, PyLint, Ruff, etc., leaving them vulnerable to command/flag injection. |
-| **Missing Subprocess Timeouts** | High | Linter executions (`runLintCommandJSON`) lack `context.WithTimeout`, meaning stalled linters will hang the CI runner indefinitely. |
-| **Untracked File OOM Risk** | High | `git ls-files` bypasses the `WalkDir` 2MB file size limit, meaning massive untracked generated files can still cause OOM crashes. |
-
-### Architecture & Agent-UX (DevEx)
-| Issue | Impact | Notes |
-|---|---|---|
-| **Serial Chunking Bottleneck** | Medium | The 300-file chunking processes sequentially. On massive monorepos, this severely impacts execution time. |
-| **Stdout Pollution / JSON Corruption** | High | Human-readable diagnostics (`fmt.Println`) are mixed into standard output, instantly corrupting the payload if an agent expects pure JSON. |
-| **Persona Mismatch & Context Bloat** | Medium | Hardcoded "Tell your agent..." messages confuse autonomous tools, and leftover `DEBUG:` prints in `check-diff` aggressively bloat LLM context windows. |
-| **Regex String Parsing** | Low | Tier 2 wrappers still rely on regex against English message strings (e.g., "complexity of 15"). |
-
----
-
-## 🌐 Supported Languages
-
-| Language | Native Parsing (Tier 1) | Orchestrated Plugin (Tier 2) | Bootstrap Config |
-|---|---|---|---|
-| **Go** | ✅ AST parser (`go-tree-sitter`) | - | `.golangci.yml` (with revive) |
-| **Java** | ✅ AST parser (`go-tree-sitter`) | - | `checkstyle.xml` |
-| **C#** | ✅ AST parser (`go-tree-sitter`) | - | `.editorconfig` |
-| **TypeScript/JS** | ❌ | ESLint, Biome | `eslint.config.js`, `biome.json` |
-| **Python** | ❌ | PyLint, Ruff | `.pylintrc`, `ruff.toml` |
-| **Ruby** | ❌ | RuboCop, StandardRB | `.rubocop.yml`, `.standard.yml` |
-
----
-
-## 📈 Metrics
-
-| Metric | Value |
-|---|---|
-| **Binary Architecture**| Static Go Binary (Hybrid Tier 1/2 Plugins) |
-| **Supported Languages** | 6 |
-| **Security Bounding**  | Workspace Jail + POSIX Injection Blocks |
-| **Test Coverage**      | 100% Green (Unit, E2E Subprocess, Golden Snapshots) |
-
----
