@@ -97,7 +97,8 @@ When modifying existing sensors or adding a new language bootstrap:
 6. **Semantic Modularity Review (Tier 2 Skill):** For any significant architectural changes or large features, you MUST invoke the `modularity-reviewer` AI skill to evaluate your code for semantic duplication and misplaced responsibilities. Do not simply accept the "happy path" completion.
 7. **Pre-Flight Check (Tier 2 Skill):** Before reporting task completion to the user, you MUST invoke the `pre-flight-check` AI skill to autonomously run `check-diff` and the test suite. Fix any refactoring prompts generated.
 8. **NFR & Performance Review (Tier 2 Skill):** Whenever refactoring for performance, evaluating Non-Functional Requirements (NFRs), or adding high-frequency features (e.g. LSP handling), you MUST invoke the `performance-benchmarker` AI skill to establish an empirical baseline. Never optimize without microbenchmarks.
-9. **Commit Often:** Always commit changes after each significant step, rather than waiting until the end of a long feature or refactoring session. Ensure changes are checkpoints safely along the way.
+9. **Documentation First:** Before finalizing any task and making the final commit, you MUST review the project's documentation (`README.md`, `STATUS.md`, `FUTURE_PLAN.md`, etc.) and ensure it accurately reflects the new architectural state or completed features.
+10. **Commit Often:** Always commit changes after each significant step, rather than waiting until the end of a long feature or refactoring session. Ensure changes are checkpoints safely along the way.
 
 ## 🔄 Iterative Subagent Development Loop
 
