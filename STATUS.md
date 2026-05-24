@@ -12,19 +12,28 @@ The codebase has transitioned to a highly scalable **Hybrid Plugin Architecture*
 
 ```
 maintainability-sensors/
-├── main.go                          # CLI entrypoint
-├── cli/
-│   ├── cmd.go                       # Subcommands & Workspace Jailing
-│   ├── html.go                      # Statically cached HTML scorecard generator
-│   └── github.go                    # Enterprise GitHub integration
-├── sensors/
-│   ├── plugin.go                    # Core Plugin Interface & Registry
-│   ├── orchestrator.go              # Argument Chunking & Plugin Invocation
-│   ├── go_ast.go                    # Native Go Plugin (Tree-sitter approach)
-│   ├── csharp_parser.go             # Native C# Plugin (Tree-sitter)
-│   ├── java_parser.go               # Native Java Plugin (Tree-sitter)
-│   ├── eslint_parser.go             # (Tier 2 wrappers implement Plugin interface)
-│   └── bootstrap.go                 # Enterprise-safe config generator
+├── cmd/
+│   └── maintainability-sensors/
+│       └── main.go                  # CLI entrypoint
+├── internal/
+│   ├── cli/
+│   │   ├── cmd.go                   # Subcommands & Workspace Jailing
+│   │   ├── html.go                  # Statically cached HTML scorecard generator
+│   │   └── github.go                # Enterprise GitHub integration
+│   ├── lsp/
+│   │   └── server.go                # Real-time IDE feedback server
+│   └── sensors/
+│       ├── plugin.go                # Core Plugin Interface & Registry
+│       ├── orchestrator.go          # Argument Chunking & Plugin Invocation
+│       ├── go_ast.go                # Native Go Plugin 
+│       ├── tree_sitter_python.go    # Native Python Plugin (Tree-sitter)
+│       ├── tree_sitter_typescript.go # Native TS/JS Plugin (Tree-sitter)
+│       ├── csharp_parser.go         # Native C# Plugin (Tree-sitter)
+│       ├── java_parser.go           # Native Java Plugin (Tree-sitter)
+│       └── bootstrap.go             # Enterprise-safe config generator
+├── skills/
+│   ├── modularity-reviewer/         # Tier 2 Agent Skill (Semantic Review)
+│   └── pre-flight-check/            # Tier 2 Agent Skill (Enforces Checks)
 └── tests/
     └── golden_test.go               # Validates formatted LLM prompts
 ```

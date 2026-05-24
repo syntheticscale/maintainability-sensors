@@ -8,9 +8,9 @@ To prevent scope creep and maintain the CLI as a lightweight, ultra-fast Go util
 
 ---
 
-## What to Build Now (Tier 1: The Go CLI)
+## Implemented Features (Tier 1: The Go CLI)
 
-These features align with our constraint of being an ultra-fast, stateless Go binary and should be prioritized for immediate implementation within this repository.
+These features have been successfully built directly into the ultra-fast, stateless Go binary.
 
 ### 1. Native AST Dependency Rules (Macro-Coupling)
 *   **Context:** AI agents need instant nudges when they violate layered architecture boundaries (e.g., a React UI component importing directly from the PostgreSQL DB layer).
@@ -29,9 +29,9 @@ These features align with our constraint of being an ultra-fast, stateless Go bi
 
 ---
 
-## What to Defer (Tier 2: External to the CLI)
+## External Features (Tier 2: AI Skills & CI)
 
-These features are highly valuable to the overarching goal of maintaining code quality, but they violate the CLI's strict constraints (they are slow, stateful, or require network/LLM calls). They should be implemented as separate projects, Agent Skills, or CI configurations.
+These features are highly valuable to the overarching goal of maintaining code quality, but violate the CLI's strict constraints (they are slow, stateful, or require network/LLM calls). They have been implemented externally as Agent Skills or CI configurations.
 
 ### 3. Semantic "Inferential" Modularity Review (LLM-as-a-Judge)
 *   **Context:** Detecting duplicated business logic or inefficient argument passing requires semantic understanding of the code's *intent*, which mathematical AST analysis cannot provide.

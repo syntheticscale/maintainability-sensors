@@ -16,7 +16,7 @@ When finalizing a task that modified code, follow these exact steps sequentially
    ```bash
    ./bin/maintainability-sensors check-diff
    ```
-   *(Note: Adjust the binary path if necessary, or run `go run main.go check-diff` if the binary is not built yet).*
+   *(Note: Adjust the binary path if necessary, or run `go run ./cmd/maintainability-sensors check-diff` if the binary is not built yet).*
 
 2. **Run the Test Suite:**
    Execute the project's tests to ensure no regressions were introduced.

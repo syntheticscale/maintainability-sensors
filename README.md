@@ -65,7 +65,7 @@ cat << 'EOF' > .git/hooks/pre-commit
 go test ./...
 TEST_STATUS=$?
 
-go run main.go check-diff
+go run ./cmd/maintainability-sensors check-diff
 DIFF_STATUS=$?
 
 if [ $TEST_STATUS -ne 0 ] || [ $DIFF_STATUS -ne 0 ]; then

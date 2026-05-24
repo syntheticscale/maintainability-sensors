@@ -12,33 +12,39 @@ This tool is designed to be a lightweight, ultra-fast Go CLI utility that orches
 
 ```
 /
-├── main.go               # CLI entrypoint
-├── cli/
-│   ├── cmd.go            # Subcommands (run, generate, bootstrap) & flag parsing
-│   ├── html.go           # HTML scorecard generator (embeds report.html template)
-│   ├── github.go         # GitHub Actions step summary & PR comment poster
-│   ├── cli_test.go       # Unit tests for CLI commands (44 tests)
-│   └── templates/
-│       └── report.html   # Dark-themed HTML scorecard template
-├── sensors/
-│   ├── orchestrator.go   # Subprocess executor and linter JSON parser
-│   ├── config_parsers.go # ConfigParser interface + shared utilities
-│   ├── eslint_parser.go  # ESLint config parser
-│   ├── pylint_parser.go  # PyLint config parser
-│   ├── golangci_parser.go # golangci-lint config parser
-│   ├── rubocop_parser.go # RuboCop config parser
-│   ├── go_ast.go         # Native Go AST metric collector
-│   ├── bootstrap.go      # Pristine config file template generator
-│   ├── constants.go      # Baseline threshold constants (complexity, length, params)
-│   ├── csharp_parser.go  # Stub for C# metrics (external tooling required)
-│   ├── parsers_test.go   # Unit tests for config parsers (30+ tests)
-│   ├── sanitize_test.go  # Unit tests for path sanitization
-│   └── subprocess_test.go # Unit tests for subprocess error branches
+├── cmd/
+│   └── maintainability-sensors/
+│       └── main.go               # CLI entrypoint
+├── internal/
+│   ├── cli/
+│   │   ├── cmd.go            # Subcommands (run, generate, bootstrap) & flag parsing
+│   │   ├── html.go           # HTML scorecard generator
+│   │   ├── github.go         # GitHub Actions step summary & PR comment poster
+│   │   ├── cli_test.go       # Unit tests for CLI commands
+│   │   └── templates/
+│   │       └── report.html   # Dark-themed HTML scorecard template
+│   ├── lsp/
+│   │   ├── server.go         # Language Server Protocol foundation
+│   │   └── server_test.go    # LSP JSON-RPC parsing tests
+│   └── sensors/
+│       ├── orchestrator.go   # Subprocess executor and linter JSON parser
+│       ├── config_parsers.go # ConfigParser interface + shared utilities
+│       ├── tree_sitter_python.go  # Native Tree-sitter Python AST metrics
+│       ├── tree_sitter_typescript.go # Native Tree-sitter TS/JS AST metrics
+│       ├── go_ast.go         # Native Go AST metric collector
+│       ├── go_architecture.go # Native architecture dependency boundary rules
+│       ├── architecture_parser.go # YAML parser for dependency rules
+│       ├── bootstrap.go      # Pristine config file template generator
+│       └── constants.go      # Baseline threshold constants
+├── skills/
+│   ├── modularity-reviewer/  # Tier 2 AI Skill for Semantic Modularity Review
+│   └── pre-flight-check/     # Tier 2 AI Skill for autonomous check-diff runs
 ├── tests/
 │   ├── orchestrator_test.go   # Go AST & Level 0 fallback unit tests
 │   ├── bootstrap_test.go      # Bootstrap template and overwrite guardrail tests
 │   ├── relaxed_limits_test.go # Relaxed limit detection tests
 │   ├── golden_test.go         # Golden snapshot tests for real-world repos
+│   ├── architecture_test.go   # Component tests for layer dependency logic
 │   └── multi_repo_test.go     # End-to-end CLI integration tests
 └── docs/
     ├── GITHUB_ACTIONS_GUIDE.md    # CI/CD integration guide
