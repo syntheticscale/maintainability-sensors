@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/alecthomas/kong"
+	"github.com/syntheticscale/maintainability-sensors/internal/lsp"
 	"github.com/syntheticscale/maintainability-sensors/internal/sensors"
 	"golang.org/x/sync/errgroup"
 )
@@ -19,6 +20,7 @@ var cli struct {
 	Generate  generateCmd  `cmd:"" help:"Reconstruct visual reports from a saved JSON scorecard (the Single Source of Truth)."`
 	Bootstrap bootstrapCmd `cmd:"" help:"Auto-detect repository language and bootstrap pristine, non-overwriting maintainability configuration files (TS, Python, Go, Java, Ruby, C#)."`
 	CheckDiff CheckDiffCmd `cmd:"" name:"check-diff" help:"Check maintainability delta against a target branch."`
+	Lsp       lspCmd       `cmd:"" help:"Start the Language Server Protocol (LSP) wrapper."`
 }
 
 func logStderr(format string, a ...interface{}) {
@@ -229,6 +231,12 @@ func (c *CheckDiffCmd) Run() error {
 
 	logStderrLn("Delta clean.")
 	return nil
+}
+
+type lspCmd struct{}
+
+func (c *lspCmd) Run() error {
+	return lsp.StartServer()
 }
 
 func loadCheckDiffPolicy(c *CheckDiffCmd) (*CheckDiffPolicy, error) {
