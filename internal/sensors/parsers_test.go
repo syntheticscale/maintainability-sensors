@@ -53,45 +53,45 @@ func TestConfigParsers_Rules(t *testing.T) {
 		parser   ConfigParser
 		expected []ParserRule
 	}{
-		{
-			name:   "ESLintConfigParser",
-			parser: ESLintConfigParser{},
-			expected: []ParserRule{
-				{RuleName: "Cyclomatic Complexity", Keys: []string{"complexity"}, Baseline: BaselineComplexity},
-				{RuleName: "Function Length", Keys: []string{"max-lines-per-function"}, Baseline: BaselineFunctionLength},
-				{RuleName: "Argument Count", Keys: []string{"max-params"}, Baseline: BaselineArgumentCount},
-				{RuleName: "File Length", Keys: []string{"max-lines"}, Baseline: BaselineFileLength},
-			},
+	{
+		name:   "ESLintConfigParser",
+		parser: ESLintConfigParser{},
+		expected: []ParserRule{
+			{RuleName: RuleComplexity, Keys: []string{"complexity"}, Baseline: BaselineComplexity},
+			{RuleName: RuleFunctionLength, Keys: []string{"max-lines-per-function"}, Baseline: BaselineFunctionLength},
+			{RuleName: RuleArgumentCount, Keys: []string{"max-params"}, Baseline: BaselineArgumentCount},
+			{RuleName: RuleFileLength, Keys: []string{"max-lines"}, Baseline: BaselineFileLength},
 		},
-		{
-			name:   "PyLintConfigParser",
-			parser: PyLintConfigParser{},
-			expected: []ParserRule{
-				{RuleName: "Cyclomatic Complexity", Keys: []string{"max-complexity"}, Baseline: BaselineComplexity},
-				{RuleName: "Function Length", Keys: []string{"max-statements"}, Baseline: BaselineFunctionLength},
-				{RuleName: "Argument Count", Keys: []string{"max-args"}, Baseline: BaselineArgumentCount},
-				{RuleName: "File Length", Keys: []string{"max-module-lines"}, Baseline: BaselineFileLength},
-			},
+	},
+	{
+		name:   "PyLintConfigParser",
+		parser: PyLintConfigParser{},
+		expected: []ParserRule{
+			{RuleName: RuleComplexity, Keys: []string{"max-complexity"}, Baseline: BaselineComplexity},
+			{RuleName: RuleFunctionLength, Keys: []string{"max-statements"}, Baseline: BaselineFunctionLength},
+			{RuleName: RuleArgumentCount, Keys: []string{"max-args"}, Baseline: BaselineArgumentCount},
+			{RuleName: RuleFileLength, Keys: []string{"max-module-lines"}, Baseline: BaselineFileLength},
 		},
-		{
-			name:   "GoConfigParser",
-			parser: GoConfigParser{},
-			expected: []ParserRule{
-				{RuleName: "Cyclomatic Complexity", Keys: []string{"min-complexity"}, Baseline: BaselineComplexity},
-				{RuleName: "Function Length", Keys: []string{"lines"}, Baseline: BaselineFunctionLength},
-				{RuleName: "Argument Count", Keys: []string{"argument-limit"}, Baseline: BaselineArgumentCount},
-			},
+	},
+	{
+		name:   "GoConfigParser",
+		parser: GoConfigParser{},
+		expected: []ParserRule{
+			{RuleName: RuleComplexity, Keys: []string{"min-complexity"}, Baseline: BaselineComplexity},
+			{RuleName: RuleFunctionLength, Keys: []string{"lines"}, Baseline: BaselineFunctionLength},
+			{RuleName: RuleArgumentCount, Keys: []string{"argument-limit"}, Baseline: BaselineArgumentCount},
 		},
-		{
-			name:   "RuboCopConfigParser",
-			parser: RuboCopConfigParser{},
-			expected: []ParserRule{
-				{RuleName: "Cyclomatic Complexity", Keys: []string{"CyclomaticComplexity"}, Baseline: BaselineComplexity},
-				{RuleName: "Function Length", Keys: []string{"MethodLength"}, Baseline: BaselineFunctionLength},
-				{RuleName: "Argument Count", Keys: []string{"ParameterLists"}, Baseline: BaselineArgumentCount},
-				{RuleName: "File Length", Keys: []string{"ModuleLength"}, Baseline: BaselineFileLength},
-			},
+	},
+	{
+		name:   "RuboCopConfigParser",
+		parser: RuboCopConfigParser{},
+		expected: []ParserRule{
+			{RuleName: RuleComplexity, Keys: []string{"CyclomaticComplexity"}, Baseline: BaselineComplexity},
+			{RuleName: RuleFunctionLength, Keys: []string{"MethodLength"}, Baseline: BaselineFunctionLength},
+			{RuleName: RuleArgumentCount, Keys: []string{"ParameterLists"}, Baseline: BaselineArgumentCount},
+			{RuleName: RuleFileLength, Keys: []string{"ModuleLength"}, Baseline: BaselineFileLength},
 		},
+	},
 	}
 
 	for _, tc := range cases {
@@ -515,10 +515,10 @@ func TestDetectRelaxedLimits_ESLintJSON(t *testing.T) {
 	}
 
 	expectedMap := map[string]int{
-		"Cyclomatic Complexity": 12,
-		"Argument Count":        6,
-		"Function Length":       100,
-		"File Length":           500,
+		"Complexity":     12,
+		"ArgumentCount":   6,
+		"FunctionLength": 100,
+		"FileLength":     500,
 	}
 
 	for _, exc := range got {
@@ -558,10 +558,10 @@ max-module-lines=450
 	}
 
 	expectedMap := map[string]int{
-		"Cyclomatic Complexity": 11,
-		"Argument Count":        7,
-		"Function Length":       80,
-		"File Length":           450,
+		"Complexity":     11,
+		"ArgumentCount":   7,
+		"FunctionLength": 80,
+		"FileLength":     450,
 	}
 
 	for _, exc := range got {
@@ -631,8 +631,8 @@ Metrics/MethodLength:
 	}
 
 	expectedMap := map[string]int{
-		"Cyclomatic Complexity": 15,
-		"Function Length":       60,
+		"Complexity":     15,
+		"FunctionLength": 60,
 	}
 
 	for _, exc := range got {
@@ -675,8 +675,8 @@ linters-settings:
 	}
 
 	expectedMap := map[string]int{
-		"Cyclomatic Complexity": 12, // Because 12 > 10 (maxOf used)
-		"Function Length":       70,
+		"Complexity":     12, // Because 12 > 10 (maxOf used)
+		"FunctionLength": 70,
 	}
 
 	for _, exc := range got {

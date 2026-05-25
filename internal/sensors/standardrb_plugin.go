@@ -47,11 +47,11 @@ func parseSingleStandardRBOffense(off StandardRBOffense, fileViolations *[]Viola
 
 	switch off.CopName {
 	case "Metrics/CyclomaticComplexity":
-		*fileViolations = append(*fileViolations, Violation{RuleName: "Complexity", Value: val, StartLine: off.Location.Line, EndLine: endLine, Message: off.Message})
+		*fileViolations = append(*fileViolations, Violation{RuleName: RuleComplexity, Value: val, StartLine: off.Location.Line, EndLine: endLine, Message: off.Message})
 	case "Metrics/MethodLength":
-		*fileViolations = append(*fileViolations, Violation{RuleName: "FunctionLength", Value: val, StartLine: off.Location.Line, EndLine: endLine, Message: off.Message})
+		*fileViolations = append(*fileViolations, Violation{RuleName: RuleFunctionLength, Value: val, StartLine: off.Location.Line, EndLine: endLine, Message: off.Message})
 	case "Metrics/ParameterLists":
-		*fileViolations = append(*fileViolations, Violation{RuleName: "ArgumentCount", Value: val, StartLine: off.Location.Line, EndLine: endLine, Message: off.Message})
+		*fileViolations = append(*fileViolations, Violation{RuleName: RuleArgumentCount, Value: val, StartLine: off.Location.Line, EndLine: endLine, Message: off.Message})
 	}
 }
 

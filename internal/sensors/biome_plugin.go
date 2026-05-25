@@ -40,7 +40,7 @@ func extractBiomeComplexity(desc string, reVal *regexp.Regexp) (string, int) {
 	if val == 0 {
 		val = 2
 	}
-	return "Complexity", val
+	return RuleComplexity, val
 }
 
 func extractBiomeMaxParameters(desc string, reVal *regexp.Regexp) (string, int) {
@@ -51,7 +51,7 @@ func extractBiomeMaxParameters(desc string, reVal *regexp.Regexp) (string, int) 
 	if val == 0 {
 		val = 2
 	}
-	return "ArgumentCount", val
+	return RuleArgumentCount, val
 }
 
 func extractBiomeRuleAndVal(diag BiomeDiagnostic, reVal *regexp.Regexp) (string, int) {

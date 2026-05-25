@@ -1,4 +1,5 @@
 package lsp
+
 import (
 	"bufio"
 	"encoding/json"
@@ -7,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/syntheticscale/maintainability-sensors/internal/sensors"
 )
@@ -82,6 +84,54 @@ type ServerCapabilities struct {
 	TextDocumentSync int `json:"textDocumentSync,omitempty"`
 }
 
+// jsonRPCWriter serializes JSON-RPC messages to an io.Writer with
+// mutex protection, ensuring atomic per-message writes even under
+// concurrent callers.
+type jsonRPCWriter struct {
+	out io.Writer
+	mu  sync.Mutex
+}
+
+func newJSONRPCWriter(out io.Writer) *jsonRPCWriter {
+	return &jsonRPCWriter{out: out}
+}
+
+func (w *jsonRPCWriter) sendNotification(notif Notification) error {
+	resBytes, err := json.Marshal(notif)
+	if err != nil {
+		return err
+	}
+
+	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(resBytes))
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if _, err := w.out.Write([]byte(header)); err != nil {
+		return err
+	}
+	_, err = w.out.Write(resBytes)
+	return err
+}
+
+func (w *jsonRPCWriter) sendResponse(res Response) error {
+	resBytes, err := json.Marshal(res)
+	if err != nil {
+		return err
+	}
+
+	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(resBytes))
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if _, err := w.out.Write([]byte(header)); err != nil {
+		return err
+	}
+	_, err = w.out.Write(resBytes)
+	return err
+}
+
 func getLimitForRule(ruleName string, exceptions []sensors.RelaxedLimit) int {
 	for _, e := range exceptions {
 		if e.RuleName == ruleName {
@@ -89,33 +139,18 @@ func getLimitForRule(ruleName string, exceptions []sensors.RelaxedLimit) int {
 		}
 	}
 	switch ruleName {
-	case "Complexity":
+	case sensors.RuleComplexity:
 		return sensors.BaselineComplexity
-	case "CognitiveComplexity":
+	case sensors.RuleCognitiveComplexity:
 		return sensors.BaselineCognitiveComplexity
-	case "FunctionLength":
+	case sensors.RuleFunctionLength:
 		return sensors.BaselineFunctionLength
-	case "ArgumentCount":
+	case sensors.RuleArgumentCount:
 		return sensors.BaselineArgumentCount
-	case "CaseBlockLength":
+	case sensors.RuleCaseBlockLength:
 		return sensors.BaselineCaseLength
 	}
 	return 999999 // fallback
-}
-
-func sendNotification(out io.Writer, notif Notification) error {
-	resBytes, err := json.Marshal(notif)
-	if err != nil {
-		return err
-	}
-
-	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(resBytes))
-	_, err = out.Write([]byte(header))
-	if err != nil {
-		return err
-	}
-	_, err = out.Write(resBytes)
-	return err
 }
 
 func StartServer() error {
@@ -124,6 +159,7 @@ func StartServer() error {
 
 func Start(in io.Reader, out io.Writer) error {
 	reader := bufio.NewReader(in)
+	writer := newJSONRPCWriter(out)
 
 	for {
 		var contentLength int
@@ -173,7 +209,7 @@ func Start(in io.Reader, out io.Writer) error {
 					},
 				},
 			}
-			sendResponse(out, res)
+			writer.sendResponse(res)
 		} else if req.Method == "textDocument/didChange" {
 			var didChangeParams DidChangeTextDocumentParams
 			if err := json.Unmarshal(req.Params, &didChangeParams); err != nil {
@@ -238,25 +274,10 @@ func Start(in io.Reader, out io.Writer) error {
 						Diagnostics: diags,
 					},
 				}
-				sendNotification(out, notif)
+				writer.sendNotification(notif)
 			}(fileCtx, uri, lang)
 		} else if req.Method == "exit" {
 			return nil
 		}
 	}
-}
-
-func sendResponse(out io.Writer, res Response) error {
-	resBytes, err := json.Marshal(res)
-	if err != nil {
-		return err
-	}
-
-	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(resBytes))
-	_, err = out.Write([]byte(header))
-	if err != nil {
-		return err
-	}
-	_, err = out.Write(resBytes)
-	return err
 }

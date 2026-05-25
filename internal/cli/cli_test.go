@@ -27,7 +27,7 @@ func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	moduleRoot := filepath.Dir(filepath.Dir(filepath.Dir(thisFile)))
 
-	cmd := exec.Command("go", "build", "-o", cliBinary, "./cmd/maintainability-sensors")
+	cmd := exec.Command("go", "build", "-buildvcs=false", "-o", cliBinary, "./cmd/maintainability-sensors") // -buildvcs=false avoids build failures in shallow worktrees or Docker without git history
 	cmd.Dir = moduleRoot
 	if output, err := cmd.CombinedOutput(); err != nil {
 		panic("failed to build CLI binary: " + err.Error() + "\n" + string(output))
@@ -164,7 +164,7 @@ func TestGenerateMarkdownScorecard_WithViolations(t *testing.T) {
 
 func TestGenerateMarkdownScorecard_WithExceptions(t *testing.T) {
 	exceptions := []sensors.RelaxedLimit{
-		{RuleName: "Cyclomatic Complexity", ConfiguredVal: 15, BaselineVal: 8},
+		{RuleName: "Complexity", ConfiguredVal: 15, BaselineVal: 8},
 	}
 	results := []sensors.OrchestratorResult{
 		orchestratedResult("/repo/relaxed.go", 5, 30, 3, exceptions),
@@ -178,7 +178,7 @@ func TestGenerateMarkdownScorecard_WithExceptions(t *testing.T) {
 	if !strings.Contains(md, "relaxed.go") {
 		t.Error("expected filename in exceptions section")
 	}
-	if !strings.Contains(md, "Cyclomatic Complexity") {
+	if !strings.Contains(md, "Complexity") {
 		t.Error("expected rule name in exceptions")
 	}
 	if !strings.Contains(md, "Configured Limit is 15") {
@@ -191,7 +191,7 @@ func TestGenerateMarkdownScorecard_WithExceptions(t *testing.T) {
 
 func TestGenerateMarkdownScorecard_ViolationsAndExceptions(t *testing.T) {
 	exceptions := []sensors.RelaxedLimit{
-		{RuleName: "Function Length", ConfiguredVal: 100, BaselineVal: 50},
+		{RuleName: "FunctionLength", ConfiguredVal: 100, BaselineVal: 50},
 	}
 	results := []sensors.OrchestratorResult{
 		orchestratedResult("/repo/mixed.go", 12, 60, 3, exceptions),
@@ -306,7 +306,7 @@ func TestGenerateHTMLScorecard_WithViolations(t *testing.T) {
 
 func TestGenerateHTMLScorecard_WithExceptions(t *testing.T) {
 	exceptions := []sensors.RelaxedLimit{
-		{RuleName: "Cyclomatic Complexity", ConfiguredVal: 15, BaselineVal: 8},
+		{RuleName: "Complexity", ConfiguredVal: 15, BaselineVal: 8},
 	}
 	results := []sensors.OrchestratorResult{
 		orchestratedResult("/repo/relaxed.go", 5, 30, 3, exceptions),
@@ -317,7 +317,7 @@ func TestGenerateHTMLScorecard_WithExceptions(t *testing.T) {
 	if !strings.Contains(html, "Configured Exceptions") {
 		t.Error("expected exceptions section")
 	}
-	if !strings.Contains(html, "Cyclomatic Complexity") {
+	if !strings.Contains(html, "Complexity") {
 		t.Error("expected rule name in exceptions")
 	}
 	if !strings.Contains(html, "Configured Limit 15") {
@@ -864,7 +864,7 @@ func TestPrintScanResult_BlindText(t *testing.T) {
 
 func TestPrintScanResult_WithExceptions(t *testing.T) {
 	exceptions := []sensors.RelaxedLimit{
-		{RuleName: "Cyclomatic Complexity", ConfiguredVal: 15, BaselineVal: 8},
+		{RuleName: "Complexity", ConfiguredVal: 15, BaselineVal: 8},
 	}
 	res := orchestratedResult("/repo/relaxed.go", 5, 30, 3, exceptions)
 
@@ -875,7 +875,7 @@ func TestPrintScanResult_WithExceptions(t *testing.T) {
 	if !strings.Contains(captured, "Configured Exceptions") {
 		t.Error("expected exceptions section")
 	}
-	if !strings.Contains(captured, "Cyclomatic Complexity") {
+	if !strings.Contains(captured, "Complexity") {
 		t.Error("expected rule name in exceptions")
 	}
 }

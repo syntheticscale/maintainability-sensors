@@ -46,10 +46,10 @@ func TestOrchestratedScan_RelaxedLimits_ESLint(t *testing.T) {
 	}
 
 	expectedMap := map[string]int{
-		"Cyclomatic Complexity": 12,
-		"Argument Count":        6,
-		"Function Length":       100,
-		"File Length":           500,
+		"Complexity":     12,
+		"ArgumentCount":   6,
+		"FunctionLength": 100,
+		"FileLength":     500,
 	}
 
 	for _, exc := range res.Exceptions {
@@ -98,10 +98,10 @@ max-module-lines=450
 	}
 
 	expectedMap := map[string]int{
-		"Cyclomatic Complexity": 11,
-		"Argument Count":        7,
-		"Function Length":       80,
-		"File Length":           450,
+		"Complexity":     11,
+		"ArgumentCount":   7,
+		"FunctionLength": 80,
+		"FileLength":     450,
 	}
 
 	for _, exc := range res.Exceptions {
@@ -146,12 +146,12 @@ linters-settings:
 	}
 
 	if len(res.Exceptions) != 2 {
-		t.Errorf("expected 2 exceptions (Complexity and Function Length), got %d: %+v", len(res.Exceptions), res.Exceptions)
+		t.Errorf("expected 2 exceptions (Complexity and FunctionLength), got %d: %+v", len(res.Exceptions), res.Exceptions)
 	}
 
 	expectedMap := map[string]int{
-		"Cyclomatic Complexity": 15,
-		"Function Length":       75,
+		"Complexity":     15,
+		"FunctionLength": 75,
 	}
 
 	for _, exc := range res.Exceptions {
@@ -178,7 +178,7 @@ func TestGenerateMarkdownScorecard(t *testing.T) {
 				ArgumentCount:  5,
 			},
 			Exceptions: []sensors.RelaxedLimit{
-				{RuleName: "Cyclomatic Complexity", ConfiguredVal: 15, BaselineVal: 8},
+				{RuleName: "Complexity", ConfiguredVal: 15, BaselineVal: 8},
 			},
 		},
 		{
@@ -202,7 +202,7 @@ func TestGenerateMarkdownScorecard(t *testing.T) {
 	if !strings.Contains(scorecard, "Configured Exceptions (Relaxed Constraints)") {
 		t.Error("scorecard missing exceptions section header")
 	}
-	if !strings.Contains(scorecard, "Cyclomatic Complexity") || !strings.Contains(scorecard, "15") {
+	if !strings.Contains(scorecard, "Complexity") || !strings.Contains(scorecard, "15") {
 		t.Error("scorecard missing exception details")
 	}
 

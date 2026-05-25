@@ -6,12 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/alecthomas/kong"
 	"github.com/syntheticscale/maintainability-sensors/internal/lsp"
 	"github.com/syntheticscale/maintainability-sensors/internal/sensors"
-	"golang.org/x/sync/errgroup"
 )
 
 var cli struct {
@@ -407,67 +405,6 @@ func FindFiles(targetPath string) ([]string, bool, error) {
 	return files, true, nil
 }
 
-func ScanFiles(filePaths []string, isDir bool) ([]sensors.OrchestratorResult, error) {
-	groups := make(map[string][]string)
-	for _, p := range filePaths {
-		lang := sensors.DetectLanguage(p)
-		groups[lang] = append(groups[lang], p)
-	}
-
-	var allResults []sensors.OrchestratorResult
-	var mu sync.Mutex
-	var g errgroup.Group
-
-	for lang, files := range groups {
-		lang, files := lang, files
-		g.Go(func() error {
-			if lang == "" {
-				for _, f := range files {
-					if !isDir {
-						return fmt.Errorf("unsupported or unrecognized language file: %s", f)
-					}
-					fmt.Fprintf(os.Stderr, "[WARNING] Scan failed for %s: unsupported or unrecognized language file: %s\n", f, f)
-				}
-				return nil
-			}
-
-			fileContexts := make([]sensors.FileContext, len(files))
-			for i, f := range files {
-				fileContexts[i] = sensors.FileContext{Path: f}
-			}
-
-			res, err := sensors.OrchestratedScanBatch(fileContexts, lang)
-			if err != nil {
-				if !isDir {
-					return fmt.Errorf("Scan failed: %v", err)
-				}
-				fmt.Fprintf(os.Stderr, "[WARNING] Scan failed for language %s: %v\n", lang, err)
-				return nil
-			}
-
-			mu.Lock()
-			allResults = append(allResults, res...)
-			mu.Unlock()
-			return nil
-		})
-	}
-
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
-
-	return allResults, nil
-}
-
-type RunOptions struct {
-	TargetPath  string
-	JSONOutput  bool
-	GithubPR    bool
-	MarkdownOut string
-	JSONOutFile string
-	HTMLOut     string
-}
-
 type ReportOptions struct {
 	MarkdownOut string
 	JSONOut     string
@@ -480,23 +417,27 @@ func hasViolations(res sensors.OrchestratorResult) bool {
 		return false
 	}
 	limitComplexity := sensors.BaselineComplexity
+	limitCogCmplx := sensors.BaselineCognitiveComplexity
 	limitLength := sensors.BaselineFunctionLength
 	limitArgs := sensors.BaselineArgumentCount
 	limitCase := sensors.BaselineCaseLength
 
 	for _, exc := range res.Exceptions {
-		if exc.RuleName == "Cyclomatic Complexity" {
+		if exc.RuleName == sensors.RuleComplexity {
 			limitComplexity = exc.ConfiguredVal
-		} else if exc.RuleName == "Function Length" {
+		} else if exc.RuleName == sensors.RuleCognitiveComplexity {
+			limitCogCmplx = exc.ConfiguredVal
+		} else if exc.RuleName == sensors.RuleFunctionLength {
 			limitLength = exc.ConfiguredVal
-		} else if exc.RuleName == "Argument Count" {
+		} else if exc.RuleName == sensors.RuleArgumentCount {
 			limitArgs = exc.ConfiguredVal
-		} else if exc.RuleName == "Max Case Length" {
+		} else if exc.RuleName == sensors.RuleCaseBlockLength {
 			limitCase = exc.ConfiguredVal
 		}
 	}
 
 	return res.Metrics.Complexity > limitComplexity ||
+		res.Metrics.CognitiveComplexity > limitCogCmplx ||
 		res.Metrics.FunctionLength > limitLength ||
 		res.Metrics.ArgumentCount > limitArgs ||
 		res.Metrics.MaxCaseLength > limitCase
@@ -586,80 +527,6 @@ func printExceptionsList(results []sensors.OrchestratorResult) {
 	}
 }
 
-func executeRun(opts RunOptions) {
-	files, isDir, err := FindFiles(opts.TargetPath)
-	if err != nil {
-		logStderrLn(err)
-		os.Exit(1)
-	}
-
-	if isDir && len(files) == 0 {
-		logStderrLn("No supported source files (TS/JS, Python, Go) found in target directory.")
-		return
-	}
-
-	results, err := ScanFiles(files, isDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
-		os.Exit(1)
-	}
-
-	if isDir && len(results) == 0 {
-		logStderrLn("No supported source files (TS/JS, Python, Go) found in target directory.")
-		return
-	}
-
-	hasV := FormatResultsCLI(results, opts.JSONOutput, isDir)
-
-	postGitHubResults(results, opts.GithubPR)
-
-	saveReportsAndExit(results, opts, hasV)
-}
-
-func saveReportsAndExit(results []sensors.OrchestratorResult, opts RunOptions, hasV bool) {
-	err := writeReports(results, ReportOptions{
-		MarkdownOut: opts.MarkdownOut,
-		JSONOut:     opts.JSONOutFile,
-		HTMLOut:     opts.HTMLOut,
-		ActionVerb:  "Saved",
-	})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
-		os.Exit(1)
-	}
-
-	if hasV {
-		os.Exit(1)
-	}
-}
-
-func postGitHubResults(results []sensors.OrchestratorResult, forcePR bool) {
-	if os.Getenv("GITHUB_ACTIONS") == "true" {
-		scorecard := GenerateMarkdownScorecard(results)
-		if err := WriteGitHubStepSummary(scorecard); err != nil {
-			fmt.Fprintf(os.Stderr, "[WARNING] Failed to write GitHub Step Summary: %v\n", err)
-		}
-	}
-
-	isCI_PR := os.Getenv("GITHUB_TOKEN") != "" && (os.Getenv("GITHUB_EVENT_PATH") != "" || os.Getenv("GITHUB_REF") != "")
-	if forcePR || isCI_PR {
-		logStderrLn("Posting inline review to GitHub PR...")
-		if err := PostGitHubReview(results); err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Failed to post GitHub inline review: %v\n", err)
-		} else {
-			logStderrLn("Successfully posted inline review to GitHub PR!")
-		}
-	}
-}
-
-func executeBootstrap(targetPath string, withWarnPolicy bool) {
-	err := sensors.BootstrapRepoWithPolicy(targetPath, withWarnPolicy)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Bootstrap failed: %v\n", err)
-		os.Exit(1)
-	}
-}
-
 func writeReports(results []sensors.OrchestratorResult, opts ReportOptions) error {
 	if opts.MarkdownOut != "" {
 		scorecard := GenerateMarkdownScorecard(results)
@@ -686,67 +553,6 @@ func writeReports(results []sensors.OrchestratorResult, opts ReportOptions) erro
 		fmt.Fprintf(os.Stderr, "[%s] %s HTML report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.HTMLOut)
 	}
 	return nil
-}
-
-func executeGenerate(jsonIn string, markdownOut string, htmlOut string) {
-	results, err := parseJSONScorecard(jsonIn)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
-		os.Exit(1)
-	}
-
-	hasV := false
-	for _, res := range results {
-		if hasViolations(res) {
-			hasV = true
-			break
-		}
-	}
-
-	if err := writeReports(results, ReportOptions{
-		MarkdownOut: markdownOut,
-		HTMLOut:     htmlOut,
-		ActionVerb:  "Generated",
-	}); err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
-		os.Exit(1)
-	}
-
-	if hasV {
-		os.Exit(1)
-	}
-}
-
-func validateScorecardResults(results []sensors.OrchestratorResult) error {
-	for i, res := range results {
-		if res.FilePath == "" {
-			return fmt.Errorf("Validation failed: Missing 'file_path' in result at index %d", i)
-		}
-		if res.Language == "" {
-			return fmt.Errorf("Validation failed: Missing 'language' in result at index %d", i)
-		}
-	}
-	return nil
-}
-
-func parseJSONScorecard(jsonIn string) ([]sensors.OrchestratorResult, error) {
-	if info, err := os.Stat(jsonIn); err == nil && (!info.Mode().IsRegular() || info.Size() > 10*1024*1024) {
-		return nil, fmt.Errorf("JSON input file is too large or not a regular file (limit 10MB)")
-	}
-	data, err := os.ReadFile(jsonIn)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to read JSON input file: %v", err)
-	}
-
-	var results []sensors.OrchestratorResult
-	if err := json.Unmarshal(data, &results); err != nil {
-		return nil, fmt.Errorf("Failed to parse JSON input scorecard: %v", err)
-	}
-
-	if err := validateScorecardResults(results); err != nil {
-		return nil, err
-	}
-	return results, nil
 }
 
 func printScanResult(res sensors.OrchestratorResult, jsonOutput bool) {
@@ -804,15 +610,15 @@ func getLimitsForFile(res sensors.OrchestratorResult) (int, int, int, int, int) 
 	limitCase := sensors.BaselineCaseLength
 
 	for _, exc := range res.Exceptions {
-		if exc.RuleName == "Cyclomatic Complexity" || exc.RuleName == "Complexity" {
+		if exc.RuleName == sensors.RuleComplexity {
 			limitComplexity = exc.ConfiguredVal
-		} else if exc.RuleName == "Cognitive Complexity" || exc.RuleName == "CognitiveComplexity" {
+		} else if exc.RuleName == sensors.RuleCognitiveComplexity {
 			limitCogCmplx = exc.ConfiguredVal
-		} else if exc.RuleName == "Function Length" || exc.RuleName == "FunctionLength" {
+		} else if exc.RuleName == sensors.RuleFunctionLength {
 			limitLength = exc.ConfiguredVal
-		} else if exc.RuleName == "Argument Count" || exc.RuleName == "ArgumentCount" {
+		} else if exc.RuleName == sensors.RuleArgumentCount {
 			limitArgs = exc.ConfiguredVal
-		} else if exc.RuleName == "Max Case Length" || exc.RuleName == "CaseBlockLength" {
+		} else if exc.RuleName == sensors.RuleCaseBlockLength {
 			limitCase = exc.ConfiguredVal
 		}
 	}

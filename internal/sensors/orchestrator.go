@@ -277,21 +277,25 @@ func isPathForPlugin(p string, pathsForPlugin []FileContext) bool {
 
 func updateSingleMetric(v Violation, metrics *MaintainabilityMetrics) {
 	switch v.RuleName {
-	case "Complexity":
+	case RuleComplexity:
 		if v.Value > metrics.Complexity {
 			metrics.Complexity = v.Value
 		}
-	case "CognitiveComplexity":
+	case RuleCognitiveComplexity:
 		if v.Value > metrics.CognitiveComplexity {
 			metrics.CognitiveComplexity = v.Value
 		}
-	case "FunctionLength":
+	case RuleFunctionLength:
 		if v.Value > metrics.FunctionLength {
 			metrics.FunctionLength = v.Value
 		}
-	case "ArgumentCount":
+	case RuleArgumentCount:
 		if v.Value > metrics.ArgumentCount {
 			metrics.ArgumentCount = v.Value
+		}
+	case RuleCaseBlockLength:
+		if v.Value > metrics.MaxCaseLength {
+			metrics.MaxCaseLength = v.Value
 		}
 	}
 }

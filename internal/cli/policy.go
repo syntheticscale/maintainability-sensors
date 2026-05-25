@@ -28,13 +28,12 @@ var validSeverities = map[Severity]bool{
 
 // Valid rule names for validation.
 var validRuleNames = map[string]bool{
-	"Complexity":           true,
-	"FunctionLength":       true,
-	"ArgumentCount":        true,
-	"Cognitive Complexity": true,
-	"CognitiveComplexity":  true,
-	"Max Case Length":      true,
-	"CaseBlockLength":      true,
+	sensors.RuleComplexity:          true,
+	sensors.RuleFunctionLength:      true,
+	sensors.RuleArgumentCount:       true,
+	sensors.RuleCognitiveComplexity: true,
+	sensors.RuleCaseBlockLength:     true,
+	sensors.RuleFileLength:          true,
 }
 
 // RulePolicy holds the configuration for a single rule.
@@ -237,12 +236,16 @@ func isValidRuleName(name string) bool {
 // getBaselineForRule returns the baseline threshold for a given rule name.
 func getBaselineForRule(ruleName string) int {
 	switch ruleName {
-	case "Complexity":
+	case sensors.RuleComplexity:
 		return sensors.BaselineComplexity
-	case "FunctionLength":
+	case sensors.RuleFunctionLength:
 		return sensors.BaselineFunctionLength
-	case "ArgumentCount":
+	case sensors.RuleArgumentCount:
 		return sensors.BaselineArgumentCount
+	case sensors.RuleCognitiveComplexity:
+		return sensors.BaselineCognitiveComplexity
+	case sensors.RuleCaseBlockLength:
+		return sensors.BaselineCaseLength
 	default:
 		return 0
 	}

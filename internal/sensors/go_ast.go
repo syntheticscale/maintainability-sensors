@@ -61,7 +61,7 @@ func ParseGoAST(file FileContext) ([]Violation, error) {
 		bodyEndPos := fset.Position(fn.Body.Rbrace)
 		length := bodyEndPos.Line - bodyStartPos.Line + 1
 		violations = append(violations, Violation{
-			RuleName:  "FunctionLength",
+			RuleName:  RuleFunctionLength,
 			Value:     length,
 			StartLine: startLine,
 			EndLine:   endLine,
@@ -79,7 +79,7 @@ func ParseGoAST(file FileContext) ([]Violation, error) {
 			}
 		}
 		violations = append(violations, Violation{
-			RuleName:  "ArgumentCount",
+			RuleName:  RuleArgumentCount,
 			Value:     params,
 			StartLine: startLine,
 			EndLine:   endLine,
@@ -88,7 +88,7 @@ func ParseGoAST(file FileContext) ([]Violation, error) {
 		// Calculate Cyclomatic Complexity of the function
 		complexity := calculateGoComplexity(fn)
 		violations = append(violations, Violation{
-			RuleName:  "Complexity",
+			RuleName:  RuleComplexity,
 			Value:     complexity,
 			StartLine: startLine,
 			EndLine:   endLine,
@@ -97,7 +97,7 @@ func ParseGoAST(file FileContext) ([]Violation, error) {
 		// Calculate Cognitive Complexity of the function
 		cognitiveComplexity := calculateGoCognitiveComplexity(fn)
 		violations = append(violations, Violation{
-			RuleName:  "CognitiveComplexity",
+			RuleName:  RuleCognitiveComplexity,
 			Value:     cognitiveComplexity,
 			StartLine: startLine,
 			EndLine:   endLine,
@@ -118,12 +118,12 @@ func ParseGoAST(file FileContext) ([]Violation, error) {
 			}
 			length := caseEndLine - caseStartLine + 1
 			if length > BaselineCaseLength {
-				violations = append(violations, Violation{
-					RuleName:  "CaseBlockLength",
-					Value:     length,
-					StartLine: caseStartLine,
-					EndLine:   caseEndLine,
-				})
+			violations = append(violations, Violation{
+				RuleName:  RuleCaseBlockLength,
+				Value:     length,
+				StartLine: caseStartLine,
+				EndLine:   caseEndLine,
+			})
 			}
 			return true
 		})

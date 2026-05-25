@@ -22,7 +22,7 @@ func TestPolyglotComponent(t *testing.T) {
 
 	// 1. Compile the CLI
 	t.Logf("Compiling CLI to %s...", binPath)
-	cmdBuild := exec.Command("go", "build", "-o", binPath, "./cmd/maintainability-sensors")
+	cmdBuild := exec.Command("go", "build", "-buildvcs=false", "-o", binPath, "./cmd/maintainability-sensors") // -buildvcs=false avoids build failures in shallow worktrees or Docker without git history
 	cmdBuild.Dir = repoRoot
 	if out, err := cmdBuild.CombinedOutput(); err != nil {
 		t.Fatalf("failed to compile CLI: %v\nOutput: %s", err, out)
@@ -114,7 +114,7 @@ func TestPolyglotComponent(t *testing.T) {
 	if !strings.Contains(outStr, "Configured Exceptions (Relaxed Constraints)") {
 		t.Error("Failed to detect relaxed constraint section")
 	}
-	if !strings.Contains(outStr, "Cyclomatic Complexity (15 vs baseline 8)") {
+	if !strings.Contains(outStr, "Complexity (15 vs baseline 8)") {
 		t.Error("Failed to detect specifically relaxed Go cyclomatic complexity")
 	}
 }

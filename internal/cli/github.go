@@ -237,11 +237,11 @@ func getLimits(res sensors.OrchestratorResult) (int, int, int) {
 
 	for _, exc := range res.Exceptions {
 		switch exc.RuleName {
-		case "Cyclomatic Complexity":
+		case sensors.RuleComplexity:
 			limitComplexity = exc.ConfiguredVal
-		case "Function Length":
+		case sensors.RuleFunctionLength:
 			limitLength = exc.ConfiguredVal
-		case "Argument Count":
+		case sensors.RuleArgumentCount:
 			limitArgs = exc.ConfiguredVal
 		}
 	}

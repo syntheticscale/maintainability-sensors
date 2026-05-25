@@ -19,9 +19,9 @@ func (p ESLintConfigParser) Anchors() []string {
 
 func (p ESLintConfigParser) Rules() []ParserRule {
 	return []ParserRule{
-		{RuleName: "Cyclomatic Complexity", Keys: []string{"complexity"}, Baseline: BaselineComplexity},
-		{RuleName: "Function Length", Keys: []string{"max-lines-per-function"}, Baseline: BaselineFunctionLength},
-		{RuleName: "Argument Count", Keys: []string{"max-params"}, Baseline: BaselineArgumentCount},
-		{RuleName: "File Length", Keys: []string{"max-lines"}, Baseline: BaselineFileLength},
+		{RuleName: RuleComplexity, Keys: []string{"complexity"}, Baseline: BaselineComplexity},
+		{RuleName: RuleFunctionLength, Keys: []string{"max-lines-per-function"}, Baseline: BaselineFunctionLength},
+		{RuleName: RuleArgumentCount, Keys: []string{"max-params"}, Baseline: BaselineArgumentCount},
+		{RuleName: RuleFileLength, Keys: []string{"max-lines"}, Baseline: BaselineFileLength},
 	}
 }

@@ -73,7 +73,7 @@ func ParseTypeScriptTreeSitter(file FileContext) ([]Violation, error) {
 			// Function Length
 			length := endLine - startLine + 1
 			violations = append(violations, Violation{
-				RuleName:  "FunctionLength",
+				RuleName:  RuleFunctionLength,
 				Value:     length,
 				StartLine: startLine,
 				EndLine:   endLine,
@@ -98,7 +98,7 @@ func ParseTypeScriptTreeSitter(file FileContext) ([]Violation, error) {
 			}
 
 			violations = append(violations, Violation{
-				RuleName:  "ArgumentCount",
+				RuleName:  RuleArgumentCount,
 				Value:     argCount,
 				StartLine: startLine,
 				EndLine:   endLine,
@@ -127,7 +127,7 @@ func ParseTypeScriptTreeSitter(file FileContext) ([]Violation, error) {
 			}
 
 			violations = append(violations, Violation{
-				RuleName:  "Complexity",
+				RuleName:  RuleComplexity,
 				Value:     complexity,
 				StartLine: startLine,
 				EndLine:   endLine,

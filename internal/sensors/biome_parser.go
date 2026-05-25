@@ -11,8 +11,8 @@ func (p BiomeConfigParser) Anchors() []string {
 
 func (p BiomeConfigParser) Rules() []ParserRule {
 	return []ParserRule{
-		{RuleName: "Cyclomatic Complexity", Keys: []string{"complexity"}, Baseline: BaselineComplexity},
-		{RuleName: "Function Length", Keys: []string{"maxLines"}, Baseline: BaselineFunctionLength},
-		{RuleName: "Argument Count", Keys: []string{"maxParameters"}, Baseline: BaselineArgumentCount},
+		{RuleName: RuleComplexity, Keys: []string{"complexity"}, Baseline: BaselineComplexity},
+		{RuleName: RuleFunctionLength, Keys: []string{"maxLines"}, Baseline: BaselineFunctionLength},
+		{RuleName: RuleArgumentCount, Keys: []string{"maxParameters"}, Baseline: BaselineArgumentCount},
 	}
 }

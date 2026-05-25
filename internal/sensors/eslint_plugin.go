@@ -50,13 +50,13 @@ func parseESLintMessages(messages []ESLintMessage) []Violation {
 		}
 		if msg.RuleID == "complexity" {
 			val := extractESLintValue(msg.Message, reComplexity, reFallback)
-			violations = append(violations, Violation{RuleName: "Complexity", Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
+			violations = append(violations, Violation{RuleName: RuleComplexity, Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
 		} else if msg.RuleID == "max-params" {
 			val := extractESLintValue(msg.Message, reParameters, reFallback)
-			violations = append(violations, Violation{RuleName: "ArgumentCount", Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
+			violations = append(violations, Violation{RuleName: RuleArgumentCount, Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
 		} else if msg.RuleID == "max-lines-per-function" {
 			val := extractESLintValue(msg.Message, reLines, reFallback)
-			violations = append(violations, Violation{RuleName: "FunctionLength", Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
+			violations = append(violations, Violation{RuleName: RuleFunctionLength, Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
 		}
 	}
 	return violations

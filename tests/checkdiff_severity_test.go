@@ -15,7 +15,7 @@ func compileBinary(t *testing.T) string {
 	bin := filepath.Join(tmpDir, "maintainability-sensors")
 	_, filename, _, _ := runtime.Caller(0)
 	repoRoot := filepath.Dir(filepath.Dir(filename))
-	cmd := exec.Command("go", "build", "-o", bin, "./cmd/maintainability-sensors")
+	cmd := exec.Command("go", "build", "-buildvcs=false", "-o", bin, "./cmd/maintainability-sensors") // -buildvcs=false avoids build failures in shallow worktrees or Docker without git history
 	cmd.Dir = repoRoot
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to compile CLI binary: %v\nOutput: %s", err, out)

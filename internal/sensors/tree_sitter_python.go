@@ -72,7 +72,7 @@ func ParsePythonTreeSitter(file FileContext) ([]Violation, error) {
 			// Function Length
 			length := endLine - startLine + 1
 			violations = append(violations, Violation{
-				RuleName:  "FunctionLength",
+				RuleName:  RuleFunctionLength,
 				Value:     length,
 				StartLine: startLine,
 				EndLine:   endLine,
@@ -91,7 +91,7 @@ func ParsePythonTreeSitter(file FileContext) ([]Violation, error) {
 				}
 			}
 			violations = append(violations, Violation{
-				RuleName:  "ArgumentCount",
+				RuleName:  RuleArgumentCount,
 				Value:     argCount,
 				StartLine: startLine,
 				EndLine:   endLine,
@@ -108,12 +108,14 @@ func ParsePythonTreeSitter(file FileContext) ([]Violation, error) {
 					switch n.Type() {
 					case "if_statement", "elif_clause", "for_statement", "while_statement", "except_clause":
 						complexity++
+					case "try_statement", "with_statement":
+						complexity++
 					case "boolean_operator":
-						// we might want to check if it's 'and' or 'or'
-						// n.ChildByFieldName("operator")?
-						// actually, for standard complexity we count these if we want, but let's see.
-						// Our Go test just adds `if`, `for`, `while`, `except` and `elif`.
-						// Let's stick to the basic nodes.
+						complexity++
+					case "list_comprehension", "dictionary_comprehension", "set_comprehension":
+						complexity++
+					case "conditional_expression":
+						complexity++
 					}
 					for i := 0; i < int(n.NamedChildCount()); i++ {
 						child := n.NamedChild(i)
@@ -127,7 +129,7 @@ func ParsePythonTreeSitter(file FileContext) ([]Violation, error) {
 			}
 
 			violations = append(violations, Violation{
-				RuleName:  "Complexity",
+				RuleName:  RuleComplexity,
 				Value:     complexity,
 				StartLine: startLine,
 				EndLine:   endLine,

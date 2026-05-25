@@ -30,17 +30,17 @@ func parsePyLintMessages(list []PyLintMessage) map[string][]Violation {
 		if msg.Symbol == "too-many-statements" {
 			if strings.Contains(msg.Message, "Too many statements") {
 				fmt.Sscanf(msg.Message, "Too many statements (%d/%*d)", &val)
-				rule = "FunctionLength"
+				rule = RuleFunctionLength
 			}
 		} else if msg.Symbol == "too-many-arguments" {
 			if strings.Contains(msg.Message, "Too many arguments") {
 				fmt.Sscanf(msg.Message, "Too many arguments (%d/%*d)", &val)
-				rule = "ArgumentCount"
+				rule = RuleArgumentCount
 			}
 		} else if msg.Symbol == "too-many-branches" || msg.Symbol == "too-complex" {
 			if strings.Contains(msg.Message, "McCabe rating is") {
 				fmt.Sscanf(msg.Message, "McCabe rating is %d", &val)
-				rule = "Complexity"
+				rule = RuleComplexity
 			}
 		}
 		if rule != "" {

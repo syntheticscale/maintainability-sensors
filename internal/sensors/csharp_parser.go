@@ -49,9 +49,9 @@ func walkCSharpNodes(n *sitter.Node, content []byte, violations *[]Violation) {
 		endLine := int(n.EndPoint().Row) + 1
 		length := endLine - startLine + 1
 
-		*violations = append(*violations, Violation{RuleName: "FunctionLength", Value: length, StartLine: startLine, EndLine: endLine})
-		*violations = append(*violations, Violation{RuleName: "ArgumentCount", Value: countCSharpParams(n), StartLine: startLine, EndLine: endLine})
-		*violations = append(*violations, Violation{RuleName: "Complexity", Value: countCSharpComplexity(n, content), StartLine: startLine, EndLine: endLine})
+		*violations = append(*violations, Violation{RuleName: RuleFunctionLength, Value: length, StartLine: startLine, EndLine: endLine})
+		*violations = append(*violations, Violation{RuleName: RuleArgumentCount, Value: countCSharpParams(n), StartLine: startLine, EndLine: endLine})
+		*violations = append(*violations, Violation{RuleName: RuleComplexity, Value: countCSharpComplexity(n, content), StartLine: startLine, EndLine: endLine})
 	}
 
 	for i := 0; i < int(n.NamedChildCount()); i++ {

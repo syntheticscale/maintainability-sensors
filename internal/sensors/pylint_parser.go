@@ -11,9 +11,9 @@ func (p PyLintConfigParser) Anchors() []string {
 
 func (p PyLintConfigParser) Rules() []ParserRule {
 	return []ParserRule{
-		{RuleName: "Cyclomatic Complexity", Keys: []string{"max-complexity"}, Baseline: BaselineComplexity},
-		{RuleName: "Function Length", Keys: []string{"max-statements"}, Baseline: BaselineFunctionLength},
-		{RuleName: "Argument Count", Keys: []string{"max-args"}, Baseline: BaselineArgumentCount},
-		{RuleName: "File Length", Keys: []string{"max-module-lines"}, Baseline: BaselineFileLength},
+		{RuleName: RuleComplexity, Keys: []string{"max-complexity"}, Baseline: BaselineComplexity},
+		{RuleName: RuleFunctionLength, Keys: []string{"max-statements"}, Baseline: BaselineFunctionLength},
+		{RuleName: RuleArgumentCount, Keys: []string{"max-args"}, Baseline: BaselineArgumentCount},
+		{RuleName: RuleFileLength, Keys: []string{"max-module-lines"}, Baseline: BaselineFileLength},
 	}
 }

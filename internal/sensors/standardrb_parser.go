@@ -11,9 +11,9 @@ func (p StandardRBConfigParser) Anchors() []string {
 
 func (p StandardRBConfigParser) Rules() []ParserRule {
 	return []ParserRule{
-		{RuleName: "Cyclomatic Complexity", Keys: []string{"CyclomaticComplexity"}, Baseline: BaselineComplexity},
-		{RuleName: "Function Length", Keys: []string{"MethodLength"}, Baseline: BaselineFunctionLength},
-		{RuleName: "Argument Count", Keys: []string{"ParameterLists"}, Baseline: BaselineArgumentCount},
-		{RuleName: "File Length", Keys: []string{"ModuleLength"}, Baseline: BaselineFileLength},
+		{RuleName: RuleComplexity, Keys: []string{"CyclomaticComplexity"}, Baseline: BaselineComplexity},
+		{RuleName: RuleFunctionLength, Keys: []string{"MethodLength"}, Baseline: BaselineFunctionLength},
+		{RuleName: RuleArgumentCount, Keys: []string{"ParameterLists"}, Baseline: BaselineArgumentCount},
+		{RuleName: RuleFileLength, Keys: []string{"ModuleLength"}, Baseline: BaselineFileLength},
 	}
 }

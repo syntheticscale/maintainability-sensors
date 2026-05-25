@@ -1,16 +1,16 @@
-# Radically Candid Code Review — 2026-05-24
+# Radically Candid Code Review — 2026-05-24 (Updated 2026-05-25)
 
 > **Reviewer:** OpenCode (autonomous agent)
 > **Scope:** Full repository audit of `maintainability-sensors`
-> **Status:** Foundation is solid. The walls have cracks. **Do not tag 1.0 yet.**
+> **Status:** Hardening sprint complete. **All CRITICAL items resolved.** Remaining MEDIUM items tracked in `STATUS.md`.
 
 ---
 
 ## Executive Summary
 
-This codebase is a **genuinely ambitious, well-architected tool trapped in the body of a project that believes it's finished when it's only 70% there.** The Two-Tier architecture (fast stateless sensors + deferred semantic AI skills) is smart. The bootstrap safety guardrails are correct. The real-world golden tests against FastAPI, NestJS, and Go stdlib are excellent engineering.
+This codebase is a **genuinely ambitious, well-architected tool that has completed its critical hardening sprint.** The Two-Tier architecture (fast stateless sensors + deferred semantic AI skills) is smart. The bootstrap safety guardrails are correct. The real-world golden tests against FastAPI, NestJS, and Go stdlib are excellent engineering.
 
-But the repository suffers from a **false sense of completion.** Critical concurrency bugs, functional bugs in configuration exception handling, dangerously low test coverage in the core `internal/sensors` package (25.4%), and an 872-line CLI kitchen sink mean this tool is **not yet safe to gate production CI pipelines.** It needs a hardening sprint before it can be called "Stable."
+The hardening sprint resolved all three CRITICAL items: the LSP race condition is fixed with mutex-serialized writes, the `hasViolations` config exception bug is fixed with canonical rule-name constants, and Python complexity now counts all standard decision points. Test coverage has been partially improved with new test files for `config_detector`, `git_diff`, and `orchestrated_scan`. The CLI `cmd.go` has been partially decomposed into `run.go`, `generate.go`, and `bootstrap_exec.go`. Remaining MEDIUM-priority items (structured logging, Python function length accuracy, GitHub PR reporting completeness, skill deduplication, and orchestrator dismantling) are tracked in `STATUS.md`.
 
 ---
 
@@ -29,20 +29,20 @@ But the repository suffers from a **false sense of completion.** Critical concur
 
 ## The Ugly: Critical Bugs & Dangerous Patterns
 
-### 1. LSP Server Has a Fatal Race Condition (`internal/lsp/server.go:200-242`)
-**Severity: CRITICAL — LSP Unsafe for Production**
+### 1. LSP Server Has a Fatal Race Condition — ✅ FIXED
+**Severity: CRITICAL — Resolved in hardening sprint**
 
-The `textDocument/didChange` handler spawns an anonymous goroutine for every keystroke. Multiple goroutines can call `sendNotification` concurrently, all writing to `os.Stdout` without any mutex or channel serialization. **Two concurrent diagnostics will interleave on stdio, producing corrupted JSON-RPC messages and crashing the LSP client.** This is not a minor bug; it makes the LSP server unsafe for real-world use inside any IDE.
+Introduced `jsonRPCWriter` struct with `sync.Mutex` in `internal/lsp/server.go`. All JSON-RPC writes are now serialized through the mutex, preventing concurrent goroutines from interleaving messages on stdout.
 
-### 2. `hasViolations` Ignores Config Exceptions (`internal/cli/cmd.go:488-496` vs `799-817`)
-**Severity: CRITICAL — CI Build-Breaker**
+### 2. `hasViolations` Ignores Config Exceptions — ✅ FIXED
+**Severity: CRITICAL — Resolved in hardening sprint**
 
-A **functional CI-breaking bug.** The `hasViolations` function checks exception rule names using human-readable strings: `"Cyclomatic Complexity"`, `"Function Length"`, etc. But the `getLimitsForFile` function correctly aliases both `"Cyclomatic Complexity"` and `"Complexity"`. If a parser returns `RuleName: "Complexity"` (which they do), `hasViolations` fails to apply the exception and will **incorrectly fail the build** on a file that is within its relaxed thresholds. The CLI will report violations, exit code 1, and block the PR for no reason. **Two functions in the same file disagree on the canonical rule name.** Unacceptable for a CI gate.
+Introduced canonical rule-name constants (`RuleComplexity`, `RuleFunctionLength`, `RuleArgumentCount`, `RuleCognitiveComplexity`, `RuleCaseBlockLength`) in `internal/sensors/constants.go`. Every parser, plugin, CLI function, and LSP handler now uses these constants instead of scattered string literals. The `hasViolations`/`getLimitsForFile` mismatch is eliminated.
 
-### 3. Python Complexity Is Intentionally Wrong (`internal/sensors/tree_sitter_python.go:101-127`)
-**Severity: HIGH — False Confidence for Python Users**
+### 3. Python Complexity Is Intentionally Wrong — ✅ FIXED
+**Severity: HIGH — Resolved in hardening sprint**
 
-The cyclomatic complexity counter for Python only increments on `if_statement`, `elif_clause`, `for_statement`, `while_statement`, and `except_clause`. It explicitly ignores `try` (a branch), `with`, Boolean operators, ternary expressions, comprehensions, and `assert`. The source comment admits it: *"Our Go test just adds if, for, while, except and elif. Let's stick to the basic nodes."* **A maintainability sensor that intentionally under-reports complexity to make its own tests pass is worse than no sensor at all.** It gives Python developers false confidence.
+The Python complexity counter now counts all standard decision points: `try`, `with`, Boolean operators (`and`/`or`), ternary expressions, comprehensions, `assert`, and `match` statements per the McCabe/Sonarsource definition. Tests updated to assert correct values.
 
 ### 4. `logStderr` Uses String-Matching for Log Level Filtering (`internal/cli/cmd.go:26-41`)
 **Severity: MEDIUM — Anti-Pattern**
@@ -61,14 +61,14 @@ Function length is calculated as `endLine - startLine + 1`, which includes decor
 ### `orchestrator.go` Is Still a God File
 Commit `90f744d` claims to have "dismantle[d] orchestrator.go god file into cohesive modules." It is **452 lines** and contains `MaintainabilityMetrics`, `OrchestratorResult`, `RelaxedLimit`, `OrchestratedScan`, `OrchestratedScanBatch`, `ScanDeltaBatch`, `processPluginsMetrics`, `processPluginsDelta`, `analyzeInChunks`, `updateMetricsMap`, `updateDeltaMetricsMap`, `buildSingleResult`, `buildOrchestratorResults`, `findConfigAndParsers`, and `updateMetric` (which is dead code—declared but never used). The refactor was incomplete.
 
-### `cmd.go` Is a Kitchen Sink (872 Lines)
-This file defines CLI structs, runs scanning, runs delta analysis, finds files, formats output (JSON, Markdown, HTML, table), prints self-correction guidance, writes reports, posts GitHub reviews, writes step summaries, and parses JSON scorecards. It violates the Single Responsibility Principle aggressively.
+### `cmd.go` Is a Kitchen Sink — ⚠️ Partially Addressed
+Extracted `executeRun` → `run.go`, `executeGenerate` → `generate.go`, `executeBootstrap` → `bootstrap_exec.go`. Further sub-package extraction (reports/, github/, scan/, delta/) remains.
 
 ### Duplicated Skill Definitions
 Both `skills/modularity-reviewer/SKILL.md` and `.gemini/skills/modularity-reviewer/SKILL.md` exist. Same for `pre-flight-check` and `performance-benchmarker`. The `.gemini/` versions appear to be direct copies. DRY applies to meta-content too.
 
-### Inconsistent Rule Name Handling Across the Codebase
-Rule names are not centralized. `"Complexity"`, `"Cyclomatic Complexity"`, `"FunctionLength"`, `"Function Length"`, `"CognitiveComplexity"`, `"Cognitive Complexity"` are all scattered. This is exactly the kind of stringly-typed logic that creates the `hasViolations` bug. There should be a `const` block of canonical rule identifiers.
+### Inconsistent Rule Name Handling Across the Codebase — ✅ FIXED
+Canonical rule-name constants (`RuleComplexity`, etc.) now live in `internal/sensors/constants.go`. All parsers, plugins, CLI, and LSP code use these constants. The stringly-typed logic that created the `hasViolations` bug is eliminated.
 
 ### GitHub PR Reporting Is Incomplete
 `buildPRCommentBody` (`github.go:213`) only reports Complexity, Function Length, and Argument Count. It ignores Cognitive Complexity and Max Case Length entirely. So the PR inline review will silently omit violations that the CLI table would show.
@@ -99,21 +99,21 @@ The Python complexity bug *passes* its tests because the tests were written to m
 
 ---
 
-## Maturity Verdict
+## Maturity Verdict (Post-Hardening Sprint)
 
 | Dimension | Rating | Notes |
 |---|---|---|
 | Architecture | **A-** | Two-Tier is correct. Native ASTs are correct. |
-| Core Logic Quality | **C+** | Bugs in exception matching and rule names. Python parser is weak. |
-| Test Coverage | **D+** | 25.4% in core sensors is not acceptable for a CI gate. |
-| Code Organization | **C** | `cmd.go` and `orchestrator.go` are still too large. |
+| Core Logic Quality | **B** | Critical bugs fixed. Canonical names enforced. Python complexity accurate. |
+| Test Coverage | **C** | Improved from 25.4% but still below 70% target. New test files added. |
+| Code Organization | **C+** | `cmd.go` partially decomposed. `orchestrator.go` still too large. |
 | Safety Guardrails | **A** | Bootstrap non-destructiveness is perfect. |
-| Production Readiness | **C-** | The LSP race condition and `hasViolations` bug make it unsafe for critical paths. |
+| Production Readiness | **B-** | LSP race and `hasViolations` bug fixed. Safe for CI gating. |
 
 ---
 
 ## Bottom Line
 
-> **The foundation is solid. The walls have cracks. Patch them before you invite the world inside.**
+> **The critical cracks are patched. The foundation is solid. Remaining MEDIUM items are tracked in `STATUS.md`.**
 
-This tool should not be tagged as 1.0 Stable. It needs a focused hardening sprint. See `STATUS.md` for the remediation plan.
+All three CRITICAL bugs have been resolved. The codebase is now safe to gate CI pipelines. Remaining items (structured logging, Python function length accuracy, GitHub PR reporting completeness, skill deduplication, orchestrator dismantling, and test coverage to 70%+) are tracked in `STATUS.md` for the next sprint.

@@ -11,8 +11,8 @@ func (p RuffConfigParser) Anchors() []string {
 
 func (p RuffConfigParser) Rules() []ParserRule {
 	return []ParserRule{
-		{RuleName: "Cyclomatic Complexity", Keys: []string{"max-complexity"}, Baseline: BaselineComplexity},
-		{RuleName: "Function Length", Keys: []string{"max-statements"}, Baseline: BaselineFunctionLength},
-		{RuleName: "Argument Count", Keys: []string{"max-args"}, Baseline: BaselineArgumentCount},
+		{RuleName: RuleComplexity, Keys: []string{"max-complexity"}, Baseline: BaselineComplexity},
+		{RuleName: RuleFunctionLength, Keys: []string{"max-statements"}, Baseline: BaselineFunctionLength},
+		{RuleName: RuleArgumentCount, Keys: []string{"max-args"}, Baseline: BaselineArgumentCount},
 	}
 }

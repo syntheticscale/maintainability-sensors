@@ -178,3 +178,39 @@ public class Sample {
 		t.Errorf("expected FunctionLength > 0, got 0")
 	}
 }
+
+func TestOrchestratedScan_PythonAdvancedComplexity(t *testing.T) {
+	tempDir := t.TempDir()
+	pyFile := filepath.Join(tempDir, "advanced.py")
+
+	content := `def advanced_complexity(a, b, c):
+    try:
+        if a > 0 and b > 0:
+            with open("file.txt") as f:
+                data = f.read()
+        elif a < 0 or c < 0:
+            data = "fallback"
+    except Exception:
+        data = "error"
+    result = [x for x in range(10) if x > 5]
+    return 1 if result else 0
+`
+	if err := os.WriteFile(pyFile, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test Python file: %v", err)
+	}
+
+	res, err := sensors.OrchestratedScan(pyFile)
+	if err != nil {
+		t.Fatalf("OrchestratedScan failed: %v", err)
+	}
+
+	if !res.ToolingDetected {
+		t.Error("expected ToolingDetected to be true for python-ast plugin")
+	}
+
+	// Complexity breakdown:
+	// 1 base + 1 (try) + 1 (if) + 1 (and) + 1 (with) + 1 (elif) + 1 (or) + 1 (except) + 1 (list_comprehension) + 1 (conditional_expression) = 10
+	if res.Metrics.Complexity != 10 {
+		t.Errorf("expected complexity 10, got %d", res.Metrics.Complexity)
+	}
+}

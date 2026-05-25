@@ -40,13 +40,13 @@ func extractRuffRule(msg RuffMessage, val *int) string {
 		if *val == 0 {
 			*val = 1
 		}
-		return "Complexity"
+		return RuleComplexity
 	}
 	if *val > 0 {
 		if msg.Code == "PLR0915" {
-			return "FunctionLength"
+			return RuleFunctionLength
 		} else if msg.Code == "PLR0913" {
-			return "ArgumentCount"
+			return RuleArgumentCount
 		}
 	}
 	return ""
