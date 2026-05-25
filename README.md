@@ -48,6 +48,21 @@ chmod +x bin/maintainability-sensors
 mv bin/maintainability-sensors /usr/local/bin/
 ```
 
+### 3. Cross-Compilation (CGO Dependency)
+Because this tool uses `go-tree-sitter` for native AST parsing, it requires `cgo` and a C compiler. To cross-compile for different operating systems or architectures, you must provide the appropriate cross-compiler via the `CC` environment variable and ensure `CGO_ENABLED=1`.
+
+Example (Linux to Windows):
+```bash
+sudo apt-get install mingw-w64
+CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -o bin/maintainability-sensors.exe ./cmd/maintainability-sensors
+```
+
+Example (macOS to Linux):
+```bash
+brew install FiloSottile/musl-cross/musl-cross
+CGO_ENABLED=1 CC=x86_64-linux-musl-gcc go build -o bin/maintainability-sensors-linux ./cmd/maintainability-sensors
+```
+
 ### 2. The AI Skills (Tier 2)
 The repository includes `.skill` files ready for installation into compatible agents (like Gemini CLI).
 ```bash

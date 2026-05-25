@@ -171,6 +171,5 @@ maintainability-sensors/
 Priority-ordered remaining work:
 
 1.  **Item 4: Harden `internal/sensors` Test Coverage** — Add biome_plugin, ruff_plugin, standardrb_plugin tests; FindFiles, processViolationsMap tests.
-2.  **Item 19: CGO dependency** — Document or vendor pre-built C libs for cross-compilation.
 
 **Pre-commit hook note:** `git commit` currently requires `--no-verify` because the codebase has pre-existing `CognitiveComplexity` and `CaseBlockLength` violations.
