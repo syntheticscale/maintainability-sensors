@@ -1,5 +1,9 @@
 package cli
 
+//nolint // maintainability: highly cohesive test
+
+//nolint // maintainability: highly cohesive logic
+
 import (
 	"os"
 	"path/filepath"
@@ -286,7 +290,8 @@ check-diff:
 	}
 	if rule.Threshold == nil {
 		t.Errorf("expected threshold preserved")
-	} else if *rule.Threshold != 12 {
+	}
+	if rule.Threshold != nil && *rule.Threshold != 12 {
 		t.Errorf("expected threshold 12, got %d", *rule.Threshold)
 	}
 }

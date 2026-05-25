@@ -54,14 +54,19 @@ func hasNativePlugin(plugins []Plugin) bool {
 }
 
 func populateResultMessage(ctx BatchContext, res *OrchestratorResult, cleanPath string) {
-	if ctx.BatchErrorMsg != "" && !res.ToolingDetected {
-		res.Message = ctx.BatchErrorMsg
-	} else if ctx.BatchErrorMsg != "" && res.ToolingDetected && ctx.MetricsMap[cleanPath] == (MaintainabilityMetrics{}) {
-		res.Message = ctx.BatchErrorMsg
-	} else {
-		if m, ok := ctx.MetricsMap[cleanPath]; ok {
-			res.Metrics = m
+	if ctx.BatchErrorMsg != "" {
+		if !res.ToolingDetected {
+			res.Message = ctx.BatchErrorMsg
+			return
 		}
+		if ctx.MetricsMap[cleanPath] == (MaintainabilityMetrics{}) {
+			res.Message = ctx.BatchErrorMsg
+			return
+		}
+	}
+
+	if m, ok := ctx.MetricsMap[cleanPath]; ok {
+		res.Metrics = m
 	}
 }
 

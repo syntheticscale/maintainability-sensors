@@ -33,6 +33,15 @@ func ParseArchitectureConfig(filePath string) (*ArchitectureConfig, error) {
 	return &config, nil
 }
 
+func segmentsMatch(segments, layerSegments []string, startIndex int) bool {
+	for j := 0; j < len(layerSegments); j++ {
+		if segments[startIndex+j] != layerSegments[j] {
+			return false
+		}
+	}
+	return true
+}
+
 func matchesLayer(path, layerName string) bool {
 	path = strings.Trim(filepath.ToSlash(path), "/")
 	layerName = strings.Trim(filepath.ToSlash(layerName), "/")
@@ -49,18 +58,41 @@ func matchesLayer(path, layerName string) bool {
 	}
 
 	for i := 0; i <= len(segments)-len(layerSegments); i++ {
-		match := true
-		for j := 0; j < len(layerSegments); j++ {
-			if segments[i+j] != layerSegments[j] {
-				match = false
-				break
-			}
-		}
-		if match {
+		if segmentsMatch(segments, layerSegments, i) {
 			return true
 		}
 	}
 	return false
+}
+
+func findLayer(path string, config *ArchitectureConfig) string {
+	for layerName := range config.Layers {
+		if matchesLayer(path, layerName) {
+			return layerName
+		}
+	}
+	return ""
+}
+
+func getViolation(currentLayer, importedLayer string, allowedMap map[string]bool, imp ImportInfo) *Violation {
+	if importedLayer != "" && importedLayer != currentLayer && !allowedMap[importedLayer] {
+		return &Violation{
+			RuleName:  "DependencyBoundary",
+			Message:   "Illegal import: layer '" + currentLayer + "' is not allowed to import layer '" + importedLayer + "'",
+			StartLine: imp.Line,
+			EndLine:   imp.Line,
+			Value:     1,
+		}
+	}
+	return nil
+}
+
+func getAbsPath(filePath string) string {
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		absPath = filePath
+	}
+	return filepath.ToSlash(absPath)
 }
 
 func CheckArchitectureDependencies(filePath string, config *ArchitectureConfig, imports []ImportInfo) []Violation {
@@ -69,49 +101,22 @@ func CheckArchitectureDependencies(filePath string, config *ArchitectureConfig, 
 		return violations
 	}
 
-	absPath, err := filepath.Abs(filePath)
-	if err != nil {
-		absPath = filePath
-	}
-	absPath = filepath.ToSlash(absPath)
+	absPath := getAbsPath(filePath)
 
-	currentLayer := ""
-	for layerName := range config.Layers {
-		if matchesLayer(absPath, layerName) {
-			currentLayer = layerName
-			break
-		}
-	}
-
+	currentLayer := findLayer(absPath, config)
 	if currentLayer == "" {
 		return violations
 	}
 
-	allowedImports := config.Layers[currentLayer].AllowedImports
 	allowedMap := make(map[string]bool)
-	for _, imp := range allowedImports {
+	for _, imp := range config.Layers[currentLayer].AllowedImports {
 		allowedMap[imp] = true
 	}
 
 	for _, imp := range imports {
-		importPath := imp.Path
-
-		importedLayer := ""
-		for layerName := range config.Layers {
-			if matchesLayer(importPath, layerName) {
-				importedLayer = layerName
-				break
-			}
-		}
-
-		if importedLayer != "" && importedLayer != currentLayer && !allowedMap[importedLayer] {
-			violations = append(violations, Violation{
-				RuleName:  "DependencyBoundary",
-				Message:   "Illegal import: layer '" + currentLayer + "' is not allowed to import layer '" + importedLayer + "'",
-				StartLine: imp.Line,
-				EndLine:   imp.Line,
-				Value:     1,
-			})
+		importedLayer := findLayer(imp.Path, config)
+		if v := getViolation(currentLayer, importedLayer, allowedMap, imp); v != nil {
+			violations = append(violations, *v)
 		}
 	}
 

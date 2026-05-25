@@ -115,13 +115,19 @@ func processDiffLine(line, currentFile string, result map[string][]LineRange) st
 		return file
 	}
 
-	if currentFile != "" {
-		if matches := diffHunkHeaderRegex.FindStringSubmatch(line); len(matches) > 1 {
-			if lr, ok := parseDiffHunk(matches); ok {
-				result[currentFile] = append(result[currentFile], lr)
-			}
-		}
+	if currentFile == "" {
+		return currentFile
 	}
+
+	matches := diffHunkHeaderRegex.FindStringSubmatch(line)
+	if len(matches) <= 1 {
+		return currentFile
+	}
+
+	if lr, ok := parseDiffHunk(matches); ok {
+		result[currentFile] = append(result[currentFile], lr)
+	}
+
 	return currentFile
 }
 

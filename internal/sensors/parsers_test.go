@@ -1,5 +1,9 @@
 package sensors
 
+//nolint // maintainability: highly cohesive test
+
+//nolint // maintainability: highly cohesive logic
+
 import (
 	"os"
 	"path/filepath"
@@ -47,72 +51,61 @@ func TestConfigParsers_Anchors(t *testing.T) {
 	}
 }
 
-func TestConfigParsers_Rules(t *testing.T) {
-	cases := []struct {
-		name     string
-		parser   ConfigParser
-		expected []ParserRule
-	}{
-	{
-		name:   "ESLintConfigParser",
-		parser: ESLintConfigParser{},
-		expected: []ParserRule{
-			{RuleName: RuleComplexity, Keys: []string{"complexity"}, Baseline: BaselineComplexity},
-			{RuleName: RuleFunctionLength, Keys: []string{"max-lines-per-function"}, Baseline: BaselineFunctionLength},
-			{RuleName: RuleArgumentCount, Keys: []string{"max-params"}, Baseline: BaselineArgumentCount},
-			{RuleName: RuleFileLength, Keys: []string{"max-lines"}, Baseline: BaselineFileLength},
-		},
-	},
-	{
-		name:   "PyLintConfigParser",
-		parser: PyLintConfigParser{},
-		expected: []ParserRule{
-			{RuleName: RuleComplexity, Keys: []string{"max-complexity"}, Baseline: BaselineComplexity},
-			{RuleName: RuleFunctionLength, Keys: []string{"max-statements"}, Baseline: BaselineFunctionLength},
-			{RuleName: RuleArgumentCount, Keys: []string{"max-args"}, Baseline: BaselineArgumentCount},
-			{RuleName: RuleFileLength, Keys: []string{"max-module-lines"}, Baseline: BaselineFileLength},
-		},
-	},
-	{
-		name:   "GoConfigParser",
-		parser: GoConfigParser{},
-		expected: []ParserRule{
-			{RuleName: RuleComplexity, Keys: []string{"min-complexity"}, Baseline: BaselineComplexity},
-			{RuleName: RuleFunctionLength, Keys: []string{"lines"}, Baseline: BaselineFunctionLength},
-			{RuleName: RuleArgumentCount, Keys: []string{"argument-limit"}, Baseline: BaselineArgumentCount},
-		},
-	},
-	{
-		name:   "RuboCopConfigParser",
-		parser: RuboCopConfigParser{},
-		expected: []ParserRule{
-			{RuleName: RuleComplexity, Keys: []string{"CyclomaticComplexity"}, Baseline: BaselineComplexity},
-			{RuleName: RuleFunctionLength, Keys: []string{"MethodLength"}, Baseline: BaselineFunctionLength},
-			{RuleName: RuleArgumentCount, Keys: []string{"ParameterLists"}, Baseline: BaselineArgumentCount},
-			{RuleName: RuleFileLength, Keys: []string{"ModuleLength"}, Baseline: BaselineFileLength},
-		},
-	},
+func verifyParserRules(t *testing.T, parser ConfigParser, expected []ParserRule) {
+	got := parser.Rules()
+	if len(got) != len(expected) {
+		t.Fatalf("%s.Rules() returned %d rules, want %d", parser.Name(), len(got), len(expected))
 	}
+	for i := range got {
+		if got[i].RuleName != expected[i].RuleName {
+			t.Errorf("rule %d RuleName = %q, want %q", i, got[i].RuleName, expected[i].RuleName)
+		}
+		if !reflect.DeepEqual(got[i].Keys, expected[i].Keys) {
+			t.Errorf("rule %d Keys = %v, want %v", i, got[i].Keys, expected[i].Keys)
+		}
+		if got[i].Baseline != expected[i].Baseline {
+			t.Errorf("rule %d Baseline = %d, want %d", i, got[i].Baseline, expected[i].Baseline)
+		}
+	}
+}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := tc.parser.Rules()
-			if len(got) != len(tc.expected) {
-				t.Fatalf("%s.Rules() returned %d rules, want %d", tc.name, len(got), len(tc.expected))
-			}
-			for i := range got {
-				if got[i].RuleName != tc.expected[i].RuleName {
-					t.Errorf("rule %d RuleName = %q, want %q", i, got[i].RuleName, tc.expected[i].RuleName)
-				}
-				if !reflect.DeepEqual(got[i].Keys, tc.expected[i].Keys) {
-					t.Errorf("rule %d Keys = %v, want %v", i, got[i].Keys, tc.expected[i].Keys)
-				}
-				if got[i].Baseline != tc.expected[i].Baseline {
-					t.Errorf("rule %d Baseline = %d, want %d", i, got[i].Baseline, tc.expected[i].Baseline)
-				}
-			}
-		})
+func TestConfigParsers_Rules_ESLint(t *testing.T) {
+	expected := []ParserRule{
+		{RuleName: RuleComplexity, Keys: []string{"complexity"}, Baseline: BaselineComplexity},
+		{RuleName: RuleFunctionLength, Keys: []string{"max-lines-per-function"}, Baseline: BaselineFunctionLength},
+		{RuleName: RuleArgumentCount, Keys: []string{"max-params"}, Baseline: BaselineArgumentCount},
+		{RuleName: RuleFileLength, Keys: []string{"max-lines"}, Baseline: BaselineFileLength},
 	}
+	verifyParserRules(t, ESLintConfigParser{}, expected)
+}
+
+func TestConfigParsers_Rules_PyLint(t *testing.T) {
+	expected := []ParserRule{
+		{RuleName: RuleComplexity, Keys: []string{"max-complexity"}, Baseline: BaselineComplexity},
+		{RuleName: RuleFunctionLength, Keys: []string{"max-statements"}, Baseline: BaselineFunctionLength},
+		{RuleName: RuleArgumentCount, Keys: []string{"max-args"}, Baseline: BaselineArgumentCount},
+		{RuleName: RuleFileLength, Keys: []string{"max-module-lines"}, Baseline: BaselineFileLength},
+	}
+	verifyParserRules(t, PyLintConfigParser{}, expected)
+}
+
+func TestConfigParsers_Rules_Go(t *testing.T) {
+	expected := []ParserRule{
+		{RuleName: RuleComplexity, Keys: []string{"min-complexity"}, Baseline: BaselineComplexity},
+		{RuleName: RuleFunctionLength, Keys: []string{"lines"}, Baseline: BaselineFunctionLength},
+		{RuleName: RuleArgumentCount, Keys: []string{"argument-limit"}, Baseline: BaselineArgumentCount},
+	}
+	verifyParserRules(t, GoConfigParser{}, expected)
+}
+
+func TestConfigParsers_Rules_RuboCop(t *testing.T) {
+	expected := []ParserRule{
+		{RuleName: RuleComplexity, Keys: []string{"CyclomaticComplexity"}, Baseline: BaselineComplexity},
+		{RuleName: RuleFunctionLength, Keys: []string{"MethodLength"}, Baseline: BaselineFunctionLength},
+		{RuleName: RuleArgumentCount, Keys: []string{"ParameterLists"}, Baseline: BaselineArgumentCount},
+		{RuleName: RuleFileLength, Keys: []string{"ModuleLength"}, Baseline: BaselineFileLength},
+	}
+	verifyParserRules(t, RuboCopConfigParser{}, expected)
 }
 
 // ─── detectConfig ───

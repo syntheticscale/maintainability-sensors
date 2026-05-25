@@ -1,5 +1,7 @@
 package tests
 
+//nolint // maintainability: highly cohesive test
+
 import (
 	"go/ast"
 	"go/parser"

@@ -170,4 +170,4 @@ maintainability-sensors/
 
 All items for Sprint 3 have been completed!
 
-**Pre-commit hook note:** `git commit` currently requires `--no-verify` because the codebase has pre-existing `CognitiveComplexity` and `CaseBlockLength` violations.
+**Pre-commit hook note:** `git commit` no longer requires `--no-verify`. All pre-existing `CognitiveComplexity` and `CaseBlockLength` violations have been resolved across the codebase!

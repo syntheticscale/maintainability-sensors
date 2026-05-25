@@ -141,25 +141,42 @@ func BootstrapRepo(repoPath string) error {
 // and boots up pristine, non-overwriting configs. If warnPolicy is true,
 // it also generates a .maintainability-sensors.yml with default-severity: warn.
 func BootstrapRepoWithPolicy(repoPath string, warnPolicy bool) error {
-	absPath, err := filepath.Abs(repoPath)
+	absPath, info, err := resolveAndStatPath(repoPath)
 	if err != nil {
-		absPath = repoPath
-	}
-
-	info, err := os.Stat(absPath)
-	if err != nil {
-		return fmt.Errorf("target path does not exist: %w", err)
+		return err
 	}
 	if !info.IsDir() {
 		return fmt.Errorf("target path is not a directory: %s", absPath)
 	}
 
-	// 1. Detect codebase languages by counting file extensions
 	langs := detectLanguages(absPath)
 	if len(langs) == 0 {
 		return fmt.Errorf("no supported codebase language detected (TS/JS, Python, Go, Java) in directory: %s", absPath)
 	}
 
+	if err := orchestrateBootstrapping(langs, absPath); err != nil {
+		return err
+	}
+
+	if warnPolicy {
+		return bootstrapMaintainabilitySensors(absPath)
+	}
+	return nil
+}
+
+func resolveAndStatPath(repoPath string) (string, os.FileInfo, error) {
+	absPath, err := filepath.Abs(repoPath)
+	if err != nil {
+		absPath = repoPath
+	}
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return "", nil, fmt.Errorf("target path does not exist: %w", err)
+	}
+	return absPath, info, nil
+}
+
+func orchestrateBootstrapping(langs []string, absPath string) error {
 	for _, lang := range langs {
 		fmt.Fprintf(os.Stderr, "=========================================\n")
 		fmt.Fprintf(os.Stderr, " Orchestrating Bootstrap for %s...\n", getFriendlyLangName(lang))
@@ -169,14 +186,6 @@ func BootstrapRepoWithPolicy(repoPath string, warnPolicy bool) error {
 			return err
 		}
 	}
-
-	// 2. Generate .maintainability-sensors.yml with gradual adoption policy if requested
-	if warnPolicy {
-		if err := bootstrapMaintainabilitySensors(absPath); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -216,25 +225,37 @@ func bootstrapLanguage(lang, absPath string) error {
 	return nil
 }
 
-func bootstrapTSJS(absPath string) error {
+func findExistingESLintConfig(absPath string) string {
 	anchors := ESLintConfigParser{}.Anchors()
-	var existingConfig string
 	for _, anchor := range anchors {
 		p := filepath.Join(absPath, anchor)
-		if info, err := os.Stat(p); err == nil {
-			if anchor == "package.json" {
-				if !info.Mode().IsRegular() || info.Size() > MaxFileSize {
-					continue
-				}
-				content, _ := os.ReadFile(p)
-				if !strings.Contains(string(content), `"eslintConfig"`) {
-					continue
-				}
-			}
-			existingConfig = anchor
-			break
+		info, err := os.Stat(p)
+		if err != nil {
+			continue
 		}
+		if anchor == "package.json" {
+			if !hasESLintConfigInPackageJson(p, info) {
+				continue
+			}
+		}
+		return anchor
 	}
+	return ""
+}
+
+func hasESLintConfigInPackageJson(p string, info os.FileInfo) bool {
+	if !info.Mode().IsRegular() || info.Size() > MaxFileSize {
+		return false
+	}
+	content, err := os.ReadFile(p)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(string(content), `"eslintConfig"`)
+}
+
+func bootstrapTSJS(absPath string) error {
+	existingConfig := findExistingESLintConfig(absPath)
 
 	if existingConfig != "" {
 		printExistingConfigBanner(existingConfig, fmt.Sprintf(`
@@ -420,43 +441,67 @@ func printInstallerInstructions(lang string) {
 
 	switch lang {
 	case "tsjs":
-		fmt.Fprintf(os.Stderr, "Execute this command to install the required development engines:\n")
-		fmt.Fprintf(os.Stderr, "  npm install --save-dev eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin\n\n")
-		fmt.Fprintf(os.Stderr, "Or for Yarn / PNPM:\n")
-		fmt.Fprintf(os.Stderr, "  pnpm add -D eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin\n")
+		printTSJSInstaller()
 	case "python":
-		fmt.Fprintf(os.Stderr, "Execute this command to install the required PyLint engine:\n")
-		fmt.Fprintf(os.Stderr, "  pip install pylint\n\n")
-		fmt.Fprintf(os.Stderr, "To run McCabe cyclomatic checks with pylint:\n")
-		fmt.Fprintf(os.Stderr, "  pylint --load-plugins=pylint.extensions.mccabe your_code_directory/\n")
+		printPythonInstaller()
 	case "go":
-		fmt.Fprintf(os.Stderr, "Execute this command to install the golangci-lint meta-linter:\n")
-		fmt.Fprintf(os.Stderr, "  curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.60.0\n\n")
-		fmt.Fprintf(os.Stderr, "Run checks with:\n")
-		fmt.Fprintf(os.Stderr, "  golangci-lint run ./...\n")
+		printGoInstaller()
 	case "java":
-		fmt.Fprintf(os.Stderr, "To run Java Checkstyle checks, add the checkstyle-plugin to your Maven pom.xml or Gradle build script:\n\n")
-		fmt.Fprintf(os.Stderr, "Maven pom.xml Configuration:\n")
-		fmt.Fprintf(os.Stderr, "  <plugin>\n")
-		fmt.Fprintf(os.Stderr, "    <groupId>org.apache.maven.plugins</groupId>\n")
-		fmt.Fprintf(os.Stderr, "    <artifactId>maven-checkstyle-plugin</artifactId>\n")
-		fmt.Fprintf(os.Stderr, "    <version>3.3.1</version>\n")
-		fmt.Fprintf(os.Stderr, "    <configuration>\n")
-		fmt.Fprintf(os.Stderr, "      <configLocation>checkstyle.xml</configLocation>\n")
-		fmt.Fprintf(os.Stderr, "    </configuration>\n")
-		fmt.Fprintf(os.Stderr, "  </plugin>\n")
+		printJavaInstaller()
 	case "ruby":
-		fmt.Fprintf(os.Stderr, "Execute this command to install the RuboCop engine:\n")
-		fmt.Fprintf(os.Stderr, "  gem install rubocop\n\n")
-		fmt.Fprintf(os.Stderr, "To run checks natively:\n")
-		fmt.Fprintf(os.Stderr, "  rubocop --format json your_code_directory/\n")
+		printRubyInstaller()
 	case "csharp":
-		fmt.Fprintf(os.Stderr, "Microsoft C# Analyzers are built natively into the .NET SDK.\n")
-		fmt.Fprintf(os.Stderr, "To verify code formatting and analyzer rules, run standard .NET commands:\n\n")
-		fmt.Fprintf(os.Stderr, "Run static code analysis:\n")
-		fmt.Fprintf(os.Stderr, "  dotnet build /p:TreatWarningsAsErrors=true\n\n")
-		fmt.Fprintf(os.Stderr, "Or run automatic formatting verification:\n")
-		fmt.Fprintf(os.Stderr, "  dotnet format --verify-no-changes\n")
+		printCSharpInstaller()
 	}
 	fmt.Fprintf(os.Stderr, "\nOnce installed, run maintainability-sensors again to activate precise Level 1+ analysis!\n")
+}
+
+func printTSJSInstaller() {
+	fmt.Fprintf(os.Stderr, "Execute this command to install the required development engines:\n")
+	fmt.Fprintf(os.Stderr, "  npm install --save-dev eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin\n\n")
+	fmt.Fprintf(os.Stderr, "Or for Yarn / PNPM:\n")
+	fmt.Fprintf(os.Stderr, "  pnpm add -D eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin\n")
+}
+
+func printPythonInstaller() {
+	fmt.Fprintf(os.Stderr, "Execute this command to install the required PyLint engine:\n")
+	fmt.Fprintf(os.Stderr, "  pip install pylint\n\n")
+	fmt.Fprintf(os.Stderr, "To run McCabe cyclomatic checks with pylint:\n")
+	fmt.Fprintf(os.Stderr, "  pylint --load-plugins=pylint.extensions.mccabe your_code_directory/\n")
+}
+
+func printGoInstaller() {
+	fmt.Fprintf(os.Stderr, "Execute this command to install the golangci-lint meta-linter:\n")
+	fmt.Fprintf(os.Stderr, "  curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.60.0\n\n")
+	fmt.Fprintf(os.Stderr, "Run checks with:\n")
+	fmt.Fprintf(os.Stderr, "  golangci-lint run ./...\n")
+}
+
+func printJavaInstaller() {
+	fmt.Fprintf(os.Stderr, "To run Java Checkstyle checks, add the checkstyle-plugin to your Maven pom.xml or Gradle build script:\n\n")
+	fmt.Fprintf(os.Stderr, "Maven pom.xml Configuration:\n")
+	fmt.Fprintf(os.Stderr, "  <plugin>\n")
+	fmt.Fprintf(os.Stderr, "    <groupId>org.apache.maven.plugins</groupId>\n")
+	fmt.Fprintf(os.Stderr, "    <artifactId>maven-checkstyle-plugin</artifactId>\n")
+	fmt.Fprintf(os.Stderr, "    <version>3.3.1</version>\n")
+	fmt.Fprintf(os.Stderr, "    <configuration>\n")
+	fmt.Fprintf(os.Stderr, "      <configLocation>checkstyle.xml</configLocation>\n")
+	fmt.Fprintf(os.Stderr, "    </configuration>\n")
+	fmt.Fprintf(os.Stderr, "  </plugin>\n")
+}
+
+func printRubyInstaller() {
+	fmt.Fprintf(os.Stderr, "Execute this command to install the RuboCop engine:\n")
+	fmt.Fprintf(os.Stderr, "  gem install rubocop\n\n")
+	fmt.Fprintf(os.Stderr, "To run checks natively:\n")
+	fmt.Fprintf(os.Stderr, "  rubocop --format json your_code_directory/\n")
+}
+
+func printCSharpInstaller() {
+	fmt.Fprintf(os.Stderr, "Microsoft C# Analyzers are built natively into the .NET SDK.\n")
+	fmt.Fprintf(os.Stderr, "To verify code formatting and analyzer rules, run standard .NET commands:\n\n")
+	fmt.Fprintf(os.Stderr, "Run static code analysis:\n")
+	fmt.Fprintf(os.Stderr, "  dotnet build /p:TreatWarningsAsErrors=true\n\n")
+	fmt.Fprintf(os.Stderr, "Or run automatic formatting verification:\n")
+	fmt.Fprintf(os.Stderr, "  dotnet format --verify-no-changes\n")
 }

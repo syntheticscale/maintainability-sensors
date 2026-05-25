@@ -36,18 +36,28 @@ func extractRuffVal(msg RuffMessage, reVal *regexp.Regexp) int {
 }
 
 func extractRuffRule(msg RuffMessage, val *int) string {
-	if msg.Code == "C901" || strings.HasPrefix(msg.Code, "C90") {
+	if isComplexityRule(msg.Code) {
 		if *val == 0 {
 			*val = 1
 		}
 		return RuleComplexity
 	}
 	if *val > 0 {
-		if msg.Code == "PLR0915" {
-			return RuleFunctionLength
-		} else if msg.Code == "PLR0913" {
-			return RuleArgumentCount
-		}
+		return extractNonComplexityRule(msg.Code)
+	}
+	return ""
+}
+
+func isComplexityRule(code string) bool {
+	return code == "C901" || strings.HasPrefix(code, "C90")
+}
+
+func extractNonComplexityRule(code string) string {
+	if code == "PLR0915" {
+		return RuleFunctionLength
+	}
+	if code == "PLR0913" {
+		return RuleArgumentCount
 	}
 	return ""
 }
@@ -100,19 +110,26 @@ func (p RuffPlugin) Analyze(files []FileContext) (map[string][]Violation, error)
 		return nil, execErr
 	}
 
-	if exitCode >= 0 {
-		metricsMap := make(map[string][]Violation)
-		if len(list) > 0 {
-			metricsMap = parseRuffMessages(list)
-		}
-		if exitCode > 0 && len(metricsMap) == 0 {
-			var dummy []interface{}
-			if parseErr := json.Unmarshal(output, &dummy); parseErr != nil {
-				return nil, fmt.Errorf("ruff crashed or encountered a configuration error (exit code %d): %s", exitCode, strings.TrimSpace(string(output)))
-			}
-		}
-		return metricsMap, nil
+	if exitCode < 0 {
+		return nil, fmt.Errorf("ruff exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 	}
 
-	return nil, fmt.Errorf("ruff exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
+	return processRuffAnalyzeResult(exitCode, list, output)
+}
+
+func processRuffAnalyzeResult(exitCode int, list []RuffMessage, output []byte) (map[string][]Violation, error) {
+	var metricsMap map[string][]Violation
+	if len(list) > 0 {
+		metricsMap = parseRuffMessages(list)
+	} else {
+		metricsMap = make(map[string][]Violation)
+	}
+
+	if exitCode > 0 && len(metricsMap) == 0 {
+		var dummy []interface{}
+		if parseErr := json.Unmarshal(output, &dummy); parseErr != nil {
+			return nil, fmt.Errorf("ruff crashed or encountered a configuration error (exit code %d): %s", exitCode, strings.TrimSpace(string(output)))
+		}
+	}
+	return metricsMap, nil
 }

@@ -12,6 +12,29 @@ type ProcessDeltaCtx struct {
 	MetricsMap    map[string][]Violation
 }
 
+func processSinglePluginDelta(plugin Plugin, pathsRemaining []FileContext, ctx ProcessDeltaCtx) ([]FileContext, error) {
+	pathsForPlugin := filterPathsForPlugin(pathsRemaining, plugin, ctx.ToolByPath)
+	if len(pathsForPlugin) == 0 {
+		return pathsRemaining, nil
+	}
+
+	toolMetrics, err := analyzeInChunks(plugin, pathsForPlugin)
+	if err != nil {
+		return nil, fmt.Errorf("Orchestration error (%s): %w", plugin.Name(), err)
+	}
+
+	if toolMetrics != nil {
+		return updateDeltaMetricsMap(UpdateDeltaCtx{
+			MetricsMap:     ctx.MetricsMap,
+			ToolMetrics:    toolMetrics,
+			OriginalPaths:  ctx.OriginalPaths,
+			PathsRemaining: pathsRemaining,
+			PathsForPlugin: pathsForPlugin,
+		}), nil
+	}
+	return pathsRemaining, nil
+}
+
 func processPluginsDelta(ctx ProcessDeltaCtx) ([]FileContext, error) {
 	pathsRemaining := ctx.ValidPaths
 
@@ -19,25 +42,10 @@ func processPluginsDelta(ctx ProcessDeltaCtx) ([]FileContext, error) {
 		if len(pathsRemaining) == 0 {
 			break
 		}
-
-		pathsForPlugin := filterPathsForPlugin(pathsRemaining, plugin, ctx.ToolByPath)
-		if len(pathsForPlugin) == 0 {
-			continue
-		}
-
-		toolMetrics, err := analyzeInChunks(plugin, pathsForPlugin)
+		var err error
+		pathsRemaining, err = processSinglePluginDelta(plugin, pathsRemaining, ctx)
 		if err != nil {
-			return nil, fmt.Errorf("Orchestration error (%s): %w", plugin.Name(), err)
-		}
-
-		if toolMetrics != nil {
-			pathsRemaining = updateDeltaMetricsMap(UpdateDeltaCtx{
-				MetricsMap:     ctx.MetricsMap,
-				ToolMetrics:    toolMetrics,
-				OriginalPaths:  ctx.OriginalPaths,
-				PathsRemaining: pathsRemaining,
-				PathsForPlugin: pathsForPlugin,
-			})
+			return nil, err
 		}
 	}
 	return pathsRemaining, nil

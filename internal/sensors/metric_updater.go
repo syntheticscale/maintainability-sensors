@@ -20,28 +20,24 @@ func isPathForPlugin(p string, pathsForPlugin []FileContext) bool {
 	return false
 }
 
+func updateIfGreater(current *int, value int) {
+	if value > *current {
+		*current = value
+	}
+}
+
 func updateSingleMetric(v Violation, metrics *MaintainabilityMetrics) {
 	switch v.RuleName {
 	case RuleComplexity:
-		if v.Value > metrics.Complexity {
-			metrics.Complexity = v.Value
-		}
+		updateIfGreater(&metrics.Complexity, v.Value)
 	case RuleCognitiveComplexity:
-		if v.Value > metrics.CognitiveComplexity {
-			metrics.CognitiveComplexity = v.Value
-		}
+		updateIfGreater(&metrics.CognitiveComplexity, v.Value)
 	case RuleFunctionLength:
-		if v.Value > metrics.FunctionLength {
-			metrics.FunctionLength = v.Value
-		}
+		updateIfGreater(&metrics.FunctionLength, v.Value)
 	case RuleArgumentCount:
-		if v.Value > metrics.ArgumentCount {
-			metrics.ArgumentCount = v.Value
-		}
+		updateIfGreater(&metrics.ArgumentCount, v.Value)
 	case RuleCaseBlockLength:
-		if v.Value > metrics.MaxCaseLength {
-			metrics.MaxCaseLength = v.Value
-		}
+		updateIfGreater(&metrics.MaxCaseLength, v.Value)
 	}
 }
 

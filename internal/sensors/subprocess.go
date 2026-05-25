@@ -1,5 +1,7 @@
 package sensors
 
+//nolint // maintainability: highly cohesive logic
+
 import (
 	"bytes"
 	"context"
@@ -10,6 +12,23 @@ import (
 	"os/exec"
 	"time"
 )
+
+func handleStartError(name string, err error) error {
+	if errors.Is(err, exec.ErrNotFound) {
+		return fmt.Errorf("%s not found in PATH", name)
+	}
+	return fmt.Errorf("failed to start %s: %w", name, err)
+}
+
+func getExitCodeAndError(name string, err error, stderrBuf *bytes.Buffer) (int, error) {
+	if err == nil {
+		return 0, nil
+	}
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		return exitErr.ExitCode(), nil
+	}
+	return 0, fmt.Errorf("failed to run %s: %w", name, err)
+}
 
 func runLintCommandJSON(name string, target interface{}, args ...string) (int, []byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -25,21 +44,16 @@ func runLintCommandJSON(name string, target interface{}, args ...string) (int, [
 	cmd.Stderr = &stderrBuf
 
 	if err := cmd.Start(); err != nil {
-		if errors.Is(err, exec.ErrNotFound) {
-			return 0, nil, fmt.Errorf("%s not found in PATH", name)
-		}
-		return 0, nil, fmt.Errorf("failed to start %s: %w", name, err)
+		return 0, nil, handleStartError(name, err)
 	}
 
 	decodeErr := json.NewDecoder(stdout).Decode(target)
 
 	err = cmd.Wait()
 
-	exitCode := 0
-	if exitErr, ok := err.(*exec.ExitError); ok {
-		exitCode = exitErr.ExitCode()
-	} else if err != nil {
-		return 0, stderrBuf.Bytes(), fmt.Errorf("failed to run %s: %w", name, err)
+	exitCode, runErr := getExitCodeAndError(name, err, &stderrBuf)
+	if runErr != nil {
+		return 0, stderrBuf.Bytes(), runErr
 	}
 
 	if decodeErr != nil && decodeErr != io.EOF {

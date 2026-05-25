@@ -11,7 +11,7 @@ import (
 
 func isSkippedDir(dirName string) bool {
 	switch dirName {
-	case "node_modules", ".git", "vendor", "bin", ".cache", ".venv", "venv", "env":
+	case "node_modules", ".git", "vendor", "bin", ".cache", ".venv", "venv", "env", ".worktrees":
 		return true
 	}
 	return false

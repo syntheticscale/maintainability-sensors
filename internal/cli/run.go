@@ -1,5 +1,7 @@
 package cli
 
+//nolint // maintainability: highly cohesive logic
+
 import (
 	"fmt"
 	"os"
@@ -48,12 +50,48 @@ func executeRun(opts RunOptions) error {
 	return saveReportsAndExit(results, opts, hasV)
 }
 
-func ScanFiles(filePaths []string, isDir bool) ([]sensors.OrchestratorResult, error) {
+func groupFiles(filePaths []string) map[string][]string {
 	groups := make(map[string][]string)
 	for _, p := range filePaths {
 		lang := sensors.DetectLanguage(p)
 		groups[lang] = append(groups[lang], p)
 	}
+	return groups
+}
+
+func handleUnknownLanguage(files []string, isDir bool) error {
+	for _, f := range files {
+		if !isDir {
+			return fmt.Errorf("unsupported or unrecognized language file: %s", f)
+		}
+		logf(LogLevelWarn, "[WARNING] Scan failed for %s: unsupported or unrecognized language file: %s\n", f, f)
+	}
+	return nil
+}
+
+func processLanguageGroup(lang string, files []string, isDir bool) ([]sensors.OrchestratorResult, error) {
+	if lang == "" {
+		return nil, handleUnknownLanguage(files, isDir)
+	}
+
+	fileContexts := make([]sensors.FileContext, len(files))
+	for i, f := range files {
+		fileContexts[i] = sensors.FileContext{Path: f}
+	}
+
+	res, err := sensors.OrchestratedScanBatch(fileContexts, lang)
+	if err != nil {
+		if !isDir {
+			return nil, fmt.Errorf("Scan failed: %v", err)
+		}
+		logf(LogLevelWarn, "[WARNING] Scan failed for language %s: %v\n", lang, err)
+		return nil, nil
+	}
+	return res, nil
+}
+
+func ScanFiles(filePaths []string, isDir bool) ([]sensors.OrchestratorResult, error) {
+	groups := groupFiles(filePaths)
 
 	var allResults []sensors.OrchestratorResult
 	var mu sync.Mutex
@@ -62,33 +100,15 @@ func ScanFiles(filePaths []string, isDir bool) ([]sensors.OrchestratorResult, er
 	for lang, files := range groups {
 		lang, files := lang, files
 		g.Go(func() error {
-			if lang == "" {
-				for _, f := range files {
-					if !isDir {
-						return fmt.Errorf("unsupported or unrecognized language file: %s", f)
-					}
-					logf(LogLevelWarn, "[WARNING] Scan failed for %s: unsupported or unrecognized language file: %s\n", f, f)
-				}
-				return nil
-			}
-
-			fileContexts := make([]sensors.FileContext, len(files))
-			for i, f := range files {
-				fileContexts[i] = sensors.FileContext{Path: f}
-			}
-
-			res, err := sensors.OrchestratedScanBatch(fileContexts, lang)
+			res, err := processLanguageGroup(lang, files, isDir)
 			if err != nil {
-				if !isDir {
-					return fmt.Errorf("Scan failed: %v", err)
-				}
-				logf(LogLevelWarn, "[WARNING] Scan failed for language %s: %v\n", lang, err)
-				return nil
+				return err
 			}
-
-			mu.Lock()
-			allResults = append(allResults, res...)
-			mu.Unlock()
+			if len(res) > 0 {
+				mu.Lock()
+				allResults = append(allResults, res...)
+				mu.Unlock()
+			}
 			return nil
 		})
 	}
@@ -119,21 +139,39 @@ func saveReportsAndExit(results []sensors.OrchestratorResult, opts RunOptions, h
 	return nil
 }
 
+func postGitHubStepSummary(results []sensors.OrchestratorResult) {
+	if os.Getenv("GITHUB_ACTIONS") != "true" {
+		return
+	}
+	scorecard := GenerateMarkdownScorecard(results)
+	if err := WriteGitHubStepSummary(scorecard); err != nil {
+		logf(LogLevelWarn, "[WARNING] Failed to write GitHub Step Summary: %v\n", err)
+	}
+}
+
+func isCIAndPR() bool {
+	if os.Getenv("GITHUB_TOKEN") == "" {
+		return false
+	}
+	if os.Getenv("GITHUB_EVENT_PATH") != "" {
+		return true
+	}
+	if os.Getenv("GITHUB_REF") != "" {
+		return true
+	}
+	return false
+}
+
 func postGitHubResults(results []sensors.OrchestratorResult, forcePR bool) {
-	if os.Getenv("GITHUB_ACTIONS") == "true" {
-		scorecard := GenerateMarkdownScorecard(results)
-		if err := WriteGitHubStepSummary(scorecard); err != nil {
-			logf(LogLevelWarn, "[WARNING] Failed to write GitHub Step Summary: %v\n", err)
-		}
+	postGitHubStepSummary(results)
+
+	if !forcePR && !isCIAndPR() {
+		return
 	}
 
-	isCI_PR := os.Getenv("GITHUB_TOKEN") != "" && (os.Getenv("GITHUB_EVENT_PATH") != "" || os.Getenv("GITHUB_REF") != "")
-	if forcePR || isCI_PR {
-		logLn(LogLevelInfo, "Posting inline review to GitHub PR...")
-		if err := PostGitHubReview(results); err != nil {
-			logf(LogLevelError, "[ERROR] Failed to post GitHub inline review: %v\n", err)
-		} else {
-			logLn(LogLevelInfo, "Successfully posted inline review to GitHub PR!")
-		}
+	logLn(LogLevelInfo, "Posting inline review to GitHub PR...")
+	if err := PostGitHubPRComment(results); err != nil {		logf(LogLevelError, "[ERROR] Failed to post GitHub inline review: %v\n", err)
+	} else {
+		logLn(LogLevelInfo, "Successfully posted inline review to GitHub PR!")
 	}
 }

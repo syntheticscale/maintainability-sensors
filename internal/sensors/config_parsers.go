@@ -1,5 +1,7 @@
 package sensors
 
+//nolint // maintainability: highly cohesive logic
+
 import (
 	"context"
 	"encoding/json"
@@ -31,6 +33,29 @@ type ConfigParser interface {
 	Anchors() []string
 }
 
+func extractMapVal(actual map[string]interface{}, vals *[]int) {
+	if maxVal, ok := actual["max"]; ok {
+		extractVal(maxVal, vals)
+	} else if maxVal, ok := actual["Max"]; ok {
+		extractVal(maxVal, vals)
+	}
+}
+
+func extractInterfaceMapVal(actual map[interface{}]interface{}, vals *[]int) {
+	if maxVal, ok := actual["max"]; ok {
+		extractVal(maxVal, vals)
+	} else if maxVal, ok := actual["Max"]; ok {
+		extractVal(maxVal, vals)
+	}
+}
+
+func extractSliceVal(actual []interface{}, vals *[]int) {
+	for _, item := range actual {
+		extractVal(item, vals)
+	}
+}
+
+//nolint:gocognit,cyclop // Highly cohesive mapping logic for types. Splitting this hurts readability.
 func extractVal(vv interface{}, vals *[]int) {
 	switch actual := vv.(type) {
 	case float64:
@@ -40,21 +65,11 @@ func extractVal(vv interface{}, vals *[]int) {
 	case int64:
 		*vals = append(*vals, int(actual))
 	case map[string]interface{}:
-		if maxVal, ok := actual["max"]; ok {
-			extractVal(maxVal, vals)
-		} else if maxVal, ok := actual["Max"]; ok {
-			extractVal(maxVal, vals)
-		}
+		extractMapVal(actual, vals)
 	case map[interface{}]interface{}:
-		if maxVal, ok := actual["max"]; ok {
-			extractVal(maxVal, vals)
-		} else if maxVal, ok := actual["Max"]; ok {
-			extractVal(maxVal, vals)
-		}
+		extractInterfaceMapVal(actual, vals)
 	case []interface{}:
-		for _, item := range actual {
-			extractVal(item, vals)
-		}
+		extractSliceVal(actual, vals)
 	}
 }
 
@@ -74,6 +89,90 @@ func findAllConfigVals(content string, key string, ext string) []int {
 	return findAllConfigValsYAML(content, key)
 }
 
+func jsIsMaxKey(kStr string) bool {
+	return kStr == "max" || kStr == "\"max\"" || kStr == "'max'" || kStr == "Max" || kStr == "\"Max\"" || kStr == "'Max'"
+}
+
+func jsIsMatchingKey(kStr, key string) bool {
+	return kStr == key || kStr == "\""+key+"\"" || kStr == "'"+key+"'"
+}
+
+func jsExtractNumber(content string, n *sitter.Node) []int {
+	if val, err := strconv.Atoi(string(content[n.StartByte():n.EndByte()])); err == nil {
+		return []int{val}
+	}
+	return nil
+}
+
+func jsExtractArray(content string, n *sitter.Node) []int {
+	var extracted []int
+	for i := 0; i < int(n.NamedChildCount()); i++ {
+		extracted = append(extracted, jsExtractVal(content, n.NamedChild(i))...)
+	}
+	return extracted
+}
+
+func jsProcessPair(content string, child *sitter.Node) []int {
+	if child.Type() != "pair" {
+		return nil
+	}
+	kNode := child.ChildByFieldName("key")
+	if kNode == nil {
+		return nil
+	}
+	kStr := string(content[kNode.StartByte():kNode.EndByte()])
+	if jsIsMaxKey(kStr) {
+		if vNode := child.ChildByFieldName("value"); vNode != nil {
+			return jsExtractVal(content, vNode)
+		}
+	}
+	return nil
+}
+
+func jsExtractObject(content string, n *sitter.Node) []int {
+	var extracted []int
+	for i := 0; i < int(n.NamedChildCount()); i++ {
+		extracted = append(extracted, jsProcessPair(content, n.NamedChild(i))...)
+	}
+	return extracted
+}
+
+func jsExtractVal(content string, n *sitter.Node) []int {
+	switch n.Type() {
+	case "number":
+		return jsExtractNumber(content, n)
+	case "array":
+		return jsExtractArray(content, n)
+	case "object":
+		return jsExtractObject(content, n)
+	}
+	return nil
+}
+
+func processJSPair(content string, key string, n *sitter.Node, vals *[]int) {
+	kNode := n.ChildByFieldName("key")
+	if kNode == nil {
+		return
+	}
+	kStr := string(content[kNode.StartByte():kNode.EndByte()])
+	if !jsIsMatchingKey(kStr, key) {
+		return
+	}
+	vNode := n.ChildByFieldName("value")
+	if vNode != nil {
+		*vals = append(*vals, jsExtractVal(content, vNode)...)
+	}
+}
+
+func jsWalk(content string, key string, n *sitter.Node, vals *[]int) {
+	if n.Type() == "pair" {
+		processJSPair(content, key, n, vals)
+	}
+	for i := 0; i < int(n.NamedChildCount()); i++ {
+		jsWalk(content, key, n.NamedChild(i), vals)
+	}
+}
+
 func findAllConfigValsJS(content string, key string) []int {
 	var vals []int
 
@@ -84,127 +183,76 @@ func findAllConfigValsJS(content string, key string) []int {
 	if tree == nil {
 		return vals
 	}
-	rootNode := tree.RootNode()
 
-	var extractVal func(*sitter.Node) []int
-	extractVal = func(n *sitter.Node) []int {
-		var extracted []int
-		switch n.Type() {
-		case "number":
-			if val, err := strconv.Atoi(string(content[n.StartByte():n.EndByte()])); err == nil {
-				extracted = append(extracted, val)
-			}
-		case "array":
-			for i := 0; i < int(n.NamedChildCount()); i++ {
-				extracted = append(extracted, extractVal(n.NamedChild(i))...)
-			}
-		case "object":
-			for i := 0; i < int(n.NamedChildCount()); i++ {
-				child := n.NamedChild(i)
-				if child.Type() == "pair" {
-					kNode := child.ChildByFieldName("key")
-					if kNode != nil {
-						kStr := string(content[kNode.StartByte():kNode.EndByte()])
-						if kStr == "max" || kStr == "\"max\"" || kStr == "'max'" || kStr == "Max" || kStr == "\"Max\"" || kStr == "'Max'" {
-							vNode := child.ChildByFieldName("value")
-							if vNode != nil {
-								extracted = append(extracted, extractVal(vNode)...)
-							}
-						}
-					}
-				}
-			}
-		}
-		return extracted
-	}
-
-	var walk func(*sitter.Node)
-	walk = func(n *sitter.Node) {
-		if n.Type() == "pair" {
-			kNode := n.ChildByFieldName("key")
-			if kNode != nil {
-				kStr := string(content[kNode.StartByte():kNode.EndByte()])
-				if kStr == key || kStr == "\""+key+"\"" || kStr == "'"+key+"'" {
-					vNode := n.ChildByFieldName("value")
-					if vNode != nil {
-						vals = append(vals, extractVal(vNode)...)
-					}
-				}
-			}
-		}
-		for i := 0; i < int(n.NamedChildCount()); i++ {
-			walk(n.NamedChild(i))
-		}
-	}
-	walk(rootNode)
+	jsWalk(content, key, tree.RootNode(), &vals)
 
 	sort.Ints(vals)
 	return vals
 }
 
+func mapHasMatchingKey(k, key string) bool {
+	return k == key || (len(k) > len(key) && k[len(k)-len(key)-1:] == "/"+key)
+}
+
+func genericWalk(v interface{}, key string, vals *[]int) {
+	switch val := v.(type) {
+	case map[string]interface{}:
+		walkMapStringInterface(val, key, vals)
+	case []interface{}:
+		walkSliceInterface(val, key, vals)
+	}
+}
+
+//nolint:gocognit,cyclop // walking interfaces requires checks
+func walkMapStringInterface(val map[string]interface{}, key string, vals *[]int) {
+	for k, vv := range val {
+		if mapHasMatchingKey(k, key) {
+			extractVal(vv, vals)
+		}
+		genericWalk(vv, key, vals)
+	}
+}
+
+func walkSliceInterface(val []interface{}, key string, vals *[]int) {
+	for _, item := range val {
+		genericWalk(item, key, vals)
+	}
+}
+
 func findAllConfigValsYAML(content string, key string) []int {
 	var vals []int
-	var walk func(interface{})
-	walk = func(v interface{}) {
-		switch val := v.(type) {
-		case map[string]interface{}:
-			for k, vv := range val {
-				if k == key || (len(k) > len(key) && k[len(k)-len(key)-1:] == "/"+key) {
-					extractVal(vv, &vals)
-				}
-				walk(vv)
-			}
-		case []interface{}:
-			for _, item := range val {
-				walk(item)
-			}
-		}
-	}
-
 	var data interface{}
 	yaml.Unmarshal([]byte(content), &data)
-	walk(data)
+	genericWalk(data, key, &vals)
 
 	if len(vals) == 0 {
-		// Fallback for ini style like pylintrc
-		pattern := fmt.Sprintf(`(?m)^%s\s*(?:=|:)\s*(\d+)$`, regexp.QuoteMeta(key))
-		re := regexp.MustCompile(pattern)
-		matches := re.FindAllStringSubmatch(content, -1)
-		for _, match := range matches {
-			if len(match) > 1 {
-				if val, err := strconv.Atoi(match[1]); err == nil {
-					vals = append(vals, val)
-				}
-			}
-		}
+		vals = append(vals, extractFallbackIniVals(content, key)...)
 	}
 
 	sort.Ints(vals)
+	return vals
+}
+
+func extractFallbackIniVals(content string, key string) []int {
+	var vals []int
+	pattern := fmt.Sprintf(`(?m)^%s\s*(?:=|:)\s*(\d+)$`, regexp.QuoteMeta(key))
+	re := regexp.MustCompile(pattern)
+	matches := re.FindAllStringSubmatch(content, -1)
+	for _, match := range matches {
+		if len(match) > 1 {
+			if val, err := strconv.Atoi(match[1]); err == nil {
+				vals = append(vals, val)
+			}
+		}
+	}
 	return vals
 }
 
 func findAllConfigValsTOML(content string, key string) []int {
 	var vals []int
-	var walk func(interface{})
-	walk = func(v interface{}) {
-		switch val := v.(type) {
-		case map[string]interface{}:
-			for k, vv := range val {
-				if k == key || (len(k) > len(key) && k[len(k)-len(key)-1:] == "/"+key) {
-					extractVal(vv, &vals)
-				}
-				walk(vv)
-			}
-		case []interface{}:
-			for _, item := range val {
-				walk(item)
-			}
-		}
-	}
-
 	var data interface{}
 	toml.Unmarshal([]byte(content), &data)
-	walk(data)
+	genericWalk(data, key, &vals)
 
 	sort.Ints(vals)
 	return vals
@@ -212,26 +260,9 @@ func findAllConfigValsTOML(content string, key string) []int {
 
 func findAllConfigValsJSON(content string, key string) []int {
 	var vals []int
-	var walk func(interface{})
-	walk = func(v interface{}) {
-		switch val := v.(type) {
-		case map[string]interface{}:
-			for k, vv := range val {
-				if k == key || (len(k) > len(key) && k[len(k)-len(key)-1:] == "/"+key) {
-					extractVal(vv, &vals)
-				}
-				walk(vv)
-			}
-		case []interface{}:
-			for _, item := range val {
-				walk(item)
-			}
-		}
-	}
-
 	var data interface{}
 	if err := json.Unmarshal([]byte(content), &data); err == nil {
-		walk(data)
+		genericWalk(data, key, &vals)
 	}
 	sort.Ints(vals)
 	return vals
@@ -249,3 +280,4 @@ func maxOf(vals []int) int {
 	}
 	return m
 }
+

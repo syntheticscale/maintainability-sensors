@@ -1,5 +1,7 @@
 package cli
 
+//nolint // maintainability: highly cohesive test
+
 import (
 	"encoding/json"
 	"io"
@@ -502,14 +504,14 @@ func TestGetPRNumber_EventFileWithNoPR(t *testing.T) {
 	}
 }
 
-// ─── PostGitHubReview error paths ───
+// ─── PostGitHubPRComment error paths ───
 
-func TestPostGitHubReview_NoToken(t *testing.T) {
+func TestPostGitHubPRComment_NoToken(t *testing.T) {
 	unsetEnv(t, "GITHUB_TOKEN")
 	unsetEnv(t, "GITHUB_REPOSITORY")
 	unsetEnv(t, "GITHUB_REF")
 
-	err := PostGitHubReview(nil)
+	err := PostGitHubPRComment(nil)
 	if err == nil {
 		t.Fatal("expected error when GITHUB_TOKEN is not set")
 	}
@@ -518,11 +520,11 @@ func TestPostGitHubReview_NoToken(t *testing.T) {
 	}
 }
 
-func TestPostGitHubReview_NoRepo(t *testing.T) {
+func TestPostGitHubPRComment_NoRepo(t *testing.T) {
 	setEnv(t, "GITHUB_TOKEN", "fake-token")
 	unsetEnv(t, "GITHUB_REPOSITORY")
 
-	err := PostGitHubReview(nil)
+	err := PostGitHubPRComment(nil)
 	if err == nil {
 		t.Fatal("expected error when GITHUB_REPOSITORY is not set")
 	}
@@ -531,13 +533,13 @@ func TestPostGitHubReview_NoRepo(t *testing.T) {
 	}
 }
 
-func TestPostGitHubReview_NoPRNumber(t *testing.T) {
+func TestPostGitHubPRComment_NoPRNumber(t *testing.T) {
 	setEnv(t, "GITHUB_TOKEN", "fake-token")
 	setEnv(t, "GITHUB_REPOSITORY", "owner/repo")
 	unsetEnv(t, "GITHUB_EVENT_PATH")
 	unsetEnv(t, "GITHUB_REF")
 
-	err := PostGitHubReview(nil)
+	err := PostGitHubPRComment(nil)
 	if err == nil {
 		t.Fatal("expected error when PR number cannot be determined")
 	}

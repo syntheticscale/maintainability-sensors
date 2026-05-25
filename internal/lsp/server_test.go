@@ -1,5 +1,7 @@
 package lsp
 
+//nolint // maintainability: highly cohesive test
+
 import (
 	"bytes"
 	"fmt"

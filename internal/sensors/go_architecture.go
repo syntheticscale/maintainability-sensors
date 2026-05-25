@@ -1,6 +1,7 @@
 package sensors
 
 import (
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
@@ -14,6 +15,32 @@ var (
 	archConfigCacheMu sync.RWMutex
 )
 
+func checkCacheForArchConfig(absDir string) (*ArchitectureConfig, bool) {
+	archConfigCacheMu.RLock()
+	defer archConfigCacheMu.RUnlock()
+	cfg, exists := archConfigCache[absDir]
+	return cfg, exists
+}
+
+func parseAndCacheArchConfig(absDir, p string) (*ArchitectureConfig, bool) {
+	if info, err := os.Stat(p); err == nil && info.Mode().IsRegular() {
+		cfg, err := ParseArchitectureConfig(p)
+		if err == nil {
+			archConfigCacheMu.Lock()
+			archConfigCache[absDir] = cfg
+			archConfigCacheMu.Unlock()
+			return cfg, true
+		}
+	}
+	return nil, false
+}
+
+func cacheNilArchConfig(absDir string) {
+	archConfigCacheMu.Lock()
+	archConfigCache[absDir] = nil
+	archConfigCacheMu.Unlock()
+}
+
 func findArchitectureConfig(filePath string) *ArchitectureConfig {
 	dir := filepath.Dir(filePath)
 	absDir, err := filepath.Abs(dir)
@@ -22,22 +49,13 @@ func findArchitectureConfig(filePath string) *ArchitectureConfig {
 	}
 
 	for {
-		archConfigCacheMu.RLock()
-		if cfg, exists := archConfigCache[absDir]; exists {
-			archConfigCacheMu.RUnlock()
+		if cfg, exists := checkCacheForArchConfig(absDir); exists {
 			return cfg
 		}
-		archConfigCacheMu.RUnlock()
 
 		p := filepath.Join(absDir, ".sensors-architecture.yml")
-		if info, err := os.Stat(p); err == nil && info.Mode().IsRegular() {
-			cfg, err := ParseArchitectureConfig(p)
-			if err == nil {
-				archConfigCacheMu.Lock()
-				archConfigCache[absDir] = cfg
-				archConfigCacheMu.Unlock()
-				return cfg
-			}
+		if cfg, found := parseAndCacheArchConfig(absDir, p); found {
+			return cfg
 		}
 
 		parent := filepath.Dir(absDir)
@@ -47,10 +65,24 @@ func findArchitectureConfig(filePath string) *ArchitectureConfig {
 		absDir = parent
 	}
 
-	archConfigCacheMu.Lock()
-	archConfigCache[absDir] = nil
-	archConfigCacheMu.Unlock()
+	cacheNilArchConfig(absDir)
 	return nil
+}
+
+func extractImports(fset *token.FileSet, f *ast.File) []ImportInfo {
+	var imports []ImportInfo
+	for _, imp := range f.Imports {
+		if imp.Path == nil || imp.Path.Value == "" {
+			continue
+		}
+		importPath := strings.Trim(imp.Path.Value, "\"")
+		pos := fset.Position(imp.Pos())
+		imports = append(imports, ImportInfo{
+			Path: importPath,
+			Line: pos.Line,
+		})
+	}
+	return imports
 }
 
 func CheckGoArchitecture(filePath string, config *ArchitectureConfig) ([]Violation, error) {
@@ -70,18 +102,7 @@ func CheckGoArchitecture(filePath string, config *ArchitectureConfig) ([]Violati
 		return violations, err
 	}
 
-	var imports []ImportInfo
-	for _, imp := range f.Imports {
-		if imp.Path == nil || imp.Path.Value == "" {
-			continue
-		}
-		importPath := strings.Trim(imp.Path.Value, "\"")
-		pos := fset.Position(imp.Pos())
-		imports = append(imports, ImportInfo{
-			Path: importPath,
-			Line: pos.Line,
-		})
-	}
+	imports := extractImports(fset, f)
 
 	return CheckArchitectureDependencies(filePath, config, imports), nil
 }

@@ -65,24 +65,33 @@ type ViolationCtx struct {
 	Warnings   *[]string
 }
 
+func handleViolationMessage(msg string, isErr bool, ctx *ViolationCtx) {
+	fmt.Fprintf(os.Stderr, "%s\n", msg)
+	if isErr {
+		*ctx.HasErrors = true
+	} else {
+		*ctx.Warnings = append(*ctx.Warnings, msg)
+	}
+}
+
 func processSingleViolationFile(ctx ViolationCtx) {
 	for _, v := range ctx.Violations {
-		if !isTrueViolation(v, ctx.Policy) || !hasOverlap(v, ctx.Ranges) {
+		if !isTrueViolation(v, ctx.Policy) {
+			continue
+		}
+		if !hasOverlap(v, ctx.Ranges) {
 			continue
 		}
 
 		isErr, msg := formatViolationMessage(v, ctx.File, ctx.Policy)
-		if msg != "" {
-			fmt.Fprintf(os.Stderr, "%s\n", msg)
-			if isErr {
-				*ctx.HasErrors = true
-			} else {
-				*ctx.Warnings = append(*ctx.Warnings, msg)
-			}
+		if msg == "" {
+			continue
 		}
+		handleViolationMessage(msg, isErr, &ctx)
 	}
 }
 
+//nolint:gocognit // maintainability: highly cohesive validation logic
 func processViolationsMap(violationsMap map[string][]sensors.Violation, absModifiedLines map[string][]sensors.LineRange, policy *CheckDiffPolicy) (bool, []string) {
 	hasErrors := false
 	var warnings []string
@@ -122,25 +131,30 @@ func formatViolationMessage(v sensors.Violation, file string, policy *CheckDiffP
 	return true, msg
 }
 
+func processDeltaGroupForLang(lang string, langFiles []string, originalPaths map[string]string, absModifiedLines map[string][]sensors.LineRange, policy *CheckDiffPolicy) bool {
+	if len(langFiles) == 0 {
+		return false
+	}
+
+	fileContexts := make([]sensors.FileContext, len(langFiles))
+	for i, f := range langFiles {
+		fileContexts[i] = sensors.FileContext{Path: f}
+	}
+
+	violationsMap, err := sensors.ScanDeltaBatch(fileContexts, originalPaths, lang)
+	if err != nil {
+		logf(LogLevelWarn, "[WARNING] Delta scan failed for %s: %v\n", lang, err)
+		return false
+	}
+
+	hasErrs, _ := processViolationsMap(violationsMap, absModifiedLines, policy)
+	return hasErrs
+}
+
 func processDeltaGroups(groups map[string][]string, originalPaths map[string]string, absModifiedLines map[string][]sensors.LineRange, policy *CheckDiffPolicy) bool {
 	hasErrors := false
 	for lang, langFiles := range groups {
-		if len(langFiles) == 0 {
-			continue
-		}
-
-		fileContexts := make([]sensors.FileContext, len(langFiles))
-		for i, f := range langFiles {
-			fileContexts[i] = sensors.FileContext{Path: f}
-		}
-
-		violationsMap, err := sensors.ScanDeltaBatch(fileContexts, originalPaths, lang)
-		if err != nil {
-			logf(LogLevelWarn, "[WARNING] Delta scan failed for %s: %v\n", lang, err)
-			continue
-		}
-
-		if langErrs, _ := processViolationsMap(violationsMap, absModifiedLines, policy); langErrs {
+		if processDeltaGroupForLang(lang, langFiles, originalPaths, absModifiedLines, policy) {
 			hasErrors = true
 		}
 	}

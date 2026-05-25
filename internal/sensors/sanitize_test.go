@@ -1,5 +1,7 @@
 package sensors
 
+//nolint // maintainability: highly cohesive test
+
 import (
 	"path/filepath"
 	"strings"

@@ -25,6 +25,29 @@ func OrchestratedScan(filePath string) (OrchestratorResult, error) {
 	return OrchestratorResult{FilePath: filePath, Language: lang}, nil
 }
 
+func processSinglePluginMetrics(plugin Plugin, toolByPath map[string]ConfigParser, pathsRemaining []FileContext, metricsMap map[string]MaintainabilityMetrics) ([]FileContext, string) {
+	pathsForPlugin := filterPathsForPlugin(pathsRemaining, plugin, toolByPath)
+	if len(pathsForPlugin) == 0 {
+		return pathsRemaining, ""
+	}
+
+	toolMetrics, analyzeErr := analyzeInChunks(plugin, pathsForPlugin)
+	if analyzeErr != nil {
+		return pathsRemaining, fmt.Sprintf("Orchestration error (%s): %v", plugin.Name(), analyzeErr)
+	}
+
+	if toolMetrics != nil {
+		return updateMetricsMap(UpdateMetricsCtx{
+			MetricsMap:     metricsMap,
+			ToolMetrics:    toolMetrics,
+			PathsRemaining: pathsRemaining,
+			PathsForPlugin: pathsForPlugin,
+		}), ""
+	}
+
+	return pathsRemaining, ""
+}
+
 func processPluginsMetrics(plugins []Plugin, toolByPath map[string]ConfigParser, validFiles []FileContext, metricsMap map[string]MaintainabilityMetrics) (string, []FileContext) {
 	var batchErrorMsg string
 	pathsRemaining := validFiles
@@ -34,24 +57,10 @@ func processPluginsMetrics(plugins []Plugin, toolByPath map[string]ConfigParser,
 			break
 		}
 
-		pathsForPlugin := filterPathsForPlugin(pathsRemaining, plugin, toolByPath)
-		if len(pathsForPlugin) == 0 {
-			continue
-		}
-
-		toolMetrics, analyzeErr := analyzeInChunks(plugin, pathsForPlugin)
-		if analyzeErr != nil {
-			batchErrorMsg = fmt.Sprintf("Orchestration error (%s): %v", plugin.Name(), analyzeErr)
-			continue
-		}
-
-		if toolMetrics != nil {
-			pathsRemaining = updateMetricsMap(UpdateMetricsCtx{
-				MetricsMap:     metricsMap,
-				ToolMetrics:    toolMetrics,
-				PathsRemaining: pathsRemaining,
-				PathsForPlugin: pathsForPlugin,
-			})
+		var errMsg string
+		pathsRemaining, errMsg = processSinglePluginMetrics(plugin, toolByPath, pathsRemaining, metricsMap)
+		if errMsg != "" {
+			batchErrorMsg = errMsg
 		}
 	}
 	return batchErrorMsg, pathsRemaining

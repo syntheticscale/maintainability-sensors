@@ -111,24 +111,21 @@ func getEffectiveLimits(res sensors.OrchestratorResult) EffectiveLimits {
 	return limits
 }
 
+func appendGitHubPrompt(prompts []string, metric int, limit int, format string) []string {
+	if metric > limit {
+		return append(prompts, fmt.Sprintf(format, metric, limit))
+	}
+	return prompts
+}
+
 func getFilePrompts(res sensors.OrchestratorResult) []string {
 	limits := getEffectiveLimits(res)
 	var prompts []string
-	if res.Metrics.Complexity > limits.Complexity {
-		prompts = append(prompts, fmt.Sprintf("  * Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, limits.Complexity))
-	}
-	if res.Metrics.CognitiveComplexity > limits.CognitiveComplexity {
-		prompts = append(prompts, fmt.Sprintf("  * Cognitive Complexity is %d (Max %d). Flatten deeply nested control flow and return early.", res.Metrics.CognitiveComplexity, limits.CognitiveComplexity))
-	}
-	if res.Metrics.FunctionLength > limits.FunctionLength {
-		prompts = append(prompts, fmt.Sprintf("  * Function lines is %d (Max %d). Modularize this block into separate functional components.", res.Metrics.FunctionLength, limits.FunctionLength))
-	}
-	if res.Metrics.ArgumentCount > limits.ArgumentCount {
-		prompts = append(prompts, fmt.Sprintf("  * Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, limits.ArgumentCount))
-	}
-	if res.Metrics.MaxCaseLength > limits.MaxCaseLength {
-		prompts = append(prompts, fmt.Sprintf("  * Case block lines is %d (Max %d). Extract the case logic into a well-named method.", res.Metrics.MaxCaseLength, limits.MaxCaseLength))
-	}
+	prompts = appendGitHubPrompt(prompts, res.Metrics.Complexity, limits.Complexity, "  * Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.")
+	prompts = appendGitHubPrompt(prompts, res.Metrics.CognitiveComplexity, limits.CognitiveComplexity, "  * Cognitive Complexity is %d (Max %d). Flatten deeply nested control flow and return early.")
+	prompts = appendGitHubPrompt(prompts, res.Metrics.FunctionLength, limits.FunctionLength, "  * Function lines is %d (Max %d). Modularize this block into separate functional components.")
+	prompts = appendGitHubPrompt(prompts, res.Metrics.ArgumentCount, limits.ArgumentCount, "  * Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.")
+	prompts = appendGitHubPrompt(prompts, res.Metrics.MaxCaseLength, limits.MaxCaseLength, "  * Case block lines is %d (Max %d). Extract the case logic into a well-named method.")
 	return prompts
 }
 
@@ -182,7 +179,8 @@ type prComment struct {
 }
 
 // PostGitHubReview posts inline PR review comments using the GitHub Pull Request Review API.
-func PostGitHubReview(results []sensors.OrchestratorResult) error {
+//nolint:gocognit // maintainability: highly cohesive github logic
+func PostGitHubPRComment(results []sensors.OrchestratorResult) error {
 	token, repo, prNumber, err := getGitHubReviewContext()
 	if err != nil {
 		return err
@@ -253,21 +251,11 @@ func getRelativePath(absPath string) string {
 func buildPRCommentBody(res sensors.OrchestratorResult) string {
 	limits := getEffectiveLimits(res)
 	var filePrompts []string
-	if res.Metrics.Complexity > limits.Complexity {
-		filePrompts = append(filePrompts, fmt.Sprintf("Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, limits.Complexity))
-	}
-	if res.Metrics.CognitiveComplexity > limits.CognitiveComplexity {
-		filePrompts = append(filePrompts, fmt.Sprintf("Cognitive Complexity is %d (Max %d). Flatten deeply nested control flow and return early.", res.Metrics.CognitiveComplexity, limits.CognitiveComplexity))
-	}
-	if res.Metrics.FunctionLength > limits.FunctionLength {
-		filePrompts = append(filePrompts, fmt.Sprintf("Function lines is %d (Max %d). Modularize this block into separate functional components.", res.Metrics.FunctionLength, limits.FunctionLength))
-	}
-	if res.Metrics.ArgumentCount > limits.ArgumentCount {
-		filePrompts = append(filePrompts, fmt.Sprintf("Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, limits.ArgumentCount))
-	}
-	if res.Metrics.MaxCaseLength > limits.MaxCaseLength {
-		filePrompts = append(filePrompts, fmt.Sprintf("Case block lines is %d (Max %d). Extract the case logic into a well-named method.", res.Metrics.MaxCaseLength, limits.MaxCaseLength))
-	}
+	filePrompts = appendGitHubPrompt(filePrompts, res.Metrics.Complexity, limits.Complexity, "Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.")
+	filePrompts = appendGitHubPrompt(filePrompts, res.Metrics.CognitiveComplexity, limits.CognitiveComplexity, "Cognitive Complexity is %d (Max %d). Flatten deeply nested control flow and return early.")
+	filePrompts = appendGitHubPrompt(filePrompts, res.Metrics.FunctionLength, limits.FunctionLength, "Function lines is %d (Max %d). Modularize this block into separate functional components.")
+	filePrompts = appendGitHubPrompt(filePrompts, res.Metrics.ArgumentCount, limits.ArgumentCount, "Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.")
+	filePrompts = appendGitHubPrompt(filePrompts, res.Metrics.MaxCaseLength, limits.MaxCaseLength, "Case block lines is %d (Max %d). Extract the case logic into a well-named method.")
 	if len(filePrompts) > 0 {
 		return strings.Join(filePrompts, "\n\n")
 	}
@@ -317,28 +305,45 @@ func sendGitHubReviewRequest(token, repo, prNumber string, comments []prComment)
 	return nil
 }
 
-func getPRNumberFromEventPath() string {
-	eventPath := os.Getenv("GITHUB_EVENT_PATH")
-	if eventPath == "" {
-		return ""
-	}
+func isValidEventFile(eventPath string) bool {
 	info, err := os.Stat(eventPath)
-	if err == nil && (!info.Mode().IsRegular() || info.Size() > sensors.MaxFileSize) {
-		return "" // skip if too large or not a regular file
-	}
-	data, err := os.ReadFile(eventPath)
 	if err != nil {
-		return ""
+		return false
 	}
+	if !info.Mode().IsRegular() {
+		return false
+	}
+	if info.Size() > sensors.MaxFileSize {
+		return false
+	}
+	return true
+}
+
+func parsePRNumberFromEvent(data []byte) string {
 	var event struct {
 		PullRequest struct {
 			Number int `json:"number"`
 		} `json:"pull_request"`
 	}
-	if err := json.Unmarshal(data, &event); err == nil && event.PullRequest.Number > 0 {
+	if err := json.Unmarshal(data, &event); err != nil {
+		return ""
+	}
+	if event.PullRequest.Number > 0 {
 		return fmt.Sprintf("%d", event.PullRequest.Number)
 	}
 	return ""
+}
+
+func getPRNumberFromEventPath() string {
+	eventPath := os.Getenv("GITHUB_EVENT_PATH")
+	if eventPath == "" || !isValidEventFile(eventPath) {
+		return ""
+	}
+	data, err := os.ReadFile(eventPath)
+	if err != nil {
+		return ""
+	}
+	return parsePRNumberFromEvent(data)
 }
 
 func getPRNumber() (string, error) {

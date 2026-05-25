@@ -36,47 +36,62 @@ func extractESLintValue(msg string, primaryRe *regexp.Regexp, fallbackRe *regexp
 }
 
 //nolint:gocognit,cyclop // Highly cohesive mapping logic for linters. Splitting this hurts readability.
+type ESLintRegexes struct {
+	Complexity *regexp.Regexp
+	Parameters *regexp.Regexp
+	Lines      *regexp.Regexp
+	Fallback   *regexp.Regexp
+}
+
 func parseESLintMessages(messages []ESLintMessage) []Violation {
 	var violations []Violation
-	reComplexity := regexp.MustCompile(`complexity of (\d+)`)
-	reParameters := regexp.MustCompile(`has (\d+) parameters`)
-	reLines := regexp.MustCompile(`exceeds (\d+) lines`)
-	reFallback := regexp.MustCompile(`(\d+)`)
+	regexes := ESLintRegexes{
+		Complexity: regexp.MustCompile(`complexity of (\d+)`),
+		Parameters: regexp.MustCompile(`has (\d+) parameters`),
+		Lines:      regexp.MustCompile(`exceeds (\d+) lines`),
+		Fallback:   regexp.MustCompile(`(\d+)`),
+	}
 
 	for _, msg := range messages {
-		endLine := msg.EndLine
-		if endLine == 0 {
-			endLine = msg.Line + FallbackEndLineOffset
-		}
-		if msg.RuleID == "complexity" {
-			val := extractESLintValue(msg.Message, reComplexity, reFallback)
-			violations = append(violations, Violation{RuleName: RuleComplexity, Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
-		} else if msg.RuleID == "max-params" {
-			val := extractESLintValue(msg.Message, reParameters, reFallback)
-			violations = append(violations, Violation{RuleName: RuleArgumentCount, Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
-		} else if msg.RuleID == "max-lines-per-function" {
-			val := extractESLintValue(msg.Message, reLines, reFallback)
-			violations = append(violations, Violation{RuleName: RuleFunctionLength, Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
+		if v, ok := parseSingleESLintMessage(msg, regexes); ok {
+			violations = append(violations, v)
 		}
 	}
 	return violations
 }
 
+func parseSingleESLintMessage(msg ESLintMessage, regexes ESLintRegexes) (Violation, bool) {
+	endLine := msg.EndLine
+	if endLine == 0 {
+		endLine = msg.Line + FallbackEndLineOffset
+	}
+	switch msg.RuleID {
+	case "complexity":
+		val := extractESLintValue(msg.Message, regexes.Complexity, regexes.Fallback)
+		return Violation{RuleName: RuleComplexity, Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message}, true
+	case "max-params":
+		val := extractESLintValue(msg.Message, regexes.Parameters, regexes.Fallback)
+		return Violation{RuleName: RuleArgumentCount, Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message}, true
+	case "max-lines-per-function":
+		val := extractESLintValue(msg.Message, regexes.Lines, regexes.Fallback)
+		return Violation{RuleName: RuleFunctionLength, Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message}, true
+	}
+	return Violation{}, false
+}
+
 func processESLintAnalyzeResult(exitCode int, list []ESLintResult, output []byte) (map[string][]Violation, error) {
-	if exitCode == 0 || exitCode == 1 || exitCode == 2 {
-		metricsMap := make(map[string][]Violation)
-		if len(list) > 0 {
-			for _, result := range list {
-				violations := parseESLintMessages(result.Messages)
-				if len(violations) > 0 {
-					metricsMap[result.FilePath] = violations
-				}
-			}
-		}
-		return metricsMap, nil
+	if exitCode != 0 && exitCode != 1 && exitCode != 2 {
+		return nil, fmt.Errorf("ESLint exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
 	}
 
-	return nil, fmt.Errorf("ESLint exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
+	metricsMap := make(map[string][]Violation)
+	for _, result := range list {
+		violations := parseESLintMessages(result.Messages)
+		if len(violations) > 0 {
+			metricsMap[result.FilePath] = violations
+		}
+	}
+	return metricsMap, nil
 }
 
 func (p ESLintPlugin) Analyze(files []FileContext) (map[string][]Violation, error) {

@@ -1,5 +1,7 @@
 package sensors
 
+//nolint // maintainability: highly cohesive test
+
 import (
 	"reflect"
 	"testing"

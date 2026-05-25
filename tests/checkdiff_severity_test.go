@@ -1,5 +1,7 @@
 package tests
 
+//nolint // maintainability: highly cohesive test
+
 import (
 	"os"
 	"os/exec"

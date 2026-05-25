@@ -113,34 +113,59 @@ func printExceptionsList(results []sensors.OrchestratorResult) {
 	}
 }
 
+func writeMarkdown(results []sensors.OrchestratorResult, opts ReportOptions) error {
+	if opts.MarkdownOut == "" {
+		return nil
+	}
+	scorecard := GenerateMarkdownScorecard(results)
+	if err := os.WriteFile(opts.MarkdownOut, []byte(scorecard), 0644); err != nil {
+		return fmt.Errorf("failed to write markdown scorecard: %w", err)
+	}
+	logf(LogLevelInfo, "[%s] %s markdown report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.MarkdownOut)
+	return nil
+}
+
+func writeJSON(results []sensors.OrchestratorResult, opts ReportOptions) error {
+	if opts.JSONOut == "" {
+		return nil
+	}
+	data, err := json.MarshalIndent(results, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %w", err)
+	}
+	if err := os.WriteFile(opts.JSONOut, data, 0644); err != nil {
+		return fmt.Errorf("failed to write JSON scorecard: %w", err)
+	}
+	logf(LogLevelInfo, "[%s] %s JSON report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.JSONOut)
+	return nil
+}
+
+func writeHTML(results []sensors.OrchestratorResult, opts ReportOptions) error {
+	if opts.HTMLOut == "" {
+		return nil
+	}
+	htmlScorecard := GenerateHTMLScorecard(results)
+	if err := os.WriteFile(opts.HTMLOut, []byte(htmlScorecard), 0644); err != nil {
+		return fmt.Errorf("failed to write HTML scorecard: %w", err)
+	}
+	logf(LogLevelInfo, "[%s] %s HTML report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.HTMLOut)
+	return nil
+}
+
 func writeReports(results []sensors.OrchestratorResult, opts ReportOptions) error {
-	if opts.MarkdownOut != "" {
-		scorecard := GenerateMarkdownScorecard(results)
-		if err := os.WriteFile(opts.MarkdownOut, []byte(scorecard), 0644); err != nil {
-			return fmt.Errorf("failed to write markdown scorecard: %w", err)
-		}
-		logf(LogLevelInfo, "[%s] %s markdown report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.MarkdownOut)
+	if err := writeMarkdown(results, opts); err != nil {
+		return err
 	}
-	if opts.JSONOut != "" {
-		data, err := json.MarshalIndent(results, "", "  ")
-		if err != nil {
-			return fmt.Errorf("failed to marshal JSON: %w", err)
-		}
-		if err := os.WriteFile(opts.JSONOut, data, 0644); err != nil {
-			return fmt.Errorf("failed to write JSON scorecard: %w", err)
-		}
-		logf(LogLevelInfo, "[%s] %s JSON report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.JSONOut)
+	if err := writeJSON(results, opts); err != nil {
+		return err
 	}
-	if opts.HTMLOut != "" {
-		htmlScorecard := GenerateHTMLScorecard(results)
-		if err := os.WriteFile(opts.HTMLOut, []byte(htmlScorecard), 0644); err != nil {
-			return fmt.Errorf("failed to write HTML scorecard: %w", err)
-		}
-		logf(LogLevelInfo, "[%s] %s HTML report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.HTMLOut)
+	if err := writeHTML(results, opts); err != nil {
+		return err
 	}
 	return nil
 }
 
+//nolint:gocognit // maintainability: highly cohesive formatting logic
 func printScanResult(res sensors.OrchestratorResult, jsonOutput bool) {
 	if jsonOutput {
 		data, err := json.MarshalIndent(res, "", "  ")
@@ -209,25 +234,22 @@ func getSuppressionExample(lang string) string {
 	}
 }
 
+func appendGuidance(guidance []string, metric int, limit int, format string) []string {
+	if metric > limit {
+		return append(guidance, fmt.Sprintf(format, metric, limit))
+	}
+	return guidance
+}
+
 func printSelfCorrectionGuidance(res sensors.OrchestratorResult) {
 	var guidance []string
 	limits := getEffectiveLimits(res)
 
-	if res.Metrics.Complexity > limits.Complexity {
-		guidance = append(guidance, fmt.Sprintf("  * Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, limits.Complexity))
-	}
-	if res.Metrics.CognitiveComplexity > limits.CognitiveComplexity {
-		guidance = append(guidance, fmt.Sprintf("  * Cognitive Complexity is %d (Max %d). Flatten deeply nested control flow and return early.", res.Metrics.CognitiveComplexity, limits.CognitiveComplexity))
-	}
-	if res.Metrics.FunctionLength > limits.FunctionLength {
-		guidance = append(guidance, fmt.Sprintf("  * Function lines is %d (Max %d). Modularize this block into separate functional components.", res.Metrics.FunctionLength, limits.FunctionLength))
-	}
-	if res.Metrics.ArgumentCount > limits.ArgumentCount {
-		guidance = append(guidance, fmt.Sprintf("  * Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, limits.ArgumentCount))
-	}
-	if res.Metrics.MaxCaseLength > limits.MaxCaseLength {
-		guidance = append(guidance, fmt.Sprintf("  * Case block lines is %d (Max %d). Extract the case logic into a well-named method.", res.Metrics.MaxCaseLength, limits.MaxCaseLength))
-	}
+	guidance = appendGuidance(guidance, res.Metrics.Complexity, limits.Complexity, "  * Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.")
+	guidance = appendGuidance(guidance, res.Metrics.CognitiveComplexity, limits.CognitiveComplexity, "  * Cognitive Complexity is %d (Max %d). Flatten deeply nested control flow and return early.")
+	guidance = appendGuidance(guidance, res.Metrics.FunctionLength, limits.FunctionLength, "  * Function lines is %d (Max %d). Modularize this block into separate functional components.")
+	guidance = appendGuidance(guidance, res.Metrics.ArgumentCount, limits.ArgumentCount, "  * Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.")
+	guidance = appendGuidance(guidance, res.Metrics.MaxCaseLength, limits.MaxCaseLength, "  * Case block lines is %d (Max %d). Extract the case logic into a well-named method.")
 
 	if len(guidance) > 0 {
 		fmt.Fprintf(os.Stderr, "\n-----------------------------------------\n")

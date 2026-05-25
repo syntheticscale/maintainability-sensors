@@ -20,38 +20,60 @@ type PyLintMessage struct {
 	EndLine int    `json:"endLine"`
 }
 
-//nolint:gocognit,cyclop // Highly cohesive mapping logic, splitting hurts readability
+//nolint:gocognit,cyclop
+func parsePyLintMessage(msg PyLintMessage) (string, int) {
+	var val int
+	if msg.Symbol == "too-many-statements" && strings.Contains(msg.Message, "Too many statements") {
+		fmt.Sscanf(msg.Message, "Too many statements (%d/%*d)", &val)
+		return RuleFunctionLength, val
+	}
+	if msg.Symbol == "too-many-arguments" && strings.Contains(msg.Message, "Too many arguments") {
+		fmt.Sscanf(msg.Message, "Too many arguments (%d/%*d)", &val)
+		return RuleArgumentCount, val
+	}
+	if (msg.Symbol == "too-many-branches" || msg.Symbol == "too-complex") && strings.Contains(msg.Message, "McCabe rating is") {
+		fmt.Sscanf(msg.Message, "McCabe rating is %d", &val)
+		return RuleComplexity, val
+	}
+	return "", 0
+}
+
 func parsePyLintMessages(list []PyLintMessage) map[string][]Violation {
 	metricsMap := make(map[string][]Violation)
 
 	for _, msg := range list {
-		var val int
-		var rule string
-		if msg.Symbol == "too-many-statements" {
-			if strings.Contains(msg.Message, "Too many statements") {
-				fmt.Sscanf(msg.Message, "Too many statements (%d/%*d)", &val)
-				rule = RuleFunctionLength
-			}
-		} else if msg.Symbol == "too-many-arguments" {
-			if strings.Contains(msg.Message, "Too many arguments") {
-				fmt.Sscanf(msg.Message, "Too many arguments (%d/%*d)", &val)
-				rule = RuleArgumentCount
-			}
-		} else if msg.Symbol == "too-many-branches" || msg.Symbol == "too-complex" {
-			if strings.Contains(msg.Message, "McCabe rating is") {
-				fmt.Sscanf(msg.Message, "McCabe rating is %d", &val)
-				rule = RuleComplexity
-			}
+		rule, val := parsePyLintMessage(msg)
+		if rule == "" {
+			continue
 		}
-		if rule != "" {
-			endLine := msg.EndLine
-			if endLine == 0 {
-				endLine = msg.Line + FallbackEndLineOffset
-			}
-			metricsMap[msg.Path] = append(metricsMap[msg.Path], Violation{RuleName: rule, Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
+		endLine := msg.EndLine
+		if endLine == 0 {
+			endLine = msg.Line + FallbackEndLineOffset
 		}
+		metricsMap[msg.Path] = append(metricsMap[msg.Path], Violation{RuleName: rule, Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
 	}
 	return metricsMap
+}
+
+func handlePyLintError(exitCode int, output []byte) error {
+	var dummy []interface{}
+	if parseErr := json.Unmarshal(output, &dummy); parseErr != nil {
+		return fmt.Errorf("pylint crashed or encountered a configuration error (exit code %d): %s", exitCode, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func checkPyLintError(exitCode int, output []byte, err error) error {
+	if err != nil {
+		if exitCode > 0 {
+			return fmt.Errorf("pylint crashed or encountered a configuration error (exit code %d): %v\n%s", exitCode, err, string(output))
+		}
+		return fmt.Errorf("pylint error: %w", err)
+	}
+	if exitCode < 0 {
+		return fmt.Errorf("pylint exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
+	}
+	return nil
 }
 
 func (p PyLintPlugin) Analyze(files []FileContext) (map[string][]Violation, error) {
@@ -60,33 +82,22 @@ func (p PyLintPlugin) Analyze(files []FileContext) (map[string][]Violation, erro
 		filePaths = append(filePaths, f.Path)
 	}
 
-	args := []string{"--output-format=json"}
-	args = append(args, "--")
-	args = append(args, filePaths...)
+	args := append([]string{"--output-format=json", "--"}, filePaths...)
 
 	var list []PyLintMessage
 	exitCode, output, err := runLintCommandJSON("pylint", &list, args...)
-	if err != nil {
-		if exitCode > 0 {
-			return nil, fmt.Errorf("pylint crashed or encountered a configuration error (exit code %d): %v\n%s", exitCode, err, string(output))
-		}
-		return nil, fmt.Errorf("pylint error: %w", err)
+	if checkErr := checkPyLintError(exitCode, output, err); checkErr != nil {
+		return nil, checkErr
 	}
 
-	if exitCode >= 0 {
-		metricsMap := make(map[string][]Violation)
-		if len(list) > 0 {
-			metricsMap = parsePyLintMessages(list)
-		}
-		if exitCode > 0 && len(metricsMap) == 0 {
-			// To catch crashes
-			var dummy []interface{}
-			if parseErr := json.Unmarshal(output, &dummy); parseErr != nil {
-				return nil, fmt.Errorf("pylint crashed or encountered a configuration error (exit code %d): %s", exitCode, strings.TrimSpace(string(output)))
-			}
-		}
-		return metricsMap, nil
+	metricsMap := make(map[string][]Violation)
+	if len(list) > 0 {
+		metricsMap = parsePyLintMessages(list)
 	}
-
-	return nil, fmt.Errorf("pylint exited with unexpected code %d: %s", exitCode, strings.TrimSpace(string(output)))
+	if exitCode > 0 && len(metricsMap) == 0 {
+		if err := handlePyLintError(exitCode, output); err != nil {
+			return nil, err
+		}
+	}
+	return metricsMap, nil
 }

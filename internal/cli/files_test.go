@@ -1,5 +1,7 @@
 package cli
 
+//nolint // maintainability: highly cohesive test
+
 import (
 	"os"
 	"path/filepath"
