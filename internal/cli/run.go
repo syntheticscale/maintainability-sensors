@@ -32,7 +32,7 @@ func executeRun(opts RunOptions) {
 
 	results, err := ScanFiles(files, isDir)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+		logf(LogLevelError, "[ERROR] %v\n", err)
 		os.Exit(1)
 	}
 
@@ -67,7 +67,7 @@ func ScanFiles(filePaths []string, isDir bool) ([]sensors.OrchestratorResult, er
 					if !isDir {
 						return fmt.Errorf("unsupported or unrecognized language file: %s", f)
 					}
-					fmt.Fprintf(os.Stderr, "[WARNING] Scan failed for %s: unsupported or unrecognized language file: %s\n", f, f)
+					logf(LogLevelWarn, "[WARNING] Scan failed for %s: unsupported or unrecognized language file: %s\n", f, f)
 				}
 				return nil
 			}
@@ -82,7 +82,7 @@ func ScanFiles(filePaths []string, isDir bool) ([]sensors.OrchestratorResult, er
 				if !isDir {
 					return fmt.Errorf("Scan failed: %v", err)
 				}
-				fmt.Fprintf(os.Stderr, "[WARNING] Scan failed for language %s: %v\n", lang, err)
+				logf(LogLevelWarn, "[WARNING] Scan failed for language %s: %v\n", lang, err)
 				return nil
 			}
 
@@ -108,7 +108,7 @@ func saveReportsAndExit(results []sensors.OrchestratorResult, opts RunOptions, h
 		ActionVerb:  "Saved",
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+		logf(LogLevelError, "[ERROR] %v\n", err)
 		os.Exit(1)
 	}
 
@@ -121,7 +121,7 @@ func postGitHubResults(results []sensors.OrchestratorResult, forcePR bool) {
 	if os.Getenv("GITHUB_ACTIONS") == "true" {
 		scorecard := GenerateMarkdownScorecard(results)
 		if err := WriteGitHubStepSummary(scorecard); err != nil {
-			fmt.Fprintf(os.Stderr, "[WARNING] Failed to write GitHub Step Summary: %v\n", err)
+			logf(LogLevelWarn, "[WARNING] Failed to write GitHub Step Summary: %v\n", err)
 		}
 	}
 
@@ -129,7 +129,7 @@ func postGitHubResults(results []sensors.OrchestratorResult, forcePR bool) {
 	if forcePR || isCI_PR {
 		logLn(LogLevelInfo, "Posting inline review to GitHub PR...")
 		if err := PostGitHubReview(results); err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Failed to post GitHub inline review: %v\n", err)
+			logf(LogLevelError, "[ERROR] Failed to post GitHub inline review: %v\n", err)
 		} else {
 			logLn(LogLevelInfo, "Successfully posted inline review to GitHub PR!")
 		}

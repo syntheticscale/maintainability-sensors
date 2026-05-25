@@ -11,7 +11,7 @@ import (
 func executeGenerate(jsonIn string, markdownOut string, htmlOut string) {
 	results, err := parseJSONScorecard(jsonIn)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+		logf(LogLevelError, "[ERROR] %v\n", err)
 		os.Exit(1)
 	}
 
@@ -28,7 +28,7 @@ func executeGenerate(jsonIn string, markdownOut string, htmlOut string) {
 		HTMLOut:     htmlOut,
 		ActionVerb:  "Generated",
 	}); err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
+		logf(LogLevelError, "[ERROR] %v\n", err)
 		os.Exit(1)
 	}
 

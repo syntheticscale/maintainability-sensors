@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/syntheticscale/maintainability-sensors/internal/sensors"
@@ -10,7 +9,7 @@ import (
 func executeBootstrap(targetPath string, withWarnPolicy bool) {
 	err := sensors.BootstrapRepoWithPolicy(targetPath, withWarnPolicy)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Bootstrap failed: %v\n", err)
+		logf(LogLevelError, "[ERROR] Bootstrap failed: %v\n", err)
 		os.Exit(1)
 	}
 }

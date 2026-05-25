@@ -275,7 +275,7 @@ func processDeltaGroups(groups map[string][]string, originalPaths map[string]str
 
 		violationsMap, err := sensors.ScanDeltaBatch(fileContexts, originalPaths, lang)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "[WARNING] Delta scan failed for %s: %v\n", lang, err)
+			logf(LogLevelWarn, "[WARNING] Delta scan failed for %s: %v\n", lang, err)
 			continue
 		}
 
@@ -337,14 +337,14 @@ func processWalkDirFile(path string, d os.DirEntry, absTargetDir string) (string
 
 	info, err := d.Info()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[WARNING] Cannot get info for %s: %v\n", path, err)
+		logf(LogLevelWarn, "[WARNING] Cannot get info for %s: %v\n", path, err)
 		return "", nil
 	}
 	if !info.Mode().IsRegular() {
 		return "", nil
 	}
 	if info.Size() > sensors.MaxFileSize {
-		fmt.Fprintf(os.Stderr, "[WARNING] Skipping file %s: exceeds 2MB limit\n", path)
+		logf(LogLevelWarn, "[WARNING] Skipping file %s: exceeds 2MB limit\n", path)
 		return "", nil
 	}
 
@@ -394,7 +394,7 @@ func FindFiles(targetPath string) ([]string, bool, error) {
 	var files []string
 	err = filepath.WalkDir(cleanPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "[WARNING] Cannot access %s: %v\n", path, err)
+			logf(LogLevelWarn, "[WARNING] Cannot access %s: %v\n", path, err)
 			return nil
 		}
 		file, walkErr := processWalkDirFile(path, d, absTargetDir)
@@ -459,7 +459,7 @@ func FormatResultsCLI(results []sensors.OrchestratorResult, jsonOutput bool, isD
 func printJSONResults(results []sensors.OrchestratorResult) {
 	data, err := json.MarshalIndent(results, "", "  ")
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Failed to marshal JSON: %v\n", err)
+		logf(LogLevelError, "[ERROR] Failed to marshal JSON: %v\n", err)
 		os.Exit(1)
 	}
 	fmt.Println(string(data))
@@ -520,7 +520,7 @@ func writeReports(results []sensors.OrchestratorResult, opts ReportOptions) erro
 		if err := os.WriteFile(opts.MarkdownOut, []byte(scorecard), 0644); err != nil {
 			return fmt.Errorf("failed to write markdown scorecard: %w", err)
 		}
-		fmt.Fprintf(os.Stderr, "[%s] %s markdown report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.MarkdownOut)
+		logf(LogLevelInfo, "[%s] %s markdown report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.MarkdownOut)
 	}
 	if opts.JSONOut != "" {
 		data, err := json.MarshalIndent(results, "", "  ")
@@ -530,14 +530,14 @@ func writeReports(results []sensors.OrchestratorResult, opts ReportOptions) erro
 		if err := os.WriteFile(opts.JSONOut, data, 0644); err != nil {
 			return fmt.Errorf("failed to write JSON scorecard: %w", err)
 		}
-		fmt.Fprintf(os.Stderr, "[%s] %s JSON report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.JSONOut)
+		logf(LogLevelInfo, "[%s] %s JSON report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.JSONOut)
 	}
 	if opts.HTMLOut != "" {
 		htmlScorecard := GenerateHTMLScorecard(results)
 		if err := os.WriteFile(opts.HTMLOut, []byte(htmlScorecard), 0644); err != nil {
 			return fmt.Errorf("failed to write HTML scorecard: %w", err)
 		}
-		fmt.Fprintf(os.Stderr, "[%s] %s HTML report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.HTMLOut)
+		logf(LogLevelInfo, "[%s] %s HTML report to %s\n", strings.ToUpper(opts.ActionVerb), opts.ActionVerb, opts.HTMLOut)
 	}
 	return nil
 }
@@ -546,7 +546,7 @@ func printScanResult(res sensors.OrchestratorResult, jsonOutput bool) {
 	if jsonOutput {
 		data, err := json.MarshalIndent(res, "", "  ")
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "[ERROR] Failed to marshal JSON: %v\n", err)
+			logf(LogLevelError, "[ERROR] Failed to marshal JSON: %v\n", err)
 			return
 		}
 		fmt.Println(string(data))
