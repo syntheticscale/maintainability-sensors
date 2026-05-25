@@ -46,7 +46,7 @@ func parseESLintMessages(messages []ESLintMessage) []Violation {
 	for _, msg := range messages {
 		endLine := msg.EndLine
 		if endLine == 0 {
-			endLine = msg.Line + 100
+			endLine = msg.Line + FallbackEndLineOffset
 		}
 		if msg.RuleID == "complexity" {
 			val := extractESLintValue(msg.Message, reComplexity, reFallback)

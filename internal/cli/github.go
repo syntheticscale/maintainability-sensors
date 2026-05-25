@@ -323,7 +323,7 @@ func getPRNumberFromEventPath() string {
 		return ""
 	}
 	info, err := os.Stat(eventPath)
-	if err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
+	if err == nil && (!info.Mode().IsRegular() || info.Size() > sensors.MaxFileSize) {
 		return "" // skip if too large or not a regular file
 	}
 	data, err := os.ReadFile(eventPath)

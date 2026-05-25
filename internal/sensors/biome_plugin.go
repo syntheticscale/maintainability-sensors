@@ -75,7 +75,7 @@ func parseSingleBiomeDiagnostic(diag BiomeDiagnostic, reVal *regexp.Regexp, file
 	startLine := diag.Location.Span.Start
 	endLine := diag.Location.Span.End
 	if endLine == 0 {
-		endLine = startLine + 100
+		endLine = startLine + FallbackEndLineOffset
 	}
 
 	*fileViolations = append(*fileViolations, Violation{RuleName: rule, Value: val, StartLine: startLine, EndLine: endLine, Message: diag.Description})

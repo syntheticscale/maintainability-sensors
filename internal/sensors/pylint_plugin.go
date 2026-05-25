@@ -46,7 +46,7 @@ func parsePyLintMessages(list []PyLintMessage) map[string][]Violation {
 		if rule != "" {
 			endLine := msg.EndLine
 			if endLine == 0 {
-				endLine = msg.Line + 100
+				endLine = msg.Line + FallbackEndLineOffset
 			}
 			metricsMap[msg.Path] = append(metricsMap[msg.Path], Violation{RuleName: rule, Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
 		}

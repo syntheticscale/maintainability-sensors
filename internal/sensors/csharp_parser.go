@@ -16,7 +16,7 @@ func ParseCSharp(file FileContext) ([]Violation, error) {
 	if file.Content != nil {
 		content = file.Content
 	} else {
-		if info, err := os.Stat(file.Path); err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
+		if info, err := os.Stat(file.Path); err == nil && (!info.Mode().IsRegular() || info.Size() > MaxFileSize) {
 			return violations, nil
 		}
 		content, err = os.ReadFile(file.Path)

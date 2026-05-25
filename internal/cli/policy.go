@@ -207,7 +207,7 @@ func applyCLISeverityOverrides(policy *CheckDiffPolicy, severityOverrides []stri
 
 // loadConfigFile reads and parses the YAML config file.
 func loadConfigFile(path string) (*CheckDiffConfigFile, error) {
-	if info, err := os.Stat(path); err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
+	if info, err := os.Stat(path); err == nil && (!info.Mode().IsRegular() || info.Size() > sensors.MaxFileSize) {
 		return nil, fmt.Errorf("config file %s is too large or not a regular file", path)
 	}
 	data, err := os.ReadFile(path)

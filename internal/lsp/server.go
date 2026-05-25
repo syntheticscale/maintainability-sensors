@@ -150,7 +150,7 @@ func getLimitForRule(ruleName string, exceptions []sensors.RelaxedLimit) int {
 	case sensors.RuleCaseBlockLength:
 		return sensors.BaselineCaseLength
 	}
-	return 999999 // fallback
+	return sensors.FallbackLimit // fallback
 }
 
 func StartServer() error {

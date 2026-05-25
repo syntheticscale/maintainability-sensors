@@ -60,7 +60,7 @@ func CheckGoArchitecture(filePath string, config *ArchitectureConfig) ([]Violati
 		return violations, nil
 	}
 
-	if info, err := os.Stat(filePath); err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
+	if info, err := os.Stat(filePath); err == nil && (!info.Mode().IsRegular() || info.Size() > MaxFileSize) {
 		return violations, nil
 	}
 

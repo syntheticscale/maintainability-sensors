@@ -50,7 +50,7 @@ func validateScorecardResults(results []sensors.OrchestratorResult) error {
 }
 
 func parseJSONScorecard(jsonIn string) ([]sensors.OrchestratorResult, error) {
-	if info, err := os.Stat(jsonIn); err == nil && (!info.Mode().IsRegular() || info.Size() > 10*1024*1024) {
+	if info, err := os.Stat(jsonIn); err == nil && (!info.Mode().IsRegular() || info.Size() > sensors.MaxJSONFileSize) {
 		return nil, fmt.Errorf("JSON input file is too large or not a regular file (limit 10MB)")
 	}
 	data, err := os.ReadFile(jsonIn)

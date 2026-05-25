@@ -343,7 +343,7 @@ func processWalkDirFile(path string, d os.DirEntry, absTargetDir string) (string
 	if !info.Mode().IsRegular() {
 		return "", nil
 	}
-	if info.Size() > 2*1024*1024 {
+	if info.Size() > sensors.MaxFileSize {
 		fmt.Fprintf(os.Stderr, "[WARNING] Skipping file %s: exceeds 2MB limit\n", path)
 		return "", nil
 	}

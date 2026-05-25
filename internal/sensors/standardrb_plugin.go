@@ -42,7 +42,7 @@ func parseSingleStandardRBOffense(off StandardRBOffense, fileViolations *[]Viola
 
 	endLine := off.Location.LastLine
 	if endLine == 0 {
-		endLine = off.Location.Line + 100
+		endLine = off.Location.Line + FallbackEndLineOffset
 	}
 
 	switch off.CopName {

@@ -230,9 +230,9 @@ func analyzeInChunks(plugin Plugin, pathsForPlugin []FileContext) (map[string][]
 	var mu sync.Mutex
 	eg, _ := errgroup.WithContext(context.Background())
 
-	for i := 0; i < len(pathsForPlugin); i += 300 {
+	for i := 0; i < len(pathsForPlugin); i += PluginChunkSize {
 		start := i
-		end := i + 300
+		end := i + PluginChunkSize
 		if end > len(pathsForPlugin) {
 			end = len(pathsForPlugin)
 		}

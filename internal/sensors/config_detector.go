@@ -90,7 +90,7 @@ func findMaxConfigVal(content string, ext string, keys []string) (int, bool) {
 
 func isValidConfigFile(configPath string) bool {
 	info, err := os.Stat(configPath)
-	return err == nil && info.Mode().IsRegular() && info.Size() <= 2*1024*1024
+	return err == nil && info.Mode().IsRegular() && info.Size() <= MaxFileSize
 }
 
 func DetectRelaxedLimits(configPath string, parser ConfigParser) []RelaxedLimit {

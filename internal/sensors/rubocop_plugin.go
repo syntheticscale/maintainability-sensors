@@ -46,7 +46,7 @@ func parseSingleRuboCopOffense(off RuboCopOffense, reVal *regexp.Regexp, fileVio
 
 	endLine := off.Location.LastLine
 	if endLine == 0 {
-		endLine = off.Location.Line + 100
+		endLine = off.Location.Line + FallbackEndLineOffset
 	}
 
 	switch off.CopName {

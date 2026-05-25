@@ -13,7 +13,7 @@ func ParseGoAST(file FileContext) ([]Violation, error) {
 	var violations []Violation
 
 	if file.Content == nil {
-		if info, err := os.Stat(file.Path); err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
+		if info, err := os.Stat(file.Path); err == nil && (!info.Mode().IsRegular() || info.Size() > MaxFileSize) {
 			return violations, nil
 		}
 	}

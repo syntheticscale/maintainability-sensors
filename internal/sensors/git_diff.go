@@ -180,9 +180,9 @@ func processUntrackedFile(file, repoPath string, result map[string][]LineRange) 
 		fullPath = filepath.Join(repoPath, file)
 	}
 	info, err := os.Stat(fullPath)
-	if err == nil && (!info.Mode().IsRegular() || info.Size() > 2*1024*1024) {
+	if err == nil && (!info.Mode().IsRegular() || info.Size() > MaxFileSize) {
 		fmt.Fprintf(os.Stderr, "Warning: skipping large or non-regular untracked file %s\n", file)
 		return
 	}
-	result[file] = []LineRange{{Start: 1, End: 999999999}}
+	result[file] = []LineRange{{Start: 1, End: UntrackedFileEndLine}}
 }

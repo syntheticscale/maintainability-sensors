@@ -223,7 +223,7 @@ func bootstrapTSJS(absPath string) error {
 		p := filepath.Join(absPath, anchor)
 		if info, err := os.Stat(p); err == nil {
 			if anchor == "package.json" {
-				if !info.Mode().IsRegular() || info.Size() > 2*1024*1024 {
+				if !info.Mode().IsRegular() || info.Size() > MaxFileSize {
 					continue
 				}
 				content, _ := os.ReadFile(p)
