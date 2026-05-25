@@ -2,6 +2,7 @@ package sensors
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -34,7 +35,10 @@ type StandardRBResult struct {
 func parseSingleStandardRBOffense(off StandardRBOffense, fileViolations *[]Violation) {
 	var val int
 	if strings.Contains(off.Message, "[") {
-		fmt.Sscanf(off.Message, "%*[^[][%d/%*d]", &val)
+		re := regexp.MustCompile(`\[(\d+)/`)
+		if m := re.FindStringSubmatch(off.Message); len(m) > 1 {
+			fmt.Sscanf(m[1], "%d", &val)
+		}
 	}
 	if val == 0 {
 		return

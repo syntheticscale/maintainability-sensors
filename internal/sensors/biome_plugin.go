@@ -55,13 +55,13 @@ func extractBiomeMaxParameters(desc string, reVal *regexp.Regexp) (string, int) 
 }
 
 func extractBiomeRuleAndVal(diag BiomeDiagnostic, reVal *regexp.Regexp) (string, int) {
+	isParams := strings.Contains(diag.Category, "maxParameters") || strings.Contains(diag.Category, "noExcessiveParameters") || strings.Contains(diag.Description, "parameters")
+	if isParams {
+		return extractBiomeMaxParameters(diag.Description, reVal)
+	}
 	isComplexity := strings.Contains(diag.Category, "complexity") || strings.Contains(diag.Description, "complexity")
 	if isComplexity {
 		return extractBiomeComplexity(diag.Description, reVal)
-	}
-	isParams := strings.Contains(diag.Category, "maxParameters") || strings.Contains(diag.Description, "parameters")
-	if isParams {
-		return extractBiomeMaxParameters(diag.Description, reVal)
 	}
 	return "", 0
 }
