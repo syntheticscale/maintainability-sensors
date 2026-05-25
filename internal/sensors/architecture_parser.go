@@ -33,6 +33,36 @@ func ParseArchitectureConfig(filePath string) (*ArchitectureConfig, error) {
 	return &config, nil
 }
 
+func matchesLayer(path, layerName string) bool {
+	path = strings.Trim(filepath.ToSlash(path), "/")
+	layerName = strings.Trim(filepath.ToSlash(layerName), "/")
+
+	if path == layerName {
+		return true
+	}
+
+	segments := strings.Split(path, "/")
+	layerSegments := strings.Split(layerName, "/")
+
+	if len(layerSegments) == 0 {
+		return false
+	}
+
+	for i := 0; i <= len(segments)-len(layerSegments); i++ {
+		match := true
+		for j := 0; j < len(layerSegments); j++ {
+			if segments[i+j] != layerSegments[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return true
+		}
+	}
+	return false
+}
+
 func CheckArchitectureDependencies(filePath string, config *ArchitectureConfig, imports []ImportInfo) []Violation {
 	var violations []Violation
 	if config == nil || len(config.Layers) == 0 {
@@ -47,8 +77,7 @@ func CheckArchitectureDependencies(filePath string, config *ArchitectureConfig, 
 
 	currentLayer := ""
 	for layerName := range config.Layers {
-		// e.g. path contains /api/
-		if strings.Contains(absPath, "/"+layerName+"/") || strings.HasSuffix(absPath, "/"+layerName) || strings.HasPrefix(absPath, layerName+"/") {
+		if matchesLayer(absPath, layerName) {
 			currentLayer = layerName
 			break
 		}
@@ -69,7 +98,7 @@ func CheckArchitectureDependencies(filePath string, config *ArchitectureConfig, 
 
 		importedLayer := ""
 		for layerName := range config.Layers {
-			if strings.Contains(importPath, "/"+layerName+"/") || strings.HasSuffix(importPath, "/"+layerName) || importPath == layerName {
+			if matchesLayer(importPath, layerName) {
 				importedLayer = layerName
 				break
 			}
