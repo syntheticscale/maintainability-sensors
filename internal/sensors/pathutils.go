@@ -17,25 +17,6 @@ func sanitizePath(path string) (string, error) {
 	return clean, nil
 }
 
-func sanitizeAndMapPaths(filePaths []string) ([]string, map[string]string, error) {
-	validPaths := make([]string, 0, len(filePaths))
-	originalPaths := make(map[string]string)
-
-	for _, p := range filePaths {
-		clean, err := sanitizePath(p)
-		if err != nil {
-			return nil, nil, err
-		}
-		abs, err := filepath.Abs(clean)
-		if err == nil {
-			originalPaths[abs] = p
-		}
-		originalPaths[clean] = p
-		validPaths = append(validPaths, clean)
-	}
-	return validPaths, originalPaths, nil
-}
-
 func sanitizeAndMapFileContexts(files []FileContext) ([]FileContext, map[string]string, error) {
 	validFiles := make([]FileContext, 0, len(files))
 	originalPaths := make(map[string]string)

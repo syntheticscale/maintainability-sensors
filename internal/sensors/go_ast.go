@@ -8,13 +8,6 @@ import (
 	"strings"
 )
 
-// GoMetrics holds extracted metrics from a Go file.
-type GoMetrics struct {
-	Complexity     int
-	FunctionLength int
-	ArgumentCount  int
-}
-
 // ParseGoAST reads a Go file and extracts maintainability metrics natively.
 func ParseGoAST(file FileContext) ([]Violation, error) {
 	var violations []Violation

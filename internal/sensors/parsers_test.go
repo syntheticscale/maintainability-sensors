@@ -130,9 +130,9 @@ func TestDetectConfig_FindsConfigInSameDir(t *testing.T) {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
-	got := detectConfig(filePath, "typescript")
+	got, _ := DetectConfigAndParser(filePath, "typescript")
 	if got != configPath {
-		t.Errorf("detectConfig(%q, \"typescript\") = %q, want %q", filePath, got, configPath)
+		t.Errorf("DetectConfigAndParser(%q, \"typescript\") = %q, want %q", filePath, got, configPath)
 	}
 }
 
@@ -155,9 +155,9 @@ func TestDetectConfig_WalksUpParentDirs(t *testing.T) {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
-	got := detectConfig(filePath, "typescript")
+	got, _ := DetectConfigAndParser(filePath, "typescript")
 	if got != configPath {
-		t.Errorf("detectConfig(%q, \"typescript\") = %q, want %q", filePath, got, configPath)
+		t.Errorf("DetectConfigAndParser(%q, \"typescript\") = %q, want %q", filePath, got, configPath)
 	}
 }
 
@@ -169,9 +169,9 @@ func TestDetectConfig_ReturnsEmptyWhenNoConfig(t *testing.T) {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
-	got := detectConfig(filePath, "typescript")
+	got, _ := DetectConfigAndParser(filePath, "typescript")
 	if got != "" {
-		t.Errorf("detectConfig(%q, \"typescript\") = %q, want \"\"", filePath, got)
+		t.Errorf("DetectConfigAndParser(%q, \"typescript\") = %q, want \"\"", filePath, got)
 	}
 }
 
@@ -183,9 +183,9 @@ func TestDetectConfig_UnsupportedLanguageReturnsEmpty(t *testing.T) {
 		t.Fatalf("failed to write file: %v", err)
 	}
 
-	got := detectConfig(filePath, "rust")
+	got, _ := DetectConfigAndParser(filePath, "rust")
 	if got != "" {
-		t.Errorf("detectConfig(%q, \"rust\") = %q, want \"\"", filePath, got)
+		t.Errorf("DetectConfigAndParser(%q, \"rust\") = %q, want \"\"", filePath, got)
 	}
 }
 

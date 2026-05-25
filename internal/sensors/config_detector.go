@@ -78,11 +78,6 @@ func DetectConfigAndParser(filePath string, lang string) (string, ConfigParser) 
 	return "", nil
 }
 
-func detectConfig(filePath string, lang string) string {
-	anchor, _ := DetectConfigAndParser(filePath, lang)
-	return anchor
-}
-
 func findMaxConfigVal(content string, ext string, keys []string) (int, bool) {
 	for _, key := range keys {
 		vals := findAllConfigVals(content, key, ext)

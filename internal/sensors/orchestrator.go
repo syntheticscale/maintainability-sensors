@@ -447,10 +447,3 @@ func findConfigAndParsers(validPaths []string, lang string) (map[string]string, 
 	return configAnchors, toolByPath
 }
 
-func updateMetric(metric *int, valStr string) {
-	var val int
-	fmt.Sscanf(valStr, "%d", &val)
-	if val > *metric {
-		*metric = val
-	}
-}
