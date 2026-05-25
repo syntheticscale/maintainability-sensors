@@ -318,7 +318,7 @@ func checkWalkDirPath(path string, absTargetDir string) string {
 	if resolvedPath, err := filepath.EvalSymlinks(absPath); err == nil {
 		absPath = resolvedPath
 	}
-	if !strings.HasPrefix(absPath, absTargetDir) {
+	if absPath != absTargetDir && !strings.HasPrefix(absPath, absTargetDir+string(filepath.Separator)) {
 		return ""
 	}
 	return path

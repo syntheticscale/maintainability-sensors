@@ -1128,6 +1128,20 @@ func TestIsValidExtension(t *testing.T) {
 	}
 }
 
+// ─── checkWalkDirPath ───
+
+func TestCheckWalkDirPathPreventsSiblingEscape(t *testing.T) {
+	tmpDir := t.TempDir()
+	siblingDir := tmpDir + "-sibling"
+	os.MkdirAll(siblingDir, 0755)
+	defer os.RemoveAll(siblingDir)
+	absTargetDir, _ := filepath.Abs(tmpDir)
+	result := checkWalkDirPath(siblingDir, absTargetDir)
+	if result != "" {
+		t.Errorf("checkWalkDirPath should reject sibling directory %q against target %q", siblingDir, absTargetDir)
+	}
+}
+
 // ─── Helper: capture stdout/stderr ───
 
 func captureOutput(fn func()) string {
