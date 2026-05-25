@@ -54,7 +54,7 @@ type runCmd struct {
 }
 
 func (c *runCmd) Run() error {
-	executeRun(RunOptions{
+	return executeRun(RunOptions{
 		TargetPath:  c.Path,
 		JSONOutput:  c.Json,
 		GithubPR:    c.GithubPr,
@@ -62,7 +62,6 @@ func (c *runCmd) Run() error {
 		JSONOutFile: c.JsonOut,
 		HTMLOut:     c.HtmlOut,
 	})
-	return nil
 }
 
 type generateCmd struct {
@@ -72,8 +71,7 @@ type generateCmd struct {
 }
 
 func (c *generateCmd) Run() error {
-	executeGenerate(c.JsonIn, c.MarkdownOut, c.HtmlOut)
-	return nil
+	return executeGenerate(c.JsonIn, c.MarkdownOut, c.HtmlOut)
 }
 
 type bootstrapCmd struct {
@@ -82,8 +80,7 @@ type bootstrapCmd struct {
 }
 
 func (c *bootstrapCmd) Run() error {
-	executeBootstrap(c.Path, c.WithWarnPolicy)
-	return nil
+	return executeBootstrap(c.Path, c.WithWarnPolicy)
 }
 
 type CheckDiffCmd struct {
@@ -460,7 +457,7 @@ func printJSONResults(results []sensors.OrchestratorResult) {
 	data, err := json.MarshalIndent(results, "", "  ")
 	if err != nil {
 		logf(LogLevelError, "[ERROR] Failed to marshal JSON: %v\n", err)
-		os.Exit(1)
+		return
 	}
 	fmt.Println(string(data))
 }

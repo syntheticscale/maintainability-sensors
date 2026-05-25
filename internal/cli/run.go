@@ -18,34 +18,34 @@ type RunOptions struct {
 	HTMLOut     string
 }
 
-func executeRun(opts RunOptions) {
+func executeRun(opts RunOptions) error {
 	files, isDir, err := FindFiles(opts.TargetPath)
 	if err != nil {
 		logLn(LogLevelError, err)
-		os.Exit(1)
+		return fmt.Errorf("failed to find files: %v", err)
 	}
 
 	if isDir && len(files) == 0 {
-	logLn(LogLevelWarn, "No supported source files (TS/JS, Python, Go) found in target directory.")
-	return
+		logLn(LogLevelWarn, "No supported source files (TS/JS, Python, Go) found in target directory.")
+		return nil
 	}
 
 	results, err := ScanFiles(files, isDir)
 	if err != nil {
 		logf(LogLevelError, "[ERROR] %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("scan failed: %v", err)
 	}
 
 	if isDir && len(results) == 0 {
 		logLn(LogLevelWarn, "No supported source files (TS/JS, Python, Go) found in target directory.")
-		return
+		return nil
 	}
 
 	hasV := FormatResultsCLI(results, opts.JSONOutput, isDir)
 
 	postGitHubResults(results, opts.GithubPR)
 
-	saveReportsAndExit(results, opts, hasV)
+	return saveReportsAndExit(results, opts, hasV)
 }
 
 func ScanFiles(filePaths []string, isDir bool) ([]sensors.OrchestratorResult, error) {
@@ -100,7 +100,7 @@ func ScanFiles(filePaths []string, isDir bool) ([]sensors.OrchestratorResult, er
 	return allResults, nil
 }
 
-func saveReportsAndExit(results []sensors.OrchestratorResult, opts RunOptions, hasV bool) {
+func saveReportsAndExit(results []sensors.OrchestratorResult, opts RunOptions, hasV bool) error {
 	err := writeReports(results, ReportOptions{
 		MarkdownOut: opts.MarkdownOut,
 		JSONOut:     opts.JSONOutFile,
@@ -109,12 +109,14 @@ func saveReportsAndExit(results []sensors.OrchestratorResult, opts RunOptions, h
 	})
 	if err != nil {
 		logf(LogLevelError, "[ERROR] %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to save reports: %v", err)
 	}
 
 	if hasV {
-		os.Exit(1)
+		return fmt.Errorf("maintainability violations detected")
 	}
+
+	return nil
 }
 
 func postGitHubResults(results []sensors.OrchestratorResult, forcePR bool) {

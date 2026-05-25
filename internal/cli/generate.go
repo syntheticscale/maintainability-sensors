@@ -8,11 +8,11 @@ import (
 	"github.com/syntheticscale/maintainability-sensors/internal/sensors"
 )
 
-func executeGenerate(jsonIn string, markdownOut string, htmlOut string) {
+func executeGenerate(jsonIn string, markdownOut string, htmlOut string) error {
 	results, err := parseJSONScorecard(jsonIn)
 	if err != nil {
 		logf(LogLevelError, "[ERROR] %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to parse JSON scorecard: %v", err)
 	}
 
 	hasV := false
@@ -29,12 +29,14 @@ func executeGenerate(jsonIn string, markdownOut string, htmlOut string) {
 		ActionVerb:  "Generated",
 	}); err != nil {
 		logf(LogLevelError, "[ERROR] %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to generate reports: %v", err)
 	}
 
 	if hasV {
-		os.Exit(1)
+		return fmt.Errorf("maintainability violations detected")
 	}
+
+	return nil
 }
 
 func validateScorecardResults(results []sensors.OrchestratorResult) error {

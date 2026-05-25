@@ -720,11 +720,32 @@ func TestExecuteGenerate_ValidJSONNoOutput(t *testing.T) {
 	}
 
 	captured := captureOutput(func() {
-		executeGenerate(jsonPath, "", "")
+		// discard error; we check output below
+		_ = executeGenerate(jsonPath, "", "")
 	})
 
 	if strings.Contains(captured, "ERROR") {
 		t.Errorf("unexpected error output: %s", captured)
+	}
+}
+
+func TestExecuteGenerate_ValidJSONNoOutput_ReturnsNil(t *testing.T) {
+	tmpDir := t.TempDir()
+	jsonPath := filepath.Join(tmpDir, "input.json")
+
+	results := []sensors.OrchestratorResult{
+		orchestratedResult("/repo/test.go", 5, 30, 3, nil),
+	}
+	data, err := json.MarshalIndent(results, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal test data: %v", err)
+	}
+	if err := os.WriteFile(jsonPath, data, 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	if err := executeGenerate(jsonPath, "", ""); err != nil {
+		t.Errorf("expected nil error, got: %v", err)
 	}
 }
 
@@ -796,7 +817,7 @@ func TestExecuteGenerate_ValidJSONWithOutputs(t *testing.T) {
 	}
 
 	captured := captureOutput(func() {
-		executeGenerate(jsonPath, mdPath, htmlPath)
+		_ = executeGenerate(jsonPath, mdPath, htmlPath)
 	})
 
 	if strings.Contains(captured, "ERROR") {
