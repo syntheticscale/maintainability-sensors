@@ -206,11 +206,15 @@ func TestGenerateMarkdownScorecard(t *testing.T) {
 		t.Error("scorecard missing exception details")
 	}
 
-	// Verify warnings are printed
+	// Verify warnings are printed (ArgumentCount 5 > baseline 4)
 	if !strings.Contains(scorecard, "Actionable Refactoring Prompts") {
 		t.Error("scorecard missing self-correction prompts header")
 	}
-	if !strings.Contains(scorecard, "Complexity is 12") {
-		t.Error("scorecard missing complexity violation warning")
+	if !strings.Contains(scorecard, "Parameter count is 5") {
+		t.Error("scorecard missing argument count violation warning")
+	}
+	// Complexity 12 < relaxed limit 15, so no complexity violation should appear
+	if strings.Contains(scorecard, "Complexity is 12") {
+		t.Error("complexity violation should not appear when below relaxed limit")
 	}
 }

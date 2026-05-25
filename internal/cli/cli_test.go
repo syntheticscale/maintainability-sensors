@@ -948,6 +948,139 @@ func TestPrintSelfCorrectionGuidance_AllViolations(t *testing.T) {
 	}
 }
 
+func TestGetFilePromptsIncludesAllRules(t *testing.T) {
+	res := sensors.OrchestratorResult{
+		ToolingDetected: true,
+		Metrics: sensors.MaintainabilityMetrics{
+			Complexity:          15,
+			CognitiveComplexity: 15,
+			FunctionLength:      60,
+			ArgumentCount:       6,
+			MaxCaseLength:       15,
+		},
+	}
+	prompts := getFilePrompts(res)
+	if len(prompts) != 5 {
+		t.Errorf("expected 5 prompts, got %d: %v", len(prompts), prompts)
+	}
+	foundCogCmplx := false
+	foundCase := false
+	for _, p := range prompts {
+		if strings.Contains(p, "Cognitive") {
+			foundCogCmplx = true
+		}
+		if strings.Contains(p, "Case block") {
+			foundCase = true
+		}
+	}
+	if !foundCogCmplx {
+		t.Error("CognitiveComplexity prompt missing from getFilePrompts")
+	}
+	if !foundCase {
+		t.Error("MaxCaseLength prompt missing from getFilePrompts")
+	}
+}
+
+func TestBuildPRCommentBodyIncludesAllRules(t *testing.T) {
+	res := sensors.OrchestratorResult{
+		ToolingDetected: true,
+		Metrics: sensors.MaintainabilityMetrics{
+			CognitiveComplexity: 15,
+			MaxCaseLength:       15,
+		},
+	}
+	body := buildPRCommentBody(res)
+	if body == "" {
+		t.Error("buildPRCommentBody returned empty string for CognitiveComplexity + MaxCaseLength violations")
+	}
+	if !strings.Contains(body, "Cognitive") {
+		t.Error("CognitiveComplexity missing from PR comment body")
+	}
+	if !strings.Contains(body, "Case block") {
+		t.Error("MaxCaseLength missing from PR comment body")
+	}
+}
+
+func TestGetEffectiveLimitsWithExceptions(t *testing.T) {
+	res := sensors.OrchestratorResult{
+		Exceptions: []sensors.RelaxedLimit{
+			{RuleName: sensors.RuleCognitiveComplexity, ConfiguredVal: 20, BaselineVal: sensors.BaselineCognitiveComplexity},
+			{RuleName: sensors.RuleCaseBlockLength, ConfiguredVal: 30, BaselineVal: sensors.BaselineCaseLength},
+		},
+	}
+	limits := getEffectiveLimits(res)
+	if limits.CognitiveComplexity != 20 {
+		t.Errorf("expected CognitiveComplexity limit 20, got %d", limits.CognitiveComplexity)
+	}
+	if limits.MaxCaseLength != 30 {
+		t.Errorf("expected MaxCaseLength limit 30, got %d", limits.MaxCaseLength)
+	}
+	if limits.Complexity != sensors.BaselineComplexity {
+		t.Errorf("expected default Complexity limit %d, got %d", sensors.BaselineComplexity, limits.Complexity)
+	}
+}
+
+func TestGetHTMLFilePromptsCountsAllViolations(t *testing.T) {
+	res := sensors.OrchestratorResult{
+		ToolingDetected: true,
+		Metrics: sensors.MaintainabilityMetrics{
+			Complexity:          15,
+			CognitiveComplexity: 15,
+			FunctionLength:      60,
+			ArgumentCount:       6,
+			MaxCaseLength:       15,
+		},
+	}
+	data := &ReportData{}
+	prompts := getHTMLFilePrompts(data, res)
+	if len(prompts) != 5 {
+		t.Errorf("expected 5 HTML prompts, got %d", len(prompts))
+	}
+	if data.TotalViolations != 5 {
+		t.Errorf("expected TotalViolations=5, got %d", data.TotalViolations)
+	}
+}
+
+func TestGetHTMLFilePromptsOnlyCogAndCase(t *testing.T) {
+	res := sensors.OrchestratorResult{
+		ToolingDetected: true,
+		Metrics: sensors.MaintainabilityMetrics{
+			CognitiveComplexity: 15,
+			MaxCaseLength:       15,
+		},
+	}
+	data := &ReportData{}
+	prompts := getHTMLFilePrompts(data, res)
+	if len(prompts) != 2 {
+		t.Errorf("expected 2 HTML prompts for Cog+Case, got %d", len(prompts))
+	}
+	if data.TotalViolations != 2 {
+		t.Errorf("expected TotalViolations=2, got %d", data.TotalViolations)
+	}
+}
+
+func TestHasViolationsDetectsCogAndCase(t *testing.T) {
+	cogRes := sensors.OrchestratorResult{
+		ToolingDetected: true,
+		Metrics: sensors.MaintainabilityMetrics{
+			CognitiveComplexity: 15,
+		},
+	}
+	if !hasViolations(cogRes) {
+		t.Error("hasViolations should detect CognitiveComplexity violation")
+	}
+
+	caseRes := sensors.OrchestratorResult{
+		ToolingDetected: true,
+		Metrics: sensors.MaintainabilityMetrics{
+			MaxCaseLength: 15,
+		},
+	}
+	if !hasViolations(caseRes) {
+		t.Error("hasViolations should detect MaxCaseLength violation")
+	}
+}
+
 // ─── isValidExtension ───
 
 func TestIsValidExtension(t *testing.T) {

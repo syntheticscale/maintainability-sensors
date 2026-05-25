@@ -31,16 +31,20 @@ type ReportData struct {
 
 // FileRow represents a single row in the scorecard table.
 type FileRow struct {
-	BaseName       string
-	FilePath       string
-	Language       string
-	IsOrchestrated bool
-	Complexity     int
-	FunctionLength int
-	ArgumentCount  int
-	CompClass      string
-	LinesClass     string
-	ParamsClass    string
+	BaseName            string
+	FilePath            string
+	Language            string
+	IsOrchestrated      bool
+	Complexity          int
+	CognitiveComplexity int
+	FunctionLength      int
+	ArgumentCount       int
+	MaxCaseLength       int
+	CompClass           string
+	CogClass            string
+	LinesClass          string
+	ParamsClass         string
+	CaseClass           string
 }
 
 // FilePromptData holds prompts for a file with violations.
@@ -98,19 +102,23 @@ func processOrchestratedResult(data *ReportData, res sensors.OrchestratorResult)
 	fileBase := filepath.Base(res.FilePath)
 	filePrompts := getHTMLFilePrompts(data, res)
 
-	compClass, linesClass, paramsClass := getCSSClasses(res)
+	compClass, cogClass, linesClass, paramsClass, caseClass := getCSSClasses(res)
 
 	data.Rows = append(data.Rows, FileRow{
-		BaseName:       fileBase,
-		FilePath:       res.FilePath,
-		Language:       strings.ToUpper(res.Language),
-		IsOrchestrated: true,
-		Complexity:     res.Metrics.Complexity,
-		FunctionLength: res.Metrics.FunctionLength,
-		ArgumentCount:  res.Metrics.ArgumentCount,
-		CompClass:      compClass,
-		LinesClass:     linesClass,
-		ParamsClass:    paramsClass,
+		BaseName:            fileBase,
+		FilePath:            res.FilePath,
+		Language:            strings.ToUpper(res.Language),
+		IsOrchestrated:      true,
+		Complexity:          res.Metrics.Complexity,
+		CognitiveComplexity: res.Metrics.CognitiveComplexity,
+		FunctionLength:      res.Metrics.FunctionLength,
+		ArgumentCount:       res.Metrics.ArgumentCount,
+		MaxCaseLength:       res.Metrics.MaxCaseLength,
+		CompClass:           compClass,
+		CogClass:            cogClass,
+		LinesClass:          linesClass,
+		ParamsClass:         paramsClass,
+		CaseClass:           caseClass,
 	})
 
 	if len(filePrompts) > 0 {
@@ -130,38 +138,52 @@ func processOrchestratedResult(data *ReportData, res sensors.OrchestratorResult)
 }
 
 func getHTMLFilePrompts(data *ReportData, res sensors.OrchestratorResult) []string {
+	limits := getEffectiveLimits(res)
 	var filePrompts []string
-	if res.Metrics.Complexity > sensors.BaselineComplexity {
+	if res.Metrics.Complexity > limits.Complexity {
 		data.TotalViolations++
-		filePrompts = append(filePrompts, fmt.Sprintf("Complexity is %d (Max %d limit). Nudge agent to extract nested conditionals into separate helper functions.", res.Metrics.Complexity, sensors.BaselineComplexity))
+		filePrompts = append(filePrompts, fmt.Sprintf("Complexity is %d (Max %d limit). Nudge agent to extract nested conditionals into separate helper functions.", res.Metrics.Complexity, limits.Complexity))
 	}
-	if res.Metrics.FunctionLength > sensors.BaselineFunctionLength {
-		if len(filePrompts) == 0 {
-			data.TotalViolations++
-		}
-		filePrompts = append(filePrompts, fmt.Sprintf("Function lines is %d (Max %d limit). Nudge agent to modularize this block into separate functional components.", res.Metrics.FunctionLength, sensors.BaselineFunctionLength))
+	if res.Metrics.CognitiveComplexity > limits.CognitiveComplexity {
+		data.TotalViolations++
+		filePrompts = append(filePrompts, fmt.Sprintf("Cognitive Complexity is %d (Max %d limit). Nudge agent to flatten deeply nested control flow and return early.", res.Metrics.CognitiveComplexity, limits.CognitiveComplexity))
 	}
-	if res.Metrics.ArgumentCount > sensors.BaselineArgumentCount {
-		if len(filePrompts) == 0 {
-			data.TotalViolations++
-		}
-		filePrompts = append(filePrompts, fmt.Sprintf("Parameter count is %d (Max %d limit). Nudge agent to bundle parameters into a structured configuration object.", res.Metrics.ArgumentCount, sensors.BaselineArgumentCount))
+	if res.Metrics.FunctionLength > limits.FunctionLength {
+		data.TotalViolations++
+		filePrompts = append(filePrompts, fmt.Sprintf("Function lines is %d (Max %d limit). Nudge agent to modularize this block into separate functional components.", res.Metrics.FunctionLength, limits.FunctionLength))
+	}
+	if res.Metrics.ArgumentCount > limits.ArgumentCount {
+		data.TotalViolations++
+		filePrompts = append(filePrompts, fmt.Sprintf("Parameter count is %d (Max %d limit). Nudge agent to bundle parameters into a structured configuration object.", res.Metrics.ArgumentCount, limits.ArgumentCount))
+	}
+	if res.Metrics.MaxCaseLength > limits.MaxCaseLength {
+		data.TotalViolations++
+		filePrompts = append(filePrompts, fmt.Sprintf("Case block lines is %d (Max %d limit). Nudge agent to extract the case logic into a well-named method.", res.Metrics.MaxCaseLength, limits.MaxCaseLength))
 	}
 	return filePrompts
 }
 
-func getCSSClasses(res sensors.OrchestratorResult) (string, string, string) {
+func getCSSClasses(res sensors.OrchestratorResult) (string, string, string, string, string) {
+	limits := getEffectiveLimits(res)
 	compClass := ""
-	if res.Metrics.Complexity > sensors.BaselineComplexity {
+	if res.Metrics.Complexity > limits.Complexity {
 		compClass = "text-error font-bold"
 	}
+	cogClass := ""
+	if res.Metrics.CognitiveComplexity > limits.CognitiveComplexity {
+		cogClass = "text-error font-bold"
+	}
 	linesClass := ""
-	if res.Metrics.FunctionLength > sensors.BaselineFunctionLength {
+	if res.Metrics.FunctionLength > limits.FunctionLength {
 		linesClass = "text-error font-bold"
 	}
 	paramsClass := ""
-	if res.Metrics.ArgumentCount > sensors.BaselineArgumentCount {
+	if res.Metrics.ArgumentCount > limits.ArgumentCount {
 		paramsClass = "text-error font-bold"
 	}
-	return compClass, linesClass, paramsClass
+	caseClass := ""
+	if res.Metrics.MaxCaseLength > limits.MaxCaseLength {
+		caseClass = "text-error font-bold"
+	}
+	return compClass, cogClass, linesClass, paramsClass, caseClass
 }

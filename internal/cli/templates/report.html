@@ -355,8 +355,10 @@
 							<th>Scanned File</th>
 							<th>Language</th>
 							<th>Complexity</th>
+							<th>Cog Complx</th>
 							<th>Func Lines</th>
 							<th>Max Params</th>
+							<th>Max Case</th>
 							<th>Sensor Status</th>
 						</tr>
 					</thead>
@@ -367,10 +369,14 @@
 							<td><span class="badge badge-lang">{{.Language}}</span></td>
 							{{if .IsOrchestrated}}
 							<td class="{{.CompClass}}">{{.Complexity}}</td>
+							<td class="{{.CogClass}}">{{.CognitiveComplexity}}</td>
 							<td class="{{.LinesClass}}">{{.FunctionLength}}</td>
 							<td class="{{.ParamsClass}}">{{.ArgumentCount}}</td>
+							<td class="{{.CaseClass}}">{{.MaxCaseLength}}</td>
 							<td><span class="badge badge-success">ORCHESTRATED (L1+)</span></td>
 							{{else}}
+							<td class="text-muted">-</td>
+							<td class="text-muted">-</td>
 							<td class="text-muted">-</td>
 							<td class="text-muted">-</td>
 							<td class="text-muted">-</td>

@@ -32,18 +32,18 @@ func GenerateMarkdownScorecard(results []sensors.OrchestratorResult) string {
 func generateSummaryTable(results []sensors.OrchestratorResult) string {
 	var sb strings.Builder
 	sb.WriteString("## 📊 Scan Summary\n\n")
-	sb.WriteString("| File | Language | Max Complexity | Max Func Lines | Max Params | Status |\n")
-	sb.WriteString("| :--- | :--- | :---: | :---: | :---: | :---: |\n")
+	sb.WriteString("| File | Language | Max Complexity | Max Cog Complx | Max Func Lines | Max Params | Max Case Lines | Status |\n")
+	sb.WriteString("| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |\n")
 
 	for _, res := range results {
 		fileBase := filepath.Base(res.FilePath)
 		status := "ORCHESTRATED ✅"
 		if !res.ToolingDetected {
 			status = "BLIND ⚠️"
-			sb.WriteString(fmt.Sprintf("| `%s` | %s | - | - | - | %s |\n", fileBase, strings.ToUpper(res.Language), status))
+			sb.WriteString(fmt.Sprintf("| `%s` | %s | - | - | - | - | - | %s |\n", fileBase, strings.ToUpper(res.Language), status))
 		} else {
-			sb.WriteString(fmt.Sprintf("| `%s` | %s | %d | %d | %d | %s |\n",
-				fileBase, strings.ToUpper(res.Language), res.Metrics.Complexity, res.Metrics.FunctionLength, res.Metrics.ArgumentCount, status))
+			sb.WriteString(fmt.Sprintf("| `%s` | %s | %d | %d | %d | %d | %d | %s |\n",
+				fileBase, strings.ToUpper(res.Language), res.Metrics.Complexity, res.Metrics.CognitiveComplexity, res.Metrics.FunctionLength, res.Metrics.ArgumentCount, res.Metrics.MaxCaseLength, status))
 		}
 	}
 	return sb.String()
@@ -78,16 +78,56 @@ func generatePromptsSection(results []sensors.OrchestratorResult) string {
 	return sb.String()
 }
 
+type EffectiveLimits struct {
+	Complexity          int
+	CognitiveComplexity int
+	FunctionLength      int
+	ArgumentCount       int
+	MaxCaseLength       int
+}
+
+func getEffectiveLimits(res sensors.OrchestratorResult) EffectiveLimits {
+	limits := EffectiveLimits{
+		Complexity:          sensors.BaselineComplexity,
+		CognitiveComplexity: sensors.BaselineCognitiveComplexity,
+		FunctionLength:      sensors.BaselineFunctionLength,
+		ArgumentCount:       sensors.BaselineArgumentCount,
+		MaxCaseLength:       sensors.BaselineCaseLength,
+	}
+	for _, exc := range res.Exceptions {
+		switch exc.RuleName {
+		case sensors.RuleComplexity:
+			limits.Complexity = exc.ConfiguredVal
+		case sensors.RuleCognitiveComplexity:
+			limits.CognitiveComplexity = exc.ConfiguredVal
+		case sensors.RuleFunctionLength:
+			limits.FunctionLength = exc.ConfiguredVal
+		case sensors.RuleArgumentCount:
+			limits.ArgumentCount = exc.ConfiguredVal
+		case sensors.RuleCaseBlockLength:
+			limits.MaxCaseLength = exc.ConfiguredVal
+		}
+	}
+	return limits
+}
+
 func getFilePrompts(res sensors.OrchestratorResult) []string {
+	limits := getEffectiveLimits(res)
 	var prompts []string
-	if res.Metrics.Complexity > sensors.BaselineComplexity {
-		prompts = append(prompts, fmt.Sprintf("  * Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, sensors.BaselineComplexity))
+	if res.Metrics.Complexity > limits.Complexity {
+		prompts = append(prompts, fmt.Sprintf("  * Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, limits.Complexity))
 	}
-	if res.Metrics.FunctionLength > sensors.BaselineFunctionLength {
-		prompts = append(prompts, fmt.Sprintf("  * Function lines is %d (Max %d). Modularize this block into separate functional components.", res.Metrics.FunctionLength, sensors.BaselineFunctionLength))
+	if res.Metrics.CognitiveComplexity > limits.CognitiveComplexity {
+		prompts = append(prompts, fmt.Sprintf("  * Cognitive Complexity is %d (Max %d). Flatten deeply nested control flow and return early.", res.Metrics.CognitiveComplexity, limits.CognitiveComplexity))
 	}
-	if res.Metrics.ArgumentCount > sensors.BaselineArgumentCount {
-		prompts = append(prompts, fmt.Sprintf("  * Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, sensors.BaselineArgumentCount))
+	if res.Metrics.FunctionLength > limits.FunctionLength {
+		prompts = append(prompts, fmt.Sprintf("  * Function lines is %d (Max %d). Modularize this block into separate functional components.", res.Metrics.FunctionLength, limits.FunctionLength))
+	}
+	if res.Metrics.ArgumentCount > limits.ArgumentCount {
+		prompts = append(prompts, fmt.Sprintf("  * Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, limits.ArgumentCount))
+	}
+	if res.Metrics.MaxCaseLength > limits.MaxCaseLength {
+		prompts = append(prompts, fmt.Sprintf("  * Case block lines is %d (Max %d). Extract the case logic into a well-named method.", res.Metrics.MaxCaseLength, limits.MaxCaseLength))
 	}
 	return prompts
 }
@@ -211,41 +251,27 @@ func getRelativePath(absPath string) string {
 }
 
 func buildPRCommentBody(res sensors.OrchestratorResult) string {
-	limitComplexity, limitLength, limitArgs := getLimits(res)
-
+	limits := getEffectiveLimits(res)
 	var filePrompts []string
-	if res.Metrics.Complexity > limitComplexity {
-		filePrompts = append(filePrompts, fmt.Sprintf("Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, limitComplexity))
+	if res.Metrics.Complexity > limits.Complexity {
+		filePrompts = append(filePrompts, fmt.Sprintf("Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.", res.Metrics.Complexity, limits.Complexity))
 	}
-	if res.Metrics.FunctionLength > limitLength {
-		filePrompts = append(filePrompts, fmt.Sprintf("Function lines is %d (Max %d). Modularize this block into separate functional components.", res.Metrics.FunctionLength, limitLength))
+	if res.Metrics.CognitiveComplexity > limits.CognitiveComplexity {
+		filePrompts = append(filePrompts, fmt.Sprintf("Cognitive Complexity is %d (Max %d). Flatten deeply nested control flow and return early.", res.Metrics.CognitiveComplexity, limits.CognitiveComplexity))
 	}
-	if res.Metrics.ArgumentCount > limitArgs {
-		filePrompts = append(filePrompts, fmt.Sprintf("Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, limitArgs))
+	if res.Metrics.FunctionLength > limits.FunctionLength {
+		filePrompts = append(filePrompts, fmt.Sprintf("Function lines is %d (Max %d). Modularize this block into separate functional components.", res.Metrics.FunctionLength, limits.FunctionLength))
 	}
-
+	if res.Metrics.ArgumentCount > limits.ArgumentCount {
+		filePrompts = append(filePrompts, fmt.Sprintf("Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.", res.Metrics.ArgumentCount, limits.ArgumentCount))
+	}
+	if res.Metrics.MaxCaseLength > limits.MaxCaseLength {
+		filePrompts = append(filePrompts, fmt.Sprintf("Case block lines is %d (Max %d). Extract the case logic into a well-named method.", res.Metrics.MaxCaseLength, limits.MaxCaseLength))
+	}
 	if len(filePrompts) > 0 {
 		return strings.Join(filePrompts, "\n\n")
 	}
 	return ""
-}
-
-func getLimits(res sensors.OrchestratorResult) (int, int, int) {
-	limitComplexity := sensors.BaselineComplexity
-	limitLength := sensors.BaselineFunctionLength
-	limitArgs := sensors.BaselineArgumentCount
-
-	for _, exc := range res.Exceptions {
-		switch exc.RuleName {
-		case sensors.RuleComplexity:
-			limitComplexity = exc.ConfiguredVal
-		case sensors.RuleFunctionLength:
-			limitLength = exc.ConfiguredVal
-		case sensors.RuleArgumentCount:
-			limitArgs = exc.ConfiguredVal
-		}
-	}
-	return limitComplexity, limitLength, limitArgs
 }
 
 func sendGitHubReviewRequest(token, repo, prNumber string, comments []prComment) error {
