@@ -948,6 +948,32 @@ func TestPrintSelfCorrectionGuidance_AllViolations(t *testing.T) {
 	}
 }
 
+// ─── isValidExtension ───
+
+func TestIsValidExtension(t *testing.T) {
+	tests := []struct {
+		ext      string
+		expected bool
+	}{
+		{".ts", true},
+		{".tsx", true},
+		{".js", true},
+		{".jsx", true},
+		{".py", true},
+		{".go", true},
+		{".rb", true},
+		{".cs", true},
+		{".java", true},
+		{".txt", false},
+		{".md", false},
+	}
+	for _, tt := range tests {
+		if got := isValidExtension(tt.ext); got != tt.expected {
+			t.Errorf("isValidExtension(%q) = %v, want %v", tt.ext, got, tt.expected)
+		}
+	}
+}
+
 // ─── Helper: capture stdout/stderr ───
 
 func captureOutput(fn func()) string {

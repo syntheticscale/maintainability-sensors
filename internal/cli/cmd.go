@@ -307,7 +307,7 @@ func isSkippedDir(dirName string) bool {
 
 func isValidExtension(ext string) bool {
 	switch ext {
-	case ".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rb", ".cs":
+	case ".ts", ".tsx", ".js", ".jsx", ".py", ".go", ".rb", ".cs", ".java":
 		return true
 	}
 	return false
