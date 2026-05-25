@@ -1,6 +1,7 @@
 package sensors
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -8,6 +9,8 @@ import (
 	"strconv"
 
 	"github.com/pelletier/go-toml/v2"
+	sitter "github.com/smacker/go-tree-sitter"
+	"github.com/smacker/go-tree-sitter/typescript/typescript"
 	"gopkg.in/yaml.v3"
 )
 
@@ -74,21 +77,66 @@ func findAllConfigVals(content string, key string, ext string) []int {
 func findAllConfigValsJS(content string, key string) []int {
 	var vals []int
 
-	safeKey := regexp.QuoteMeta(key)
-	pattern := fmt.Sprintf(`(?:["']%s["']|\b%s\b)\s*:\s*(?:\[[^\]]*?\{\s*[^}]*?["']?(?:max|Max)["']?\s*:\s*(\d+)[^}]*?\}[^\]]*?\]|\[[^\]]*?,\s*(\d+)[^\]]*?\]|\{\s*[^}]*?["']?(?:max|Max)["']?\s*:\s*(\d+)[^}]*?\}|(\d+))`, safeKey, safeKey)
-	re := regexp.MustCompile(pattern)
+	parser := sitter.NewParser()
+	parser.SetLanguage(typescript.GetLanguage())
 
-	matches := re.FindAllStringSubmatch(content, -1)
-	for _, match := range matches {
-		for i := 1; i < len(match); i++ {
-			if match[i] != "" {
-				if val, err := strconv.Atoi(match[i]); err == nil {
-					vals = append(vals, val)
-					break
+	tree, _ := parser.ParseCtx(context.Background(), nil, []byte(content))
+	if tree == nil {
+		return vals
+	}
+	rootNode := tree.RootNode()
+
+	var extractVal func(*sitter.Node) []int
+	extractVal = func(n *sitter.Node) []int {
+		var extracted []int
+		switch n.Type() {
+		case "number":
+			if val, err := strconv.Atoi(string(content[n.StartByte():n.EndByte()])); err == nil {
+				extracted = append(extracted, val)
+			}
+		case "array":
+			for i := 0; i < int(n.NamedChildCount()); i++ {
+				extracted = append(extracted, extractVal(n.NamedChild(i))...)
+			}
+		case "object":
+			for i := 0; i < int(n.NamedChildCount()); i++ {
+				child := n.NamedChild(i)
+				if child.Type() == "pair" {
+					kNode := child.ChildByFieldName("key")
+					if kNode != nil {
+						kStr := string(content[kNode.StartByte():kNode.EndByte()])
+						if kStr == "max" || kStr == "\"max\"" || kStr == "'max'" || kStr == "Max" || kStr == "\"Max\"" || kStr == "'Max'" {
+							vNode := child.ChildByFieldName("value")
+							if vNode != nil {
+								extracted = append(extracted, extractVal(vNode)...)
+							}
+						}
+					}
 				}
 			}
 		}
+		return extracted
 	}
+
+	var walk func(*sitter.Node)
+	walk = func(n *sitter.Node) {
+		if n.Type() == "pair" {
+			kNode := n.ChildByFieldName("key")
+			if kNode != nil {
+				kStr := string(content[kNode.StartByte():kNode.EndByte()])
+				if kStr == key || kStr == "\""+key+"\"" || kStr == "'"+key+"'" {
+					vNode := n.ChildByFieldName("value")
+					if vNode != nil {
+						vals = append(vals, extractVal(vNode)...)
+					}
+				}
+			}
+		}
+		for i := 0; i < int(n.NamedChildCount()); i++ {
+			walk(n.NamedChild(i))
+		}
+	}
+	walk(rootNode)
 
 	sort.Ints(vals)
 	return vals

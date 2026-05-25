@@ -338,7 +338,7 @@ func TestFindAllConfigVals_FlatConfig(t *testing.T) {
 		},
 		{
 			name:     "JS format multiple occurrences",
-			content:  `"complexity": ["error", 10] and later complexity: 30`,
+			content:  `module.exports = { rules: { "complexity": ["error", 10] }, overrides: [{ rules: { complexity: 30 } }] };`,
 			key:      "complexity",
 			ext:      ".js",
 			expected: []int{10, 30},
@@ -360,6 +360,8 @@ func TestFindAllConfigVals_FlatConfig(t *testing.T) {
 		{
 			name: "JS format with multiline array and object",
 			content: `
+module.exports = {
+	rules: {
 			"max-lines-per-function": [
 				"error", 
 				{ 
@@ -367,7 +369,9 @@ func TestFindAllConfigVals_FlatConfig(t *testing.T) {
 					"skipBlankLines": true,
 					"skipComments": true
 				}
-			]`,
+			]
+	}
+}`,
 			key:      "max-lines-per-function",
 			ext:      ".js",
 			expected: []int{60},

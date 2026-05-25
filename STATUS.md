@@ -171,14 +171,7 @@ maintainability-sensors/
 Priority-ordered remaining work:
 
 1.  **Item 4: Harden `internal/sensors` Test Coverage** — Add biome_plugin, ruff_plugin, standardrb_plugin tests; FindFiles, processViolationsMap tests.
-2.  **Item 17: Brittle JS config parsing** — Replace `.eslintrc.js` regex with AST-based parsing.
-3.  **Item 18: Naive architecture layer matching** — Replace `strings.Contains` with proper path segment matching.
-4.  **Item 19: CGO dependency** — Document or vendor pre-built C libs for cross-compilation.
-
-**Pre-commit hook note:** `git commit` currently requires `--no-verify` because the codebase has pre-existing `CognitiveComplexity` and `CaseBlockLength` violations.
-dater.go`.
-4.  **Item 17: Brittle JS config parsing** — Replace `.eslintrc.js` regex with AST-based parsing.
-5.  **Item 18: Naive architecture layer matching** — Replace `strings.Contains` with proper path segment matching.
-6.  **Item 19: CGO dependency** — Document or vendor pre-built C libs for cross-compilation.
+2.  **Item 18: Naive architecture layer matching** — Replace `strings.Contains` with proper path segment matching.
+3.  **Item 19: CGO dependency** — Document or vendor pre-built C libs for cross-compilation.
 
 **Pre-commit hook note:** `git commit` currently requires `--no-verify` because the codebase has pre-existing `CognitiveComplexity` and `CaseBlockLength` violations.
