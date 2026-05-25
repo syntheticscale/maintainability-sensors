@@ -1,7 +1,7 @@
 # Project Status
 
 **Last Updated:** 2026-05-25
-**Branch:** `hardening-sprint-final`
+**Branch:** `main`
 **State:** ✅ Stable — Sprint 1 + Sprint 2 Complete
 
 > See `docs/RADICAL_REVIEW.md` for the full audit.

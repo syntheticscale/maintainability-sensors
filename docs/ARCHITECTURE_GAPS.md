@@ -6,10 +6,10 @@ This document tracks the architectural flaws and incorrect trade-offs identified
 - **The Flaw:** The tool buffered the *entire* output stream of orchestrated linters (ESLint, PyLint) into memory using `CombinedOutput()` and then parsed it directly via `json.Unmarshal`. For large enterprise monorepos, this could easily cause an Out-of-Memory (OOM) crash.
 - **The Fix:** Streamed `stdout` into an `io.Reader` and parsed using `json.NewDecoder().Decode()`.
 
-## 2. Regex Parsing of English Linter Output (`sensors/orchestrator.go`)
+## 2. Regex Parsing of English Linter Output (`sensors/orchestrator.go`) — ⚠️ Partially Addressed
 - **The Flaw:** To extract metrics, the orchestrator runs regex against the *English text* of the linter warnings (e.g., `regexp.MustCompile("complexity of (\\d+)")`). If maintainers change their error string formatting, the tool breaks silently.
 - **The Worst Offense:** For **Biome**, the code hardcodes a dummy value of `2` for violations. This completely sacrifices accuracy.
-- **The Fix:** Parse the structured JSON output properties (or equivalent error codes/data fields) instead of relying on regex against message strings.
+- **Current State:** Magic numbers (`100` endLine offset, `2*1024*1024` file size limit) extracted into named constants. Biome dummy value and regex-based extraction remain. Structured JSON output parsing (where available) is the long-term fix.
 
 ## 3. [RESOLVED] Inaccurate Go AST Complexity Measurement (`sensors/go_ast.go`)
 - **The Flaw:** The native Go AST parser used `ast.Inspect` to traverse all nodes recursively indefinitely. If a function contained a nested closure (`func() { ... }`), the complexity of the inner closure was added directly to the outer parent function's score.
