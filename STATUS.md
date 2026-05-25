@@ -110,9 +110,25 @@ maintainability-sensors/
 
 ---
 
+## Next Steps (Sprint 2)
+
+Before starting Sprint 2, merge `hardening-sprint-final` into `main`:
+
+```bash
+git checkout main && git merge hardening-sprint-final
+git branch -d hardening-sprint  # delete broken branch
+git worktree prune              # clean up stale worktrees
+```
+
+Then tackle items 6-10 in priority order. Each is independently committable.
+
+**Pre-commit hook note:** `git commit` currently requires `--no-verify` because the codebase has pre-existing `CognitiveComplexity` and `CaseBlockLength` violations. These will clear progressively as items 6-8 are resolved.
+
+---
+
 ## Known Issues Not Yet Addressed
 
-These are historical items from prior audits that have not been assigned to the sprint above.
+These are historical items from prior audits that have not been assigned to a sprint.
 
 *   **CGO Dependency:** `go-tree-sitter` broke the "Minimal External Dependencies" constraint. Cross-compilation now requires a C compiler. Consider vendoring pre-built C libs or documenting this clearly.
 *   **Brittle Parsing:** `internal/sensors/config_parsers.go` uses massive, fragile regular expressions to parse JavaScript (`.eslintrc.js`) configuration files.
