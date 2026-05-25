@@ -21,13 +21,13 @@ type RunOptions struct {
 func executeRun(opts RunOptions) {
 	files, isDir, err := FindFiles(opts.TargetPath)
 	if err != nil {
-		logStderrLn(err)
+		logLn(LogLevelError, err)
 		os.Exit(1)
 	}
 
 	if isDir && len(files) == 0 {
-		logStderrLn("No supported source files (TS/JS, Python, Go) found in target directory.")
-		return
+	logLn(LogLevelWarn, "No supported source files (TS/JS, Python, Go) found in target directory.")
+	return
 	}
 
 	results, err := ScanFiles(files, isDir)
@@ -37,7 +37,7 @@ func executeRun(opts RunOptions) {
 	}
 
 	if isDir && len(results) == 0 {
-		logStderrLn("No supported source files (TS/JS, Python, Go) found in target directory.")
+		logLn(LogLevelWarn, "No supported source files (TS/JS, Python, Go) found in target directory.")
 		return
 	}
 
@@ -127,11 +127,11 @@ func postGitHubResults(results []sensors.OrchestratorResult, forcePR bool) {
 
 	isCI_PR := os.Getenv("GITHUB_TOKEN") != "" && (os.Getenv("GITHUB_EVENT_PATH") != "" || os.Getenv("GITHUB_REF") != "")
 	if forcePR || isCI_PR {
-		logStderrLn("Posting inline review to GitHub PR...")
+		logLn(LogLevelInfo, "Posting inline review to GitHub PR...")
 		if err := PostGitHubReview(results); err != nil {
 			fmt.Fprintf(os.Stderr, "[ERROR] Failed to post GitHub inline review: %v\n", err)
 		} else {
-			logStderrLn("Successfully posted inline review to GitHub PR!")
+			logLn(LogLevelInfo, "Successfully posted inline review to GitHub PR!")
 		}
 	}
 }

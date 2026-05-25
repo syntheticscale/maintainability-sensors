@@ -21,19 +21,25 @@ var cli struct {
 	Lsp       lspCmd       `cmd:"" help:"Start the Language Server Protocol (LSP) wrapper."`
 }
 
-func logStderr(format string, a ...interface{}) {
-	if cli.Quiet && !strings.Contains(format, "[ERROR]") && !strings.Contains(format, "[WARNING]") && !strings.Contains(format, "REFACTORING PROMPT") && !strings.Contains(format, "BLIND") {
+type LogLevel int
+
+const (
+	LogLevelDebug LogLevel = iota
+	LogLevelInfo
+	LogLevelWarn
+	LogLevelError
+)
+
+func logf(level LogLevel, format string, a ...interface{}) {
+	if cli.Quiet && level < LogLevelWarn {
 		return
 	}
 	fmt.Fprintf(os.Stderr, format, a...)
 }
 
-func logStderrLn(a ...interface{}) {
-	if cli.Quiet {
-		str := fmt.Sprint(a...)
-		if !strings.Contains(str, "[ERROR]") && !strings.Contains(str, "[WARNING]") && !strings.Contains(str, "REFACTORING PROMPT") && !strings.Contains(str, "BLIND") {
-			return
-		}
+func logLn(level LogLevel, a ...interface{}) {
+	if cli.Quiet && level < LogLevelWarn {
+		return
 	}
 	fmt.Fprintln(os.Stderr, a...)
 }
@@ -227,7 +233,7 @@ func (c *CheckDiffCmd) Run() error {
 		return fmt.Errorf("Delta violations found")
 	}
 
-	logStderrLn("Delta clean.")
+	logLn(LogLevelInfo, "Delta clean.")
 	return nil
 }
 
@@ -520,7 +526,7 @@ func printExceptionsList(results []sensors.OrchestratorResult) {
 		fmt.Fprintf(os.Stderr, "=========================================\n")
 		fmt.Fprintf(os.Stderr, "⚠️  The following files have relaxed rules configured in their linters:\n\n")
 		for _, excStr := range allExceptions {
-			logStderrLn(excStr)
+			logLn(LogLevelWarn, excStr)
 		}
 		fmt.Fprintf(os.Stderr, "\nNOTE: These relaxed thresholds must be manually verified by a human during code review.\n")
 		fmt.Fprintf(os.Stderr, "(\"Looking at the exceptions AI created was a good point to start my code review.\")\n")
@@ -670,7 +676,7 @@ func printSelfCorrectionGuidance(res sensors.OrchestratorResult) {
 		fmt.Fprintf(os.Stderr, "-----------------------------------------\n")
 		fmt.Fprintf(os.Stderr, "REFACTORING PROMPT: Refactor these violations:\n\n")
 		for _, g := range guidance {
-			logStderrLn(g)
+			logLn(LogLevelWarn, g)
 		}
 		suppressionExample := getSuppressionExample(res.Language)
 		fmt.Fprintf(os.Stderr, "\nIf refactoring is impossible, REFACTORING PROMPT: suppress the warning with standard inline annotations (e.g. %s).\n", suppressionExample)
