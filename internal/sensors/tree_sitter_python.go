@@ -69,8 +69,19 @@ func ParsePythonTreeSitter(file FileContext) ([]Violation, error) {
 			startLine := int(node.StartPoint().Row) + 1
 			endLine := int(node.EndPoint().Row) + 1
 
-			// Function Length
 			length := endLine - startLine + 1
+			bodyNode := node.ChildByFieldName("body")
+			if bodyNode != nil && int(bodyNode.NamedChildCount()) > 0 {
+				firstStmt := bodyNode.NamedChild(0)
+				if firstStmt.Type() == "expression_statement" && int(firstStmt.NamedChildCount()) > 0 {
+					if firstStmt.NamedChild(0).Type() == "string" {
+						docStart := int(firstStmt.StartPoint().Row) + 1
+						docEnd := int(firstStmt.EndPoint().Row) + 1
+						length -= docEnd - docStart + 1
+					}
+				}
+			}
+
 			violations = append(violations, Violation{
 				RuleName:  RuleFunctionLength,
 				Value:     length,
@@ -101,7 +112,6 @@ func ParsePythonTreeSitter(file FileContext) ([]Violation, error) {
 			complexity := 1 // base
 
 			// We need a helper to walk just the function body for complexity
-			bodyNode := node.ChildByFieldName("body")
 			if bodyNode != nil {
 				var countComplexity func(n *sitter.Node)
 				countComplexity = func(n *sitter.Node) {

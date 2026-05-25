@@ -82,3 +82,106 @@ def complex_function(x, y, z, options):
 		t.Errorf("Expected complex_function complexity 7, got: %+v", v)
 	}
 }
+
+func TestPythonFunctionLengthExcludesDecorators(t *testing.T) {
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "decorated.py")
+
+	pythonCode := `@decorator1
+@decorator2
+def decorated_func():
+    x = 1
+    y = 2
+`
+	if err := os.WriteFile(filePath, []byte(pythonCode), 0644); err != nil {
+		t.Fatalf("Failed to write test python file: %v", err)
+	}
+
+	violations, err := sensors.ParsePythonTreeSitter(sensors.FileContext{Path: filePath})
+	if err != nil {
+		t.Fatalf("ParsePythonTreeSitter failed: %v", err)
+	}
+
+	findViolation := func(ruleName string, startLine int) *sensors.Violation {
+		for _, v := range violations {
+			if v.RuleName == ruleName && v.StartLine == startLine {
+				return &v
+			}
+		}
+		return nil
+	}
+
+	if v := findViolation("FunctionLength", 3); v == nil || v.Value != 3 {
+		t.Errorf("decorated_func length should be exactly 3 (def + 2 body lines, excluding decorators), got %d", v.Value)
+	}
+}
+
+func TestPythonFunctionLengthExcludesDocstrings(t *testing.T) {
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "docstring.py")
+
+	pythonCode := `def func_with_docstring():
+    """This is a
+    multiline docstring
+    that spans lines."""
+    x = 1
+    y = 2
+`
+	if err := os.WriteFile(filePath, []byte(pythonCode), 0644); err != nil {
+		t.Fatalf("Failed to write test python file: %v", err)
+	}
+
+	violations, err := sensors.ParsePythonTreeSitter(sensors.FileContext{Path: filePath})
+	if err != nil {
+		t.Fatalf("ParsePythonTreeSitter failed: %v", err)
+	}
+
+	findViolation := func(ruleName string, startLine int) *sensors.Violation {
+		for _, v := range violations {
+			if v.RuleName == ruleName && v.StartLine == startLine {
+				return &v
+			}
+		}
+		return nil
+	}
+
+	if v := findViolation("FunctionLength", 1); v == nil {
+		t.Fatal("no FunctionLength violation found for func_with_docstring")
+	} else if v.Value != 3 {
+		t.Errorf("func_with_docstring length should be exactly 3 (def + 2 code lines, excluding 3-line docstring), got %d", v.Value)
+	}
+}
+
+func TestPythonFunctionLengthExcludesSingleLineDocstring(t *testing.T) {
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "single_line_docstring.py")
+
+	pythonCode := `def f():
+    """One-line docstring."""
+    x = 1
+    y = 2
+`
+	if err := os.WriteFile(filePath, []byte(pythonCode), 0644); err != nil {
+		t.Fatalf("Failed to write test python file: %v", err)
+	}
+
+	violations, err := sensors.ParsePythonTreeSitter(sensors.FileContext{Path: filePath})
+	if err != nil {
+		t.Fatalf("ParsePythonTreeSitter failed: %v", err)
+	}
+
+	findViolation := func(ruleName string, startLine int) *sensors.Violation {
+		for _, v := range violations {
+			if v.RuleName == ruleName && v.StartLine == startLine {
+				return &v
+			}
+		}
+		return nil
+	}
+
+	if v := findViolation("FunctionLength", 1); v == nil {
+		t.Fatal("no FunctionLength violation found for f with single-line docstring")
+	} else if v.Value != 3 {
+		t.Errorf("f length should be exactly 3 (def + 2 code lines, excluding single-line docstring), got %d", v.Value)
+	}
+}
