@@ -215,18 +215,19 @@ func getGitHubReviewContext() (string, string, string, error) {
 
 func buildPRComments(results []sensors.OrchestratorResult) []prComment {
 	var comments []prComment
-	for _, res := range results {
-		if !hasViolations(res) {
+	summaries := sensors.EvaluateAll(results)
+	for _, summary := range summaries {
+		if !summary.HasViolations {
 			continue
 		}
 
-		body := buildPRCommentBody(res)
+		body := buildPRCommentBody(summary)
 		if body == "" {
 			continue
 		}
 
 		comments = append(comments, prComment{
-			Path: filepath.ToSlash(getRelativePath(res.FilePath)),
+			Path: filepath.ToSlash(getRelativePath(summary.Result.FilePath)),
 			Body: body,
 			Line: 1,
 		})
@@ -248,14 +249,11 @@ func getRelativePath(absPath string) string {
 	return absPath
 }
 
-func buildPRCommentBody(res sensors.OrchestratorResult) string {
-	limits := getEffectiveLimits(res)
+func buildPRCommentBody(summary sensors.EvaluatedSummary) string {
 	var filePrompts []string
-	filePrompts = appendGitHubPrompt(filePrompts, res.Metrics.Complexity, limits.Complexity, "Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.")
-	filePrompts = appendGitHubPrompt(filePrompts, res.Metrics.CognitiveComplexity, limits.CognitiveComplexity, "Cognitive Complexity is %d (Max %d). Flatten deeply nested control flow and return early.")
-	filePrompts = appendGitHubPrompt(filePrompts, res.Metrics.FunctionLength, limits.FunctionLength, "Function lines is %d (Max %d). Modularize this block into separate functional components.")
-	filePrompts = appendGitHubPrompt(filePrompts, res.Metrics.ArgumentCount, limits.ArgumentCount, "Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.")
-	filePrompts = appendGitHubPrompt(filePrompts, res.Metrics.MaxCaseLength, limits.MaxCaseLength, "Case block lines is %d (Max %d). Extract the case logic into a well-named method.")
+	for _, v := range summary.Violations {
+		filePrompts = append(filePrompts, v.Guidance)
+	}
 	if len(filePrompts) > 0 {
 		return strings.Join(filePrompts, "\n\n")
 	}

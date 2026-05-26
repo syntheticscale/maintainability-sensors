@@ -199,7 +199,7 @@ func printScanResult(res sensors.OrchestratorResult, jsonOutput bool) {
 	fmt.Fprintf(os.Stderr, "- Max Switch Case Line Count:   %d (Limit: %d)\n", res.Metrics.MaxCaseLength, limits.MaxCaseLength)
 
 	// Output specific self-correction guidance blocks (Fowler article style)
-	printSelfCorrectionGuidance(res)
+	printSelfCorrectionGuidance(sensors.Evaluate(res))
 
 	// Display Exceptions if any
 	if len(res.Exceptions) > 0 {
@@ -234,32 +234,16 @@ func getSuppressionExample(lang string) string {
 	}
 }
 
-func appendGuidance(guidance []string, metric int, limit int, format string) []string {
-	if metric > limit {
-		return append(guidance, fmt.Sprintf(format, metric, limit))
-	}
-	return guidance
-}
-
-func printSelfCorrectionGuidance(res sensors.OrchestratorResult) {
-	var guidance []string
-	limits := getEffectiveLimits(res)
-
-	guidance = appendGuidance(guidance, res.Metrics.Complexity, limits.Complexity, "  * Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.")
-	guidance = appendGuidance(guidance, res.Metrics.CognitiveComplexity, limits.CognitiveComplexity, "  * Cognitive Complexity is %d (Max %d). Flatten deeply nested control flow and return early.")
-	guidance = appendGuidance(guidance, res.Metrics.FunctionLength, limits.FunctionLength, "  * Function lines is %d (Max %d). Modularize this block into separate functional components.")
-	guidance = appendGuidance(guidance, res.Metrics.ArgumentCount, limits.ArgumentCount, "  * Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.")
-	guidance = appendGuidance(guidance, res.Metrics.MaxCaseLength, limits.MaxCaseLength, "  * Case block lines is %d (Max %d). Extract the case logic into a well-named method.")
-
-	if len(guidance) > 0 {
+func printSelfCorrectionGuidance(summary sensors.EvaluatedSummary) {
+	if summary.HasViolations {
 		fmt.Fprintf(os.Stderr, "\n-----------------------------------------\n")
 		fmt.Fprintf(os.Stderr, " Actionable Refactoring Prompts:\n")
 		fmt.Fprintf(os.Stderr, "-----------------------------------------\n")
 		fmt.Fprintf(os.Stderr, "REFACTORING PROMPT: Refactor these violations:\n\n")
-		for _, g := range guidance {
-			logLn(LogLevelWarn, g)
+		for _, v := range summary.Violations {
+			logLn(LogLevelWarn, "  * " + v.Guidance)
 		}
-		suppressionExample := getSuppressionExample(res.Language)
+		suppressionExample := getSuppressionExample(summary.Result.Language)
 		fmt.Fprintf(os.Stderr, "\nIf refactoring is impossible, REFACTORING PROMPT: suppress the warning with standard inline annotations (e.g. %s).\n", suppressionExample)
 	}
 }

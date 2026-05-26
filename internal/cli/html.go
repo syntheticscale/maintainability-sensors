@@ -99,10 +99,11 @@ func processOrchestratedResult(data *ReportData, res sensors.OrchestratorResult)
 	data.OrchestratedCount++
 	data.TotalExceptions += len(res.Exceptions)
 
+	summary := sensors.Evaluate(res)
 	fileBase := filepath.Base(res.FilePath)
-	filePrompts := getHTMLFilePrompts(data, res)
+	filePrompts := getHTMLFilePrompts(data, summary)
 
-	compClass, cogClass, linesClass, paramsClass, caseClass := getCSSClasses(res)
+	compClass, cogClass, linesClass, paramsClass, caseClass := getCSSClasses(summary)
 
 	data.Rows = append(data.Rows, FileRow{
 		BaseName:            fileBase,
@@ -137,53 +138,36 @@ func processOrchestratedResult(data *ReportData, res sensors.OrchestratorResult)
 	}
 }
 
-func getHTMLFilePrompts(data *ReportData, res sensors.OrchestratorResult) []string {
-	limits := getEffectiveLimits(res)
+func getHTMLFilePrompts(data *ReportData, summary sensors.EvaluatedSummary) []string {
 	var filePrompts []string
-	if res.Metrics.Complexity > limits.Complexity {
+	for _, v := range summary.Violations {
 		data.TotalViolations++
-		filePrompts = append(filePrompts, fmt.Sprintf("Complexity is %d (Max %d limit). Nudge agent to extract nested conditionals into separate helper functions.", res.Metrics.Complexity, limits.Complexity))
-	}
-	if res.Metrics.CognitiveComplexity > limits.CognitiveComplexity {
-		data.TotalViolations++
-		filePrompts = append(filePrompts, fmt.Sprintf("Cognitive Complexity is %d (Max %d limit). Nudge agent to flatten deeply nested control flow and return early.", res.Metrics.CognitiveComplexity, limits.CognitiveComplexity))
-	}
-	if res.Metrics.FunctionLength > limits.FunctionLength {
-		data.TotalViolations++
-		filePrompts = append(filePrompts, fmt.Sprintf("Function lines is %d (Max %d limit). Nudge agent to modularize this block into separate functional components.", res.Metrics.FunctionLength, limits.FunctionLength))
-	}
-	if res.Metrics.ArgumentCount > limits.ArgumentCount {
-		data.TotalViolations++
-		filePrompts = append(filePrompts, fmt.Sprintf("Parameter count is %d (Max %d limit). Nudge agent to bundle parameters into a structured configuration object.", res.Metrics.ArgumentCount, limits.ArgumentCount))
-	}
-	if res.Metrics.MaxCaseLength > limits.MaxCaseLength {
-		data.TotalViolations++
-		filePrompts = append(filePrompts, fmt.Sprintf("Case block lines is %d (Max %d limit). Nudge agent to extract the case logic into a well-named method.", res.Metrics.MaxCaseLength, limits.MaxCaseLength))
+		filePrompts = append(filePrompts, v.Guidance)
 	}
 	return filePrompts
 }
 
-func getCSSClasses(res sensors.OrchestratorResult) (string, string, string, string, string) {
-	limits := getEffectiveLimits(res)
+func getCSSClasses(summary sensors.EvaluatedSummary) (string, string, string, string, string) {
 	compClass := ""
-	if res.Metrics.Complexity > limits.Complexity {
-		compClass = "text-error font-bold"
-	}
 	cogClass := ""
-	if res.Metrics.CognitiveComplexity > limits.CognitiveComplexity {
-		cogClass = "text-error font-bold"
-	}
 	linesClass := ""
-	if res.Metrics.FunctionLength > limits.FunctionLength {
-		linesClass = "text-error font-bold"
-	}
 	paramsClass := ""
-	if res.Metrics.ArgumentCount > limits.ArgumentCount {
-		paramsClass = "text-error font-bold"
-	}
 	caseClass := ""
-	if res.Metrics.MaxCaseLength > limits.MaxCaseLength {
-		caseClass = "text-error font-bold"
+
+	for _, v := range summary.Violations {
+		switch v.RuleName {
+		case sensors.RuleComplexity:
+			compClass = "text-error font-bold"
+		case sensors.RuleCognitiveComplexity:
+			cogClass = "text-error font-bold"
+		case sensors.RuleFunctionLength:
+			linesClass = "text-error font-bold"
+		case sensors.RuleArgumentCount:
+			paramsClass = "text-error font-bold"
+		case sensors.RuleCaseBlockLength:
+			caseClass = "text-error font-bold"
+		}
 	}
+
 	return compClass, cogClass, linesClass, paramsClass, caseClass
 }

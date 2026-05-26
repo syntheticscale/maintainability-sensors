@@ -16,8 +16,9 @@ func executeGenerate(jsonIn string, markdownOut string, htmlOut string) error {
 	}
 
 	hasV := false
-	for _, res := range results {
-		if hasViolations(res) {
+	summaries := sensors.EvaluateAll(results)
+	for _, summary := range summaries {
+		if summary.HasViolations {
 			hasV = true
 			break
 		}

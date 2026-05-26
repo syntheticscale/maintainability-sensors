@@ -930,7 +930,7 @@ func TestPrintSelfCorrectionGuidance_NoViolations(t *testing.T) {
 	res := orchestratedResult("/repo/clean.go", 5, 30, 3, nil)
 
 	captured := captureOutput(func() {
-		printSelfCorrectionGuidance(res)
+		printSelfCorrectionGuidance(sensors.Evaluate(res))
 	})
 
 	if captured != "" {
@@ -942,7 +942,7 @@ func TestPrintSelfCorrectionGuidance_ComplexityViolation(t *testing.T) {
 	res := orchestratedResult("/repo/complex.go", 20, 10, 2, nil)
 
 	captured := captureOutput(func() {
-		printSelfCorrectionGuidance(res)
+		printSelfCorrectionGuidance(sensors.Evaluate(res))
 	})
 
 	if !strings.Contains(captured, "Complexity is 20") {
@@ -957,7 +957,7 @@ func TestPrintSelfCorrectionGuidance_AllViolations(t *testing.T) {
 	res := orchestratedResult("/repo/bad.go", 20, 100, 10, nil)
 
 	captured := captureOutput(func() {
-		printSelfCorrectionGuidance(res)
+		printSelfCorrectionGuidance(sensors.Evaluate(res))
 	})
 
 	if !strings.Contains(captured, "Complexity is 20") {
@@ -1012,7 +1012,8 @@ func TestBuildPRCommentBodyIncludesAllRules(t *testing.T) {
 			MaxCaseLength:       15,
 		},
 	}
-	body := buildPRCommentBody(res)
+	summary := sensors.Evaluate(res)
+	body := buildPRCommentBody(summary)
 	if body == "" {
 		t.Error("buildPRCommentBody returned empty string for CognitiveComplexity + MaxCaseLength violations")
 	}
@@ -1031,7 +1032,7 @@ func TestGetEffectiveLimitsWithExceptions(t *testing.T) {
 			{RuleName: sensors.RuleCaseBlockLength, ConfiguredVal: 30, BaselineVal: sensors.BaselineCaseLength},
 		},
 	}
-	limits := getEffectiveLimits(res)
+	limits := sensors.GetEffectiveLimits(res)
 	if limits.CognitiveComplexity != 20 {
 		t.Errorf("expected CognitiveComplexity limit 20, got %d", limits.CognitiveComplexity)
 	}
@@ -1055,7 +1056,8 @@ func TestGetHTMLFilePromptsCountsAllViolations(t *testing.T) {
 		},
 	}
 	data := &ReportData{}
-	prompts := getHTMLFilePrompts(data, res)
+	summary := sensors.Evaluate(res)
+	prompts := getHTMLFilePrompts(data, summary)
 	if len(prompts) != 5 {
 		t.Errorf("expected 5 HTML prompts, got %d", len(prompts))
 	}
@@ -1073,7 +1075,8 @@ func TestGetHTMLFilePromptsOnlyCogAndCase(t *testing.T) {
 		},
 	}
 	data := &ReportData{}
-	prompts := getHTMLFilePrompts(data, res)
+	summary := sensors.Evaluate(res)
+	prompts := getHTMLFilePrompts(data, summary)
 	if len(prompts) != 2 {
 		t.Errorf("expected 2 HTML prompts for Cog+Case, got %d", len(prompts))
 	}
@@ -1082,15 +1085,15 @@ func TestGetHTMLFilePromptsOnlyCogAndCase(t *testing.T) {
 	}
 }
 
-func TestHasViolationsDetectsCogAndCase(t *testing.T) {
+func TestEvaluateDetectsCogAndCase(t *testing.T) {
 	cogRes := sensors.OrchestratorResult{
 		ToolingDetected: true,
 		Metrics: sensors.MaintainabilityMetrics{
 			CognitiveComplexity: 15,
 		},
 	}
-	if !hasViolations(cogRes) {
-		t.Error("hasViolations should detect CognitiveComplexity violation")
+	if !sensors.Evaluate(cogRes).HasViolations {
+		t.Error("Evaluate should detect CognitiveComplexity violation")
 	}
 
 	caseRes := sensors.OrchestratorResult{
@@ -1099,8 +1102,8 @@ func TestHasViolationsDetectsCogAndCase(t *testing.T) {
 			MaxCaseLength: 15,
 		},
 	}
-	if !hasViolations(caseRes) {
-		t.Error("hasViolations should detect MaxCaseLength violation")
+	if !sensors.Evaluate(caseRes).HasViolations {
+		t.Error("Evaluate should detect MaxCaseLength violation")
 	}
 }
 

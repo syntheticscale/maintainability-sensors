@@ -1,0 +1,78 @@
+--- internal/cli/format.go
++++ internal/cli/format.go
+@@ -17,16 +17,20 @@
+ 	ActionVerb  string
+ }
+ 
+-func hasViolations(res sensors.OrchestratorResult) bool {
+-	if !res.ToolingDetected {
+-		return false
+-	}
+-	limits := getEffectiveLimits(res)
+-	return res.Metrics.Complexity > limits.Complexity ||
+-		res.Metrics.CognitiveComplexity > limits.CognitiveComplexity ||
+-		res.Metrics.FunctionLength > limits.FunctionLength ||
+-		res.Metrics.ArgumentCount > limits.ArgumentCount ||
+-		res.Metrics.MaxCaseLength > limits.MaxCaseLength
+-}
+-
+ func FormatResultsCLI(results []sensors.OrchestratorResult, jsonOutput bool, isDir bool) bool {
+ 	hasV := false
+ 	for _, res := range results {
+-		if hasViolations(res) {
++		summary := sensors.Evaluate(res)
++		if summary.HasViolations {
+ 			hasV = true
+ 			break
+@@ -191,7 +195,7 @@
+ 	}
+ 
+ 	fmt.Fprintf(os.Stderr, "Status:     ORCHESTRATED (Level 1+) ✅\n\n")
+-	limits := getEffectiveLimits(res)
++	limits := sensors.GetEffectiveLimits(res)
+ 	fmt.Fprintf(os.Stderr, "Maintainability Telemetry:\n")
+ 	fmt.Fprintf(os.Stderr, "- Max Cyclomatic Complexity:    %d (Limit: %d)\n", res.Metrics.Complexity, limits.Complexity)
+@@ -200,7 +204,7 @@
+ 	fmt.Fprintf(os.Stderr, "- Max Switch Case Line Count:   %d (Limit: %d)\n", res.Metrics.MaxCaseLength, limits.MaxCaseLength)
+ 
+ 	// Output specific self-correction guidance blocks (Fowler article style)
+-	printSelfCorrectionGuidance(res)
++	printSelfCorrectionGuidance(sensors.Evaluate(res))
+ 
+ 	// Display Exceptions if any
+@@ -235,22 +239,8 @@
+ 	}
+ }
+ 
+-func appendGuidance(guidance []string, metric int, limit int, format string) []string {
+-	if metric > limit {
+-		return append(guidance, fmt.Sprintf(format, metric, limit))
+-	}
+-	return guidance
+-}
+-
+-func printSelfCorrectionGuidance(res sensors.OrchestratorResult) {
+-	var guidance []string
+-	limits := getEffectiveLimits(res)
+-
+-	guidance = appendGuidance(guidance, res.Metrics.Complexity, limits.Complexity, "  * Complexity is %d (Max %d). Extract nested conditionals into separate, single-responsibility helper functions.")
+-	guidance = appendGuidance(guidance, res.Metrics.CognitiveComplexity, limits.CognitiveComplexity, "  * Cognitive Complexity is %d (Max %d). Flatten deeply nested control flow and return early.")
+-	guidance = appendGuidance(guidance, res.Metrics.FunctionLength, limits.FunctionLength, "  * Function lines is %d (Max %d). Modularize this block into separate functional components.")
+-	guidance = appendGuidance(guidance, res.Metrics.ArgumentCount, limits.ArgumentCount, "  * Parameter count is %d (Max %d). Bundle parameters into a single structured configuration object.")
+-	guidance = appendGuidance(guidance, res.Metrics.MaxCaseLength, limits.MaxCaseLength, "  * Case block lines is %d (Max %d). Extract the case logic into a well-named method.")
+-
+-	if len(guidance) > 0 {
++func printSelfCorrectionGuidance(summary sensors.EvaluatedSummary) {
++	if summary.HasViolations {
+ 		fmt.Fprintf(os.Stderr, "\n-----------------------------------------\n")
+ 		fmt.Fprintf(os.Stderr, " Actionable Refactoring Prompts:\n")
+ 		fmt.Fprintf(os.Stderr, "-----------------------------------------\n")
+ 		fmt.Fprintf(os.Stderr, "REFACTORING PROMPT: Refactor these violations:\n\n")
+-		for _, g := range guidance {
+-			logLn(LogLevelWarn, g)
++		for _, v := range summary.Violations {
++			logLn(LogLevelWarn, "  * " + v.Guidance)
+ 		}
+-		suppressionExample := getSuppressionExample(res.Language)
++		suppressionExample := getSuppressionExample(summary.Result.Language)
+ 		fmt.Fprintf(os.Stderr, "\nIf refactoring is impossible, REFACTORING PROMPT: suppress the warning with standard inline annotations (e.g. %s).\n", suppressionExample)
