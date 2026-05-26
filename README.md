@@ -23,7 +23,7 @@ Instead of passive `README` guides that agents ignore, or blunt CI pipelines tha
 
 ### Tier 1: The Guardrails (Syntactic Sensors)
 A lightning-fast, stateless Go utility that provides sub-millisecond feedback on structural boundaries.
-*   **Native Polyglot ASTs:** Deterministically calculates Cyclomatic Complexity (Max 8), Function Length (Max 50), and Parameter Counts (Max 4) entirely in memory for **Go, Python, TypeScript/JavaScript, C#, and Java** using Tree-sitter. Zero external toolchains required.
+*   **Native Polyglot Execution:** Deterministically calculates Cyclomatic Complexity (Max 8), Function Length (Max 50), and Parameter Counts (Max 4) for **Go, Python, TypeScript/JavaScript, and Ruby**. The core is a 100% statically compiled Go binary that efficiently orchestrates a polyglot plugin subprocess over standard I/O, maintaining sub-millisecond execution times without CGO dependencies.
 *   **Real-Time LSP Server:** Runs natively in the background of any modern IDE (VS Code, Cursor, Neovim) providing instant red squiggles (`textDocument/didChange`) to developers and LSP-aware agents as they type.
 *   **Macro-Coupling Dependency Rules:** Enforces layered architecture boundaries (e.g., stopping the `domain` layer from importing the `api` layer) natively via AST `import` extraction.
 *   **Agent Self-Correction Formatter:** Converts violations into rich, high-context **Refactoring Prompts** (e.g., *"Nudge coding agent to extract nested conditionals"*).

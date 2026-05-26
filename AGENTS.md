@@ -13,8 +13,10 @@ This tool is designed to be a lightweight, ultra-fast Go CLI utility that orches
 ```
 /
 ├── cmd/
-│   └── maintainability-sensors/
-│       └── main.go               # CLI entrypoint
+│   ├── maintainability-sensors/
+│   │   └── main.go               # Core CLI entrypoint
+│   └── legacy-plugin/
+│       └── main.go               # Polyglot plugin entrypoint
 ├── internal/
 │   ├── cli/
 │   │   ├── cmd.go            # Subcommands (run, generate, bootstrap) & flag parsing
@@ -23,14 +25,16 @@ This tool is designed to be a lightweight, ultra-fast Go CLI utility that orches
 │   │   ├── cli_test.go       # Unit tests for CLI commands
 │   │   └── templates/
 │   │       └── report.html   # Dark-themed HTML scorecard template
+│   ├── legacy/               # Legacy language plugins (Ruby, Python, JS/TS)
 │   ├── lsp/
 │   │   ├── server.go         # Language Server Protocol foundation
 │   │   └── server_test.go    # LSP JSON-RPC parsing tests
+│   ├── plugin/
+│   │   └── protocol/         # JSON standard I/O IPC schema
 │   └── sensors/
 │       ├── orchestrator.go   # Subprocess executor and linter JSON parser
+│       ├── plugin_runner.go  # IPC stdin/stdout JSON engine
 │       ├── config_parsers.go # ConfigParser interface + shared utilities
-│       ├── tree_sitter_python.go  # Native Tree-sitter Python AST metrics
-│       ├── tree_sitter_typescript.go # Native Tree-sitter TS/JS AST metrics
 │       ├── go_ast.go         # Native Go AST metric collector
 │       ├── go_architecture.go # Native architecture dependency boundary rules
 │       ├── architecture_parser.go # YAML parser for dependency rules
