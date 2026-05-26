@@ -1,3 +1,7 @@
+# Compiled binaries
+bin/
+maintainability-sensors
+
 # Cache directories
 .cache/
 __pycache__/
@@ -7,13 +11,26 @@ __pycache__/
 # Worktrees
 .worktrees/
 worktrees/
-.worktrees/
 
 # IDE and local configurations
 .vscode/
 .DS_Store
-
-# Local binary compilation if any
-bin/maintainability-sensors
 .local/
-\n*.skill
+
+# Runtime artifacts
+scan.log
+scan_out.txt
+out.json
+*.patch
+
+# Generated lint configs (created by bootstrap)
+.pylintrc
+biome.json
+eslint.config.mjs
+eslint_flat_template.mjs
+
+# Build output
+dist/
+
+# Skill archives (binary blobs)
+*.skill

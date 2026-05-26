@@ -78,37 +78,10 @@ func generatePromptsSection(results []sensors.OrchestratorResult) string {
 	return sb.String()
 }
 
-type EffectiveLimits struct {
-	Complexity          int
-	CognitiveComplexity int
-	FunctionLength      int
-	ArgumentCount       int
-	MaxCaseLength       int
-}
+type EffectiveLimits = sensors.EffectiveLimits
 
 func getEffectiveLimits(res sensors.OrchestratorResult) EffectiveLimits {
-	limits := EffectiveLimits{
-		Complexity:          sensors.BaselineComplexity,
-		CognitiveComplexity: sensors.BaselineCognitiveComplexity,
-		FunctionLength:      sensors.BaselineFunctionLength,
-		ArgumentCount:       sensors.BaselineArgumentCount,
-		MaxCaseLength:       sensors.BaselineCaseLength,
-	}
-	for _, exc := range res.Exceptions {
-		switch exc.RuleName {
-		case sensors.RuleComplexity:
-			limits.Complexity = exc.ConfiguredVal
-		case sensors.RuleCognitiveComplexity:
-			limits.CognitiveComplexity = exc.ConfiguredVal
-		case sensors.RuleFunctionLength:
-			limits.FunctionLength = exc.ConfiguredVal
-		case sensors.RuleArgumentCount:
-			limits.ArgumentCount = exc.ConfiguredVal
-		case sensors.RuleCaseBlockLength:
-			limits.MaxCaseLength = exc.ConfiguredVal
-		}
-	}
-	return limits
+	return sensors.GetEffectiveLimits(res)
 }
 
 func appendGitHubPrompt(prompts []string, metric int, limit int, format string) []string {

@@ -107,8 +107,8 @@ func TestHelperProcess(t *testing.T) {
 	}
 
 	if mode == "1" {
-		// Success mode
 		resp := protocol.AnalyzeResponse{
+			Version: protocol.ProtocolVersion,
 			Results: map[string][]protocol.Violation{
 				"test.py": {
 					{
@@ -124,9 +124,9 @@ func TestHelperProcess(t *testing.T) {
 		out, _ := json.Marshal(resp)
 		fmt.Fprint(os.Stdout, string(out))
 	} else if mode == "2" {
-		// Error mode
 		resp := protocol.AnalyzeResponse{
-			Error: "mock error from plugin",
+			Version: protocol.ProtocolVersion,
+			Error:   "mock error from plugin",
 		}
 		out, _ := json.Marshal(resp)
 		fmt.Fprint(os.Stdout, string(out))

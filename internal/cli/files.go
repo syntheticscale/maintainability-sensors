@@ -86,7 +86,7 @@ func FindFiles(targetPath string) ([]string, bool, error) {
 
 	absTargetDir, err := filepath.Abs(cleanPath)
 	if err != nil {
-		return nil, false, fmt.Errorf("[ERROR] Failed to get absolute path of target directory: %v", err)
+        return nil, false, fmt.Errorf("[ERROR] Failed to get absolute path of target directory: %w", err)
 	}
 
 	if resolvedTargetDir, err := filepath.EvalSymlinks(absTargetDir); err == nil {
@@ -117,7 +117,7 @@ func FindFiles(targetPath string) ([]string, bool, error) {
 	})
 
 	if err != nil {
-		return nil, true, fmt.Errorf("[ERROR] Directory scan failed: %v", err)
+        return nil, true, fmt.Errorf("[ERROR] Directory scan failed: %w", err)
 	}
 
 	return files, true, nil

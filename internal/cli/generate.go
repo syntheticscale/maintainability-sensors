@@ -12,7 +12,7 @@ func executeGenerate(jsonIn string, markdownOut string, htmlOut string) error {
 	results, err := parseJSONScorecard(jsonIn)
 	if err != nil {
 		logf(LogLevelError, "[ERROR] %v\n", err)
-		return fmt.Errorf("failed to parse JSON scorecard: %v", err)
+        return fmt.Errorf("failed to parse JSON scorecard: %w", err)
 	}
 
 	hasV := false
@@ -30,7 +30,7 @@ func executeGenerate(jsonIn string, markdownOut string, htmlOut string) error {
 		ActionVerb:  "Generated",
 	}); err != nil {
 		logf(LogLevelError, "[ERROR] %v\n", err)
-		return fmt.Errorf("failed to generate reports: %v", err)
+        return fmt.Errorf("failed to generate reports: %w", err)
 	}
 
 	if hasV {
@@ -58,12 +58,12 @@ func parseJSONScorecard(jsonIn string) ([]sensors.OrchestratorResult, error) {
 	}
 	data, err := os.ReadFile(jsonIn)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read JSON input file: %v", err)
+        return nil, fmt.Errorf("Failed to read JSON input file: %w", err)
 	}
 
 	var results []sensors.OrchestratorResult
 	if err := json.Unmarshal(data, &results); err != nil {
-		return nil, fmt.Errorf("Failed to parse JSON input scorecard: %v", err)
+        return nil, fmt.Errorf("Failed to parse JSON input scorecard: %w", err)
 	}
 
 	if err := validateScorecardResults(results); err != nil {

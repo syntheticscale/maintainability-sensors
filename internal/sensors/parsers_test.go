@@ -39,7 +39,7 @@ func TestConfigParsers_Anchors(t *testing.T) {
 		{
 			name:     "legacy.RuboCopConfigParser",
 			parser:   RuboCopConfigParser{},
-			expected: []string{".rubocop.yml"},
+			expected: []string{".rubocop.yml", "Gemfile"},
 		},
 	}
 

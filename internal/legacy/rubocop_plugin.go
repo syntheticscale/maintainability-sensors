@@ -46,7 +46,7 @@ func parseSingleRuboCopOffense(off RuboCopOffense, reVal *regexp.Regexp, fileVio
 
 	endLine := off.Location.LastLine
 	if endLine == 0 {
-		endLine = off.Location.Line + 100
+		endLine = off.Location.Line + FallbackEndLineOffset
 	}
 
 	switch off.CopName {
@@ -104,7 +104,7 @@ func (p RuboCopPlugin) Analyze(files []FileContext) (map[string][]Violation, err
 	exitCode, output, err := runLintCommandJSON("rubocop", &result, args...)
 	if err != nil {
 		if exitCode > 0 {
-			return nil, fmt.Errorf("rubocop crashed or encountered a configuration error (exit code %d): %v\n%s", exitCode, err, string(output))
+            return nil, fmt.Errorf("rubocop crashed or encountered a configuration error (exit code %d): %w\n%s", exitCode, err, string(output))
 		}
 		return nil, fmt.Errorf("rubocop error: %w", err)
 	}

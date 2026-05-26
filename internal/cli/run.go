@@ -24,7 +24,7 @@ func executeRun(opts RunOptions) error {
 	files, isDir, err := FindFiles(opts.TargetPath)
 	if err != nil {
 		logLn(LogLevelError, err)
-		return fmt.Errorf("failed to find files: %v", err)
+        return fmt.Errorf("failed to find files: %w", err)
 	}
 
 	if isDir && len(files) == 0 {
@@ -35,7 +35,7 @@ func executeRun(opts RunOptions) error {
 	results, err := ScanFiles(files, isDir)
 	if err != nil {
 		logf(LogLevelError, "[ERROR] %v\n", err)
-		return fmt.Errorf("scan failed: %v", err)
+        return fmt.Errorf("scan failed: %w", err)
 	}
 
 	if isDir && len(results) == 0 {
@@ -82,7 +82,7 @@ func processLanguageGroup(lang string, files []string, isDir bool) ([]sensors.Or
 	res, err := sensors.OrchestratedScanBatch(fileContexts, lang)
 	if err != nil {
 		if !isDir {
-			return nil, fmt.Errorf("Scan failed: %v", err)
+            return nil, fmt.Errorf("Scan failed: %w", err)
 		}
 		logf(LogLevelWarn, "[WARNING] Scan failed for language %s: %v\n", lang, err)
 		return nil, nil
@@ -129,7 +129,7 @@ func saveReportsAndExit(results []sensors.OrchestratorResult, opts RunOptions, h
 	})
 	if err != nil {
 		logf(LogLevelError, "[ERROR] %v\n", err)
-		return fmt.Errorf("failed to save reports: %v", err)
+        return fmt.Errorf("failed to save reports: %w", err)
 	}
 
 	if hasV {
@@ -170,7 +170,8 @@ func postGitHubResults(results []sensors.OrchestratorResult, forcePR bool) {
 	}
 
 	logLn(LogLevelInfo, "Posting inline review to GitHub PR...")
-	if err := PostGitHubPRComment(results); err != nil {		logf(LogLevelError, "[ERROR] Failed to post GitHub inline review: %v\n", err)
+	if err := PostGitHubPRComment(results); err != nil {
+		logf(LogLevelError, "[ERROR] Failed to post GitHub inline review: %v\n", err)
 	} else {
 		logLn(LogLevelInfo, "Successfully posted inline review to GitHub PR!")
 	}

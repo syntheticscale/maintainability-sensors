@@ -25,12 +25,14 @@ func checkCacheForArchConfig(absDir string) (*ArchitectureConfig, bool) {
 func parseAndCacheArchConfig(absDir, p string) (*ArchitectureConfig, bool) {
 	if info, err := os.Stat(p); err == nil && info.Mode().IsRegular() {
 		cfg, err := ParseArchitectureConfig(p)
-		if err == nil {
-			archConfigCacheMu.Lock()
-			archConfigCache[absDir] = cfg
-			archConfigCacheMu.Unlock()
-			return cfg, true
+		if err != nil {
+			cacheNilArchConfig(absDir)
+			return nil, false
 		}
+		archConfigCacheMu.Lock()
+		archConfigCache[absDir] = cfg
+		archConfigCacheMu.Unlock()
+		return cfg, true
 	}
 	return nil, false
 }
@@ -39,6 +41,20 @@ func cacheNilArchConfig(absDir string) {
 	archConfigCacheMu.Lock()
 	archConfigCache[absDir] = nil
 	archConfigCacheMu.Unlock()
+}
+
+func resetArchConfigCache() {
+	archConfigCacheMu.Lock()
+	defer archConfigCacheMu.Unlock()
+	for k := range archConfigCache {
+		delete(archConfigCache, k)
+	}
+}
+
+// ResetArchConfigCache clears the architecture config cache.
+// It is intended for use in tests to avoid cross-test contamination.
+func ResetArchConfigCache() {
+	resetArchConfigCache()
 }
 
 func findArchitectureConfig(filePath string) *ArchitectureConfig {

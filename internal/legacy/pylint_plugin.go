@@ -46,7 +46,7 @@ func parsePyLintMessages(list []PyLintMessage) map[string][]Violation {
 		if rule != "" {
 			endLine := msg.EndLine
 			if endLine == 0 {
-				endLine = msg.Line + 100
+				endLine = msg.Line + FallbackEndLineOffset
 			}
 			metricsMap[msg.Path] = append(metricsMap[msg.Path], Violation{RuleName: rule, Value: val, StartLine: msg.Line, EndLine: endLine, Message: msg.Message})
 		}
@@ -68,7 +68,7 @@ func (p PyLintPlugin) Analyze(files []FileContext) (map[string][]Violation, erro
 	exitCode, output, err := runLintCommandJSON("pylint", &list, args...)
 	if err != nil {
 		if exitCode > 0 {
-			return nil, fmt.Errorf("pylint crashed or encountered a configuration error (exit code %d): %v\n%s", exitCode, err, string(output))
+            return nil, fmt.Errorf("pylint crashed or encountered a configuration error (exit code %d): %w\n%s", exitCode, err, string(output))
 		}
 		return nil, fmt.Errorf("pylint error: %w", err)
 	}

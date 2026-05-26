@@ -46,7 +46,7 @@ func parseESLintMessages(messages []ESLintMessage) []Violation {
 	for _, msg := range messages {
 		endLine := msg.EndLine
 		if endLine == 0 {
-			endLine = msg.Line + 100
+			endLine = msg.Line + FallbackEndLineOffset
 		}
 		if msg.RuleID == "complexity" {
 			val := extractESLintValue(msg.Message, reComplexity, reFallback)
@@ -92,7 +92,7 @@ func (p ESLintPlugin) Analyze(files []FileContext) (map[string][]Violation, erro
 	exitCode, output, err := runLintCommandJSON("npx", &list, args...)
 	if err != nil {
 		if exitCode > 0 {
-			return nil, fmt.Errorf("ESLint crashed or encountered a configuration error (exit code %d): %v\n%s", exitCode, err, string(output))
+            return nil, fmt.Errorf("ESLint crashed or encountered a configuration error (exit code %d): %w\n%s", exitCode, err, string(output))
 		}
 		return nil, fmt.Errorf("ESLint error: %w", err)
 	}

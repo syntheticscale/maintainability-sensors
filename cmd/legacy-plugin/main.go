@@ -32,6 +32,11 @@ func main() {
 		return
 	}
 
+	if req.Version != protocol.ProtocolVersion {
+		emitError(fmt.Sprintf("protocol version mismatch: plugin expects %d, core sent %d", protocol.ProtocolVersion, req.Version))
+		return
+	}
+
 	var plugins []interface {
 		Analyze([]protocol.FileContext) (map[string][]protocol.Violation, error)
 	}
@@ -59,6 +64,7 @@ func main() {
 	}
 
 	resp := protocol.AnalyzeResponse{
+		Version: protocol.ProtocolVersion,
 		Results: finalResults,
 	}
 

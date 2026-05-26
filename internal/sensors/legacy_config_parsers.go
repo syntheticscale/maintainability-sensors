@@ -63,7 +63,7 @@ type RuboCopConfigParser struct{}
 func (RuboCopConfigParser) Name() string { return "rubocop" }
 
 func (p RuboCopConfigParser) Anchors() []string {
-	return []string{".rubocop.yml"}
+	return []string{".rubocop.yml", "Gemfile"}
 }
 
 func (p RuboCopConfigParser) Rules() []ParserRule {

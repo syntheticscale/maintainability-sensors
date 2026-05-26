@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 
 	"github.com/syntheticscale/maintainability-sensors/internal/plugin/protocol"
@@ -40,6 +41,7 @@ func (p *PluginRunner) Analyze(files []FileContext) (map[string][]Violation, err
 
 func (p *PluginRunner) buildRequest(files []FileContext) ([]byte, error) {
 	req := protocol.AnalyzeRequest{
+		Version:  protocol.ProtocolVersion,
 		Language: p.Language,
 		Files:    make([]protocol.FileContext, len(files)),
 	}
@@ -59,6 +61,10 @@ func (p *PluginRunner) buildRequest(files []FileContext) ([]byte, error) {
 }
 
 func (p *PluginRunner) executeCommand(reqBytes []byte) ([]byte, error) {
+	if _, err := os.Stat(p.Command); err != nil {
+		return nil, fmt.Errorf("legacy plugin binary not found at %q: build it with 'go build -o bin/legacy-plugin ./cmd/legacy-plugin'", p.Command)
+	}
+
 	cmd := exec.Command(p.Command, p.Args...)
 	cmd.Stdin = bytes.NewReader(reqBytes)
 
@@ -82,6 +88,10 @@ func (p *PluginRunner) parseResponse(output []byte) (map[string][]Violation, err
 
 	if resp.Error != "" {
 		return nil, fmt.Errorf("plugin returned error: %s", resp.Error)
+	}
+
+	if resp.Version != protocol.ProtocolVersion {
+		return nil, fmt.Errorf("protocol version mismatch: core expects %d, plugin returned %d", protocol.ProtocolVersion, resp.Version)
 	}
 
 	result := make(map[string][]Violation)

@@ -64,7 +64,7 @@ func parseSingleRuffMessage(msg RuffMessage, reVal *regexp.Regexp, fileViolation
 	if rule != "" {
 		endLine := msg.EndLocation.Row
 		if endLine == 0 {
-			endLine = msg.Location.Row + 100
+			endLine = msg.Location.Row + FallbackEndLineOffset
 		}
 		*fileViolations = append(*fileViolations, Violation{RuleName: rule, Value: val, StartLine: msg.Location.Row, EndLine: endLine, Message: msg.Message})
 	}

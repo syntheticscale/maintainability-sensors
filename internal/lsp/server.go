@@ -232,6 +232,10 @@ func handleDidChange(req Request, writer *jsonRPCWriter) {
 	uri := didChangeParams.TextDocument.URI
 
 	filePath := strings.TrimPrefix(uri, "file://")
+	// On Windows, file:///C:/path gives "/C:/path", so strip leading slash.
+	if len(filePath) >= 2 && filePath[0] == '/' && filePath[2] == ':' {
+		filePath = filePath[1:]
+	}
 	lang := sensors.DetectLanguage(filePath)
 	if lang == "" {
 		return

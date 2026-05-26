@@ -20,7 +20,7 @@ This document audits six high-profile, real-world repositories across **Go, Pyth
 | **3. Go Std Library** | Go | `net/http/server.go` -> `(*conn).serve` | Stateful Monolith | Inherent complexity of stateful network protocols | Code cannot be safely modified without breaking HTTP/1.x invariants. |
 | **4. `tiangolo/fastapi`** | Python | `dependencies/utils.py` -> `solve_dependencies` | Procedural Bottleneck | High-throughput polymorphic request parsing | Breaking type-casting or security parameter validation. |
 | **5. `nestjs/nest`** | TypeScript | `packages/core/injector/injector.ts` | Deeply Coupled State | Runtime reflection & complex DAG DI resolution | AI recursion traps, stack overflows, or memory leaks on custom scopes. |
-| **6. `dotnet/aspnetcore`** | C# | `Routing/EndpointRoutingMiddleware.cs` -> `Invoke` | Layered Middleware Stack | Framework extensibility & cross-cutting concern composition | AI introduces middleware ordering bugs or breaks request pipeline短路invariants. |
+| **6. `dotnet/aspnetcore`** | C# | `Routing/EndpointRoutingMiddleware.cs` -> `Invoke` | Layered Middleware Stack | Framework extensibility & cross-cutting concern composition | AI introduces middleware ordering bugs or breaks request pipeline invariants. |
 
 ---
 

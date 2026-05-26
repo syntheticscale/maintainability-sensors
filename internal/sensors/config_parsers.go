@@ -1,9 +1,6 @@
 package sensors
 
-//nolint // maintainability: highly cohesive logic
-
 import (
-
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -11,16 +8,13 @@ import (
 	"strconv"
 
 	"github.com/pelletier/go-toml/v2"
+	"github.com/syntheticscale/maintainability-sensors/internal/plugin/protocol"
 
 	"gopkg.in/yaml.v3"
 )
 
 // ParserRule maps a human-readable rule name to the config key(s) used to look it up.
-type ParserRule struct {
-	RuleName string
-	Keys     []string
-	Baseline int
-}
+type ParserRule = protocol.ParserRule
 
 // ConfigParser extracts threshold values from a config file for a given language.
 type ConfigParser interface {
@@ -32,41 +26,52 @@ type ConfigParser interface {
 	Anchors() []string
 }
 
-func extractMapVal(actual map[string]interface{}, vals *[]int) {
-	if maxVal, ok := actual["max"]; ok {
+func extractFloat64Val(v float64, vals *[]int) {
+	*vals = append(*vals, int(v))
+}
+
+func extractIntVal(v int, vals *[]int) {
+	*vals = append(*vals, v)
+}
+
+func extractInt64Val(v int64, vals *[]int) {
+	*vals = append(*vals, int(v))
+}
+
+func extractMapStringVal(v map[string]interface{}, vals *[]int) {
+	if maxVal, ok := v["max"]; ok {
 		extractVal(maxVal, vals)
-	} else if maxVal, ok := actual["Max"]; ok {
+	} else if maxVal, ok := v["Max"]; ok {
 		extractVal(maxVal, vals)
 	}
 }
 
-func extractInterfaceMapVal(actual map[interface{}]interface{}, vals *[]int) {
-	if maxVal, ok := actual["max"]; ok {
+func extractMapIfaceVal(v map[interface{}]interface{}, vals *[]int) {
+	if maxVal, ok := v["max"]; ok {
 		extractVal(maxVal, vals)
-	} else if maxVal, ok := actual["Max"]; ok {
+	} else if maxVal, ok := v["Max"]; ok {
 		extractVal(maxVal, vals)
 	}
 }
 
-func extractSliceVal(actual []interface{}, vals *[]int) {
-	for _, item := range actual {
+func extractSliceVal(v []interface{}, vals *[]int) {
+	for _, item := range v {
 		extractVal(item, vals)
 	}
 }
 
-//nolint:gocognit,cyclop // Highly cohesive mapping logic for types. Splitting this hurts readability.
 func extractVal(vv interface{}, vals *[]int) {
 	switch actual := vv.(type) {
 	case float64:
-		*vals = append(*vals, int(actual))
+		extractFloat64Val(actual, vals)
 	case int:
-		*vals = append(*vals, actual)
+		extractIntVal(actual, vals)
 	case int64:
-		*vals = append(*vals, int(actual))
+		extractInt64Val(actual, vals)
 	case map[string]interface{}:
-		extractMapVal(actual, vals)
+		extractMapStringVal(actual, vals)
 	case map[interface{}]interface{}:
-		extractInterfaceMapVal(actual, vals)
+		extractMapIfaceVal(actual, vals)
 	case []interface{}:
 		extractSliceVal(actual, vals)
 	}
@@ -105,13 +110,16 @@ func genericWalk(v interface{}, key string, vals *[]int) {
 	}
 }
 
-//nolint:gocognit,cyclop // walking interfaces requires checks
+func processMapEntry(k string, vv interface{}, key string, vals *[]int) {
+	if mapHasMatchingKey(k, key) {
+		extractVal(vv, vals)
+	}
+	genericWalk(vv, key, vals)
+}
+
 func walkMapStringInterface(val map[string]interface{}, key string, vals *[]int) {
 	for k, vv := range val {
-		if mapHasMatchingKey(k, key) {
-			extractVal(vv, vals)
-		}
-		genericWalk(vv, key, vals)
+		processMapEntry(k, vv, key, vals)
 	}
 }
 
@@ -124,7 +132,9 @@ func walkSliceInterface(val []interface{}, key string, vals *[]int) {
 func findAllConfigValsYAML(content string, key string) []int {
 	var vals []int
 	var data interface{}
-	yaml.Unmarshal([]byte(content), &data)
+	if err := yaml.Unmarshal([]byte(content), &data); err != nil {
+		return extractFallbackIniVals(content, key)
+	}
 	genericWalk(data, key, &vals)
 
 	if len(vals) == 0 {
@@ -153,7 +163,9 @@ func extractFallbackIniVals(content string, key string) []int {
 func findAllConfigValsTOML(content string, key string) []int {
 	var vals []int
 	var data interface{}
-	toml.Unmarshal([]byte(content), &data)
+	if err := toml.Unmarshal([]byte(content), &data); err != nil {
+		return vals
+	}
 	genericWalk(data, key, &vals)
 
 	sort.Ints(vals)

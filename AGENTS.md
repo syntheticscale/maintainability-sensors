@@ -6,55 +6,16 @@ Every AI assistant or developer working on this codebase must respect these rule
 
 ---
 
-## 🏛️ Repository Architecture
+## 🏛️ Architecture Rules
 
-This tool is designed to be a lightweight, ultra-fast Go CLI utility that orchestrates local static analysis and parses ASTs natively.
+This tool is a lightweight, ultra-fast Go CLI that orchestrates local static analysis and parses ASTs natively. The key boundaries:
 
-```
-/
-├── cmd/
-│   ├── maintainability-sensors/
-│   │   └── main.go               # Core CLI entrypoint
-│   └── legacy-plugin/
-│       └── main.go               # Polyglot plugin entrypoint
-├── internal/
-│   ├── cli/
-│   │   ├── cmd.go            # Subcommands (run, generate, bootstrap) & flag parsing
-│   │   ├── html.go           # HTML scorecard generator
-│   │   ├── github.go         # GitHub Actions step summary & PR comment poster
-│   │   ├── cli_test.go       # Unit tests for CLI commands
-│   │   └── templates/
-│   │       └── report.html   # Dark-themed HTML scorecard template
-│   ├── legacy/               # Legacy language plugins (Ruby, Python, JS/TS)
-│   ├── lsp/
-│   │   ├── server.go         # Language Server Protocol foundation
-│   │   └── server_test.go    # LSP JSON-RPC parsing tests
-│   ├── plugin/
-│   │   └── protocol/         # JSON standard I/O IPC schema
-│   └── sensors/
-│       ├── orchestrator.go   # Subprocess executor and linter JSON parser
-│       ├── plugin_runner.go  # IPC stdin/stdout JSON engine
-│       ├── config_parsers.go # ConfigParser interface + shared utilities
-│       ├── go_ast.go         # Native Go AST metric collector
-│       ├── go_architecture.go # Native architecture dependency boundary rules
-│       ├── architecture_parser.go # YAML parser for dependency rules
-│       ├── bootstrap.go      # Pristine config file template generator
-│       └── constants.go      # Baseline threshold constants
-├── skills/
-│   ├── modularity-reviewer/  # Tier 2 AI Skill for Semantic Modularity Review
-│   └── pre-flight-check/     # Tier 2 AI Skill for autonomous check-diff runs
-├── tests/
-│   ├── orchestrator_test.go   # Go AST & Level 0 fallback unit tests
-│   ├── bootstrap_test.go      # Bootstrap template and overwrite guardrail tests
-│   ├── relaxed_limits_test.go # Relaxed limit detection tests
-│   ├── golden_test.go         # Golden snapshot tests for real-world repos
-│   ├── architecture_test.go   # Component tests for layer dependency logic
-│   └── multi_repo_test.go     # End-to-end CLI integration tests
-└── docs/
-    ├── GITHUB_ACTIONS_GUIDE.md    # CI/CD integration guide
-    ├── AI_AGENT_FEEDBACK_LOOP.md  # Agent self-correction loop guide
-    └── CASE_STUDIES.md            # Real-world code decay analysis
-```
+- **`cmd/maintainability-sensors/`** — Core CLI. **`cmd/legacy-plugin/`** — Polyglot IPC subprocess for non-Go languages. Two binaries, both must be built.
+- **`internal/plugin/protocol/`** — Single source of truth for domain constants (baselines, rule names, `ParserRule`), IPC message types, and `ProtocolVersion`. Both `internal/sensors/` and `internal/legacy/` delegate here. Do not duplicate.
+- **`internal/sensors/evaluator.go`** — Canonical `EffectiveLimits` struct and `Evaluate()` function. All violation checking flows through here. CLI formatters must not reimplement evaluation logic.
+- **`internal/sensors/bootstrap_*.go`** — Per-language bootstrap files. Adding a new language = one new file + a case in `bootstrapLanguage`/`detectLanguages`.
+- **`internal/legacy/*_plugin.go`** — Per-linter subprocess parsers. Each shells out to a linter (ESLint, Pylint, RuboCop, etc.) and parses its JSON output.
+- **`internal/lsp/`** — Experimental stub. Not production-ready.
 
 ---
 
@@ -64,6 +25,8 @@ This tool is designed to be a lightweight, ultra-fast Go CLI utility that orches
 2. **Minimal External Dependencies:** The binary must have minimal external Go dependencies, strictly limited to standard config unmarshallers (like `yaml.v3` and `go-toml/v2`).
 3. **Safety Guardrails:** The `bootstrap` command must **never** destructive-overwrite existing custom configuration files. If an existing config is found, skip writing, alert the user, and output recommended addition snippets.
 4. **Agent-Facing Output:** All warnings and errors must output clear, actionable, and structured **Refactoring Prompts** specifically optimized for LLM coding agents to ingest and act on.
+5. **Single Source of Truth:** Domain constants (baselines, rule names, `ParserRule`) live in `internal/plugin/protocol/`. Both `internal/sensors/` and `internal/legacy/` delegate to this package via type aliases and constant assignments. Do not duplicate.
+6. **Protocol Versioning:** The IPC protocol between the core and `legacy-plugin` carries a `ProtocolVersion` field. Both sides validate it on every message. Bump the version in `internal/plugin/protocol/schema.go` when changing the schema.
 
 ---
 
@@ -71,13 +34,10 @@ This tool is designed to be a lightweight, ultra-fast Go CLI utility that orches
 
 ```bash
 # Run all tests
-/usr/local/go/bin/go test ./...
+make test
 
-# Force a clean, non-cached test run
-/usr/local/go/bin/go test -count=1 ./...
-
-# Build the static binary
-go build -o bin/maintainability-sensors ./cmd/maintainability-sensors
+# Build both binaries (required for full functionality)
+make build
 
 # Scan the current folder
 ./bin/maintainability-sensors run .
@@ -101,7 +61,7 @@ When modifying existing sensors or adding a new language bootstrap:
 6. **Semantic Modularity Review (Tier 2 Skill):** For any significant architectural changes or large features, you MUST invoke the `modularity-reviewer` AI skill to evaluate your code for semantic duplication and misplaced responsibilities. Do not simply accept the "happy path" completion.
 7. **Pre-Flight Check (Tier 2 Skill):** Before reporting task completion to the user, you MUST invoke the `pre-flight-check` AI skill to autonomously run `check-diff` and the test suite. Fix any refactoring prompts generated.
 8. **NFR & Performance Review (Tier 2 Skill):** Whenever refactoring for performance, evaluating Non-Functional Requirements (NFRs), or adding high-frequency features (e.g. LSP handling), you MUST invoke the `performance-benchmarker` AI skill to establish an empirical baseline. Never optimize without microbenchmarks.
-9. **Documentation First:** Before finalizing any task and making the final commit, you MUST review the project's documentation (`README.md`, `STATUS.md`, `FUTURE_PLAN.md`, etc.) and ensure it accurately reflects the new architectural state or completed features.
+9. **Documentation First:** Before finalizing any task and making the final commit, you MUST review the project's documentation (`README.md`, `STATUS.md`, `PLAN.md`, etc.) and ensure it accurately reflects the new architectural state or completed features.
 10. **Commit Often:** Always commit changes after each significant step, rather than waiting until the end of a long feature or refactoring session. Ensure changes are checkpoints safely along the way.
 
 ## 🔄 Iterative Subagent Development Loop

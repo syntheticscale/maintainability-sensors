@@ -18,15 +18,7 @@ type ReportOptions struct {
 }
 
 func hasViolations(res sensors.OrchestratorResult) bool {
-	if !res.ToolingDetected {
-		return false
-	}
-	limits := getEffectiveLimits(res)
-	return res.Metrics.Complexity > limits.Complexity ||
-		res.Metrics.CognitiveComplexity > limits.CognitiveComplexity ||
-		res.Metrics.FunctionLength > limits.FunctionLength ||
-		res.Metrics.ArgumentCount > limits.ArgumentCount ||
-		res.Metrics.MaxCaseLength > limits.MaxCaseLength
+	return sensors.Evaluate(res).HasViolations
 }
 
 func FormatResultsCLI(results []sensors.OrchestratorResult, jsonOutput bool, isDir bool) bool {

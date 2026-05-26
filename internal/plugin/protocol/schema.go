@@ -1,18 +1,18 @@
 package protocol
 
-// FileContext represents a file to be analyzed.
+const ProtocolVersion = 1
+
 type FileContext struct {
 	Path    string `json:"path"`
 	Content []byte `json:"content,omitempty"`
 }
 
-// AnalyzeRequest is sent over stdin to the plugin.
 type AnalyzeRequest struct {
+	Version  int           `json:"version"`
 	Language string        `json:"language"`
 	Files    []FileContext `json:"files"`
 }
 
-// Violation represents a single maintainability issue found in a file.
 type Violation struct {
 	RuleName  string `json:"rule_name"`
 	Value     int    `json:"value"`
@@ -21,13 +21,40 @@ type Violation struct {
 	Message   string `json:"message"`
 }
 
-// AnalyzeResponse is emitted by the plugin to stdout.
 type AnalyzeResponse struct {
+	Version int                    `json:"version"`
 	Results map[string][]Violation `json:"results"`
 	Error   string                 `json:"error,omitempty"`
 }
 
-// Handshake represents the initial message to verify the plugin capabilities.
 type Handshake struct {
 	SupportedLanguages []string `json:"supported_languages"`
 }
+
+type ParserRule struct {
+	RuleName string
+	Keys     []string
+	Baseline int
+}
+
+const (
+	BaselineComplexity          = 8
+	BaselineCognitiveComplexity = 8
+	BaselineFunctionLength      = 50
+	BaselineArgumentCount       = 4
+	BaselineFileLength          = 300
+	BaselineCaseLength          = 10
+)
+
+const (
+	FallbackEndLineOffset = 100
+)
+
+const (
+	RuleComplexity          = "Complexity"
+	RuleCognitiveComplexity = "CognitiveComplexity"
+	RuleFunctionLength      = "FunctionLength"
+	RuleArgumentCount       = "ArgumentCount"
+	RuleCaseBlockLength     = "CaseBlockLength"
+	RuleFileLength          = "FileLength"
+)

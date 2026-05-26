@@ -24,7 +24,6 @@ Instead of passive `README` guides that agents ignore, or blunt CI pipelines tha
 ### Tier 1: The Guardrails (Syntactic Sensors)
 A lightning-fast, stateless Go utility that provides sub-millisecond feedback on structural boundaries.
 *   **Native Polyglot Execution:** Deterministically calculates Cyclomatic Complexity (Max 8), Function Length (Max 50), and Parameter Counts (Max 4) for **Go, Python, TypeScript/JavaScript, and Ruby**. The core is a 100% statically compiled Go binary that efficiently orchestrates a polyglot plugin subprocess over standard I/O, maintaining sub-millisecond execution times without CGO dependencies.
-*   **Real-Time LSP Server:** Runs natively in the background of any modern IDE (VS Code, Cursor, Neovim) providing instant red squiggles (`textDocument/didChange`) to developers and LSP-aware agents as they type.
 *   **Macro-Coupling Dependency Rules:** Enforces layered architecture boundaries (e.g., stopping the `domain` layer from importing the `api` layer) natively via AST `import` extraction.
 *   **Agent Self-Correction Formatter:** Converts violations into rich, high-context **Refactoring Prompts** (e.g., *"Nudge coding agent to extract nested conditionals"*).
 
@@ -40,25 +39,29 @@ Slower, context-heavy operations deferred to autonomous AI Agent Skills and asyn
 
 ### 1. The Go CLI (Tier 1)
 ```bash
-# Build the binary
-go build -o bin/maintainability-sensors ./cmd/maintainability-sensors
+# Build both binaries (required for full polyglot support)
+make build
+
+# Or build individually
+make build-core
+make build-legacy
 
 # Install to path
-chmod +x bin/maintainability-sensors
-mv bin/maintainability-sensors /usr/local/bin/
+make install
+# Or manually:
+# sudo cp bin/maintainability-sensors /usr/local/bin/
 ```
 
+> **Note:** The `legacy-plugin` binary must be present at `./bin/legacy-plugin` relative to your working directory for Python, TypeScript/JavaScript, and Ruby scanning to work. The core binary will produce a clear error if it's missing.
+
 ### 2. The AI Skills (Tier 2)
-The repository includes `.skill` files ready for installation into compatible agents (like Gemini CLI).
+The repository includes skill definitions in `skills/` ready for installation into compatible agents (like Gemini CLI).
 ```bash
 # Install the autonomous pre-flight guardrail
-gemini skills install pre-flight-check.skill --scope workspace
+gemini skills install skills/pre-flight-check --scope workspace
 
 # Install the LLM-as-a-judge modularity reviewer
-gemini skills install modularity-reviewer.skill --scope workspace
-
-# Install the empirical performance benchmarker
-gemini skills install performance-benchmarker.skill --scope workspace
+gemini skills install skills/modularity-reviewer --scope workspace
 ```
 
 ---
@@ -72,11 +75,13 @@ The primary operational mode for AI agents. It analyzes `git diff HEAD` (or a sp
 maintainability-sensors check-diff
 ```
 
-### 2. `lsp` (Real-Time Editor Squiggles)
+### 2. `lsp` (Experimental)
 Launch the Language Server Protocol wrapper to communicate with your IDE via `stdio`.
 ```bash
 maintainability-sensors lsp
 ```
+
+> **⚠️ Experimental:** The LSP server currently handles `initialize`, `textDocument/didChange`, and `exit` only. It does not yet support `didOpen`, `shutdown`, completion, hover, or incremental sync. IDE integration is not yet production-ready.
 
 ### 3. `run` (Audit Mode: Legacy Analysis)
 Scan a specific file or your entire repository. Used by Tech Leads to generate a one-time scorecard or map out the existing legacy debt of the codebase.
@@ -118,7 +123,7 @@ If you are auditing a massive legacy file, do **not** relax the global repositor
 
 To maintain a fast, sub-millisecond execution profile without relying on fragile CGO bindings for foreign ASTs, `maintainability-sensors` utilizes a **Two-Tier Architecture**.
 
-The core Go orchestrator relies on a standalone `legacy-plugin` subprocess to lint non-Go files (like Python, TS, JS, and Ruby) over standard I/O JSON. 
+The core Go orchestrator relies on a standalone `legacy-plugin` subprocess to lint non-Go files (like Python, TS, JS, and Ruby) over standard I/O JSON. The IPC protocol is versioned — both sides validate `ProtocolVersion` on every message.
 
 👉 **[Read the Two-Tier Architecture and Plugin Implementation details in docs/IMPLEMENTATION_PLANS.md](docs/IMPLEMENTATION_PLANS.md)**
 

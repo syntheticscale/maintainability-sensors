@@ -75,7 +75,7 @@ func parseSingleBiomeDiagnostic(diag BiomeDiagnostic, reVal *regexp.Regexp, file
 	startLine := diag.Location.Span.Start
 	endLine := diag.Location.Span.End
 	if endLine == 0 {
-		endLine = startLine + 100
+		endLine = startLine + FallbackEndLineOffset
 	}
 
 	*fileViolations = append(*fileViolations, Violation{RuleName: rule, Value: val, StartLine: startLine, EndLine: endLine, Message: diag.Description})
@@ -128,7 +128,7 @@ func (p BiomePlugin) Analyze(files []FileContext) (map[string][]Violation, error
 	exitCode, output, err := runLintCommandJSON("biome", &result, args...)
 	if err != nil {
 		if exitCode > 0 {
-			return nil, fmt.Errorf("biome crashed or encountered a configuration error (exit code %d): %v\n%s", exitCode, err, string(output))
+            return nil, fmt.Errorf("biome crashed or encountered a configuration error (exit code %d): %w\n%s", exitCode, err, string(output))
 		}
 		return nil, fmt.Errorf("biome error: %w", err)
 	}

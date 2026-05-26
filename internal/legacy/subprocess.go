@@ -52,7 +52,7 @@ func runLintCommandJSON(name string, target interface{}, args ...string) (int, [
 func checkLintExecutionError(name string, exitCode int, output []byte, err error) error {
 	if err != nil {
 		if exitCode > 0 {
-			return fmt.Errorf("%s crashed or encountered a configuration error (exit code %d): %v\n%s", name, exitCode, err, string(output))
+        return fmt.Errorf("%s crashed or encountered a configuration error (exit code %d): %w\n%s", name, exitCode, err, string(output))
 		}
 		return fmt.Errorf("%s error: %w", name, err)
 	}

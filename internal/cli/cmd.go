@@ -96,12 +96,12 @@ func (c *CheckDiffCmd) Run() error {
 
 	modifiedLines, err := sensors.GetModifiedLines(c.TargetBranch, c.TargetPath)
 	if err != nil {
-		return fmt.Errorf("[ERROR] Failed to get modified lines: %v", err)
+        return fmt.Errorf("[ERROR] Failed to get modified lines: %w", err)
 	}
 
 	files, _, err := FindFiles(c.TargetPath)
 	if err != nil {
-		return fmt.Errorf("[ERROR] Failed to find files: %v", err)
+        return fmt.Errorf("[ERROR] Failed to find files: %w", err)
 	}
 
 	absModifiedLines := mapModifiedLinesToAbsPaths(modifiedLines, c.TargetPath)
@@ -126,7 +126,7 @@ func (c *lspCmd) Run() error {
 func loadCheckDiffPolicy(c *CheckDiffCmd) (*CheckDiffPolicy, error) {
 	policy, err := LoadPolicy(c.Config, c.DefaultSeverity, c.Severity)
 	if err != nil {
-		return nil, fmt.Errorf("[ERROR] Failed to load policy: %v", err)
+                return nil, fmt.Errorf("[ERROR] Failed to load policy: %w", err)
 	}
 
 	if c.Config == "" {
@@ -134,7 +134,7 @@ func loadCheckDiffPolicy(c *CheckDiffCmd) (*CheckDiffPolicy, error) {
 		if foundConfig != "" {
 			policy, err = LoadPolicy(foundConfig, c.DefaultSeverity, c.Severity)
 			if err != nil {
-				return nil, fmt.Errorf("[ERROR] Failed to load policy: %v", err)
+        return nil, fmt.Errorf("[ERROR] Failed to load policy: %w", err)
 			}
 		}
 	}
