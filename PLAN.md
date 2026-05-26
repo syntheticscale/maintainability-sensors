@@ -1,35 +1,31 @@
 # Maintainability Sensors — Implementation Plan
 
-**Updated:** 2026-05-20  
-**State:** Milestone "Architecture & Modernization Rewrite" Complete
+**Updated:** 2026-05-26
+**State:** Milestone "Two-Tier Architecture Refactor" Complete
 
 ---
 
-## 🏆 Sprint 1: Architecture & Modernization (Completed)
+## 🏆 Completed Sprints
 
-All architectural flaws and outstanding technical debt from the initial release have been addressed. The CLI is now robust, testable, and ready for modern polyglot environments.
+All architectural flaws and outstanding technical debt from the initial release and the Radical Audit have been addressed across 5 consecutive sprints. The CLI is now robust, testable, and completely statically compiled (zero CGO).
 
-| Task | Outcome | Delivered |
+| Sprint | Focus | Outcome |
 |---|---|---|
-| **CLI Monolith Refactor** | `executeRun` split into a clean `FindFiles`, `ScanFiles`, `FormatResultsCLI` pipeline. | ✅ |
-| **Polyglot Bootstrapping** | `BootstrapRepo` now detects and configures all languages in a monorepo, rather than just the majority language. | ✅ |
-| **Native Config Parser** | Replaced fragile line-oriented regex with a native, standard library-only stack-based YAML/INI parser for `.rubocop.yml`, `.pylintrc`, etc. | ✅ |
-| **ESLint 9 Flat Config** | Added robust parsing for `eslint.config.js` and `eslint.config.mjs` flat configuration structures. | ✅ |
-| **Input Validation** | Added strict schema validation to the `generate` subcommand to prevent cryptic JSON unmarshal crashes. | ✅ |
-| **Golden Snapshots** | Regenerated test snapshots against active local linters to capture real, deterministic code metrics. | ✅ |
-| **CLI & Subprocess Tests**| Extensive test suites for CLI package commands, subprocess error boundaries, and environment fallbacks. | ✅ |
-| **Ecosystem Modernization** | Added batched subprocess execution and native parsers for Biome, Ruff, and StandardRB. | ✅ |
-| **Visionary Features** | Added `baseline` command for legacy debt suppression and inline GitHub PR review comments. | ✅ |
+| **Sprint 1** | Hardening & Bug Fixes | Fixed LSP race conditions, rule-name mismatches, and Python AST metric bugs. |
+| **Sprint 2** | UX & Output Quality | Fixed deceptive log-matching, improved function-length accuracy, and enabled full GitHub PR comments. |
+| **Sprint 3** | The Great Core Deletion | Dismantled `orchestrator.go`, purged the `go-tree-sitter` CGO dependency, and pivoted to a Two-Tier plugin architecture. |
+| **Sprint 4** | Structural Precision | Replaced naive layer matching strings with robust path segment evaluation. |
+| **Sprint 5** | CLI Domain Purification | Centralized the violation evaluation logic, removing domain leakage from HTML and PR output formatters. |
 
 ---
 
-## 🎯 Future Explorations (Unscheduled)
+## 🎯 Future Explorations
 
-With the core architecture stabilized, future work will focus on expanding native parsing capabilities and keeping up with the evolving static analysis ecosystem.
+> See `STATUS.md` for the up-to-date roadmap and active tracking.
 
-1. **Native C# AST Parsing:** Investigate utilizing native Go ports of Roslyn (if they ever exist) or cross-compiling analyzers to remove the reliance on the host `.NET` SDK.
-2. **Native Java AST Parsing:** Explore parsing Java ASTs in Go to drop the `Checkstyle` dependency.
-3. **Modernize Templates:** Periodically review and update the `.golangci.yml` and `.eslintrc.json` templates to ensure they align with the latest community best practices.
+With the core architecture stabilized and the Two-Tier IPC plugin model established, future work will focus on:
+1. **Expanding the Legacy Plugin:** Adding support for more languages (e.g., Rust, Kotlin) by bolting new subprocess linters onto the standalone legacy plugin without needing to recompile the core Go CLI.
+2. **Modernize Templates:** Periodically review and update the `.golangci.yml` and `.eslintrc.json` templates to ensure they align with the latest community best practices.
 
 ---
 
@@ -39,8 +35,9 @@ With the core architecture stabilized, future work will focus on expanding nativ
 # 1. Run full suite
 go test -count=1 -race ./...
 
-# 2. Build binary
+# 2. Build binaries
 go build -o bin/maintainability-sensors ./cmd/maintainability-sensors
+go build -o bin/legacy-plugin ./cmd/legacy-plugin
 
 # 3. Verify no linting issues
 go vet ./...
