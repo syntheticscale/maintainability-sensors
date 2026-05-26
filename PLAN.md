@@ -26,6 +26,7 @@ All architectural flaws and outstanding technical debt from the initial release 
 With the core architecture stabilized and the Two-Tier IPC plugin model established, future work will focus on:
 1. **Expanding the Legacy Plugin:** Adding support for more languages (e.g., Rust, Kotlin) by bolting new subprocess linters onto the standalone legacy plugin without needing to recompile the core Go CLI.
 2. **Modernize Templates:** Periodically review and update the `.golangci.yml` and `.eslintrc.json` templates to ensure they align with the latest community best practices.
+3. **Pure-Go TypeScript Parser:** Investigate or build a pure-Go AST parser for TypeScript/JavaScript. This would allow TS/JS to be promoted back to a Tier 1 native sensor, eliminating the overhead of the Node.js/ESLint legacy plugin subprocess without re-introducing CGO.
 
 ---
 
