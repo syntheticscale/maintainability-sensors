@@ -1,0 +1,830 @@
+[
+  {
+    "file_path": "cmd/maintainability-sensors/main.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 1,
+      "cognitive_complexity": 0,
+      "function_length": 3,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/cli/bootstrap_exec.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 2,
+      "cognitive_complexity": 1,
+      "function_length": 8,
+      "argument_count": 2,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/cli/cli_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/cli/cmd.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 5,
+      "cognitive_complexity": 7,
+      "function_length": 28,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/cli/files.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 7,
+      "cognitive_complexity": 7,
+      "function_length": 41,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/cli/files_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/cli/format.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/cli/generate.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 7,
+      "cognitive_complexity": 6,
+      "function_length": 30,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/cli/github.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/cli/html.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 6,
+      "cognitive_complexity": 5,
+      "function_length": 41,
+      "argument_count": 2,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/cli/policy.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 6,
+      "cognitive_complexity": 8,
+      "function_length": 25,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/cli/policy_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/cli/run.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/cli/violations.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/cli/violations_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/lsp/server.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 8,
+      "cognitive_complexity": 7,
+      "function_length": 47,
+      "argument_count": 2,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/lsp/server_bench_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 4,
+      "cognitive_complexity": 3,
+      "function_length": 21,
+      "argument_count": 1,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/lsp/server_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 4,
+      "cognitive_complexity": 3,
+      "function_length": 53,
+      "argument_count": 1,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/architecture_parser.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 7,
+      "cognitive_complexity": 7,
+      "function_length": 27,
+      "argument_count": 4,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/biome_parser.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 1,
+      "cognitive_complexity": 0,
+      "function_length": 7,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/biome_plugin.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 7,
+      "cognitive_complexity": 8,
+      "function_length": 21,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/biome_plugin_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/bootstrap.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 7,
+      "cognitive_complexity": 8,
+      "function_length": 49,
+      "argument_count": 2,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/bootstrap_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/config_detector.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 8,
+      "cognitive_complexity": 8,
+      "function_length": 24,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/config_detector_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/config_parsers.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/constants.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/csharp_parser.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 7,
+      "cognitive_complexity": 8,
+      "function_length": 29,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/delta.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 6,
+      "cognitive_complexity": 6,
+      "function_length": 37,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/eslint_parser.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 1,
+      "cognitive_complexity": 0,
+      "function_length": 11,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/eslint_plugin.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 6,
+      "cognitive_complexity": 6,
+      "function_length": 20,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/git_diff.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 6,
+      "cognitive_complexity": 6,
+      "function_length": 30,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/git_diff_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/go_architecture.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 7,
+      "cognitive_complexity": 8,
+      "function_length": 27,
+      "argument_count": 2,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/go_ast.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 7,
+      "cognitive_complexity": 7,
+      "function_length": 37,
+      "argument_count": 2,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/golangci_parser.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 1,
+      "cognitive_complexity": 0,
+      "function_length": 7,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/java_parser.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 7,
+      "cognitive_complexity": 8,
+      "function_length": 29,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/metric_updater.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 6,
+      "cognitive_complexity": 6,
+      "function_length": 14,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/orchestrated_scan_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/orchestrator.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 6,
+      "cognitive_complexity": 7,
+      "function_length": 44,
+      "argument_count": 4,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/parsers_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/pathutils.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 4,
+      "cognitive_complexity": 5,
+      "function_length": 18,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/plugin.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 1,
+      "cognitive_complexity": 0,
+      "function_length": 23,
+      "argument_count": 2,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/pylint_parser.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 1,
+      "cognitive_complexity": 0,
+      "function_length": 8,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/pylint_plugin.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 8,
+      "cognitive_complexity": 7,
+      "function_length": 25,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/result.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 5,
+      "cognitive_complexity": 6,
+      "function_length": 22,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/rubocop_parser.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 1,
+      "cognitive_complexity": 0,
+      "function_length": 8,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/rubocop_plugin.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 8,
+      "cognitive_complexity": 8,
+      "function_length": 25,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/ruff_parser.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 1,
+      "cognitive_complexity": 0,
+      "function_length": 7,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/ruff_plugin.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 5,
+      "cognitive_complexity": 5,
+      "function_length": 22,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/ruff_plugin_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/sanitize_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/standardrb_parser.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 1,
+      "cognitive_complexity": 0,
+      "function_length": 8,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/standardrb_plugin.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 8,
+      "cognitive_complexity": 8,
+      "function_length": 26,
+      "argument_count": 3,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/standardrb_plugin_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/subprocess.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/subprocess_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/tree_sitter_python.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 6,
+      "cognitive_complexity": 8,
+      "function_length": 40,
+      "argument_count": 4,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "internal/sensors/tree_sitter_typescript.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 7,
+      "cognitive_complexity": 7,
+      "function_length": 36,
+      "argument_count": 4,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "tests/architecture_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "tests/checkdiff_severity_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "tests/close_leak_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "tests/component_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "tests/golden_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "tests/orchestrator_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "tests/relaxed_limits_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "tests/tree_sitter_python_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  },
+  {
+    "file_path": "tests/tree_sitter_typescript_test.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    }
+  }
+]

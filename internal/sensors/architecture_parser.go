@@ -9,6 +9,7 @@ import (
 )
 
 type ArchitectureConfig struct {
+	Dir    string
 	Layers map[string]LayerConfig `yaml:"layers"`
 }
 
@@ -42,36 +43,58 @@ func segmentsMatch(segments, layerSegments []string, startIndex int) bool {
 	return true
 }
 
-func matchesLayer(path, layerName string) bool {
+func matchesLayer(path, layerName string) int {
 	path = strings.Trim(filepath.ToSlash(path), "/")
 	layerName = strings.Trim(filepath.ToSlash(layerName), "/")
 
 	if path == layerName {
-		return true
+		return 0
 	}
 
 	segments := strings.Split(path, "/")
 	layerSegments := strings.Split(layerName, "/")
 
 	if len(layerSegments) == 0 {
-		return false
+		return -1
 	}
 
 	for i := 0; i <= len(segments)-len(layerSegments); i++ {
 		if segmentsMatch(segments, layerSegments, i) {
-			return true
+			return i
 		}
 	}
-	return false
+	return -1
+}
+
+func isBetterLayerMatch(idx, layerLen, bestIndex, bestLen int) bool {
+	if bestIndex == -1 {
+		return true
+	}
+	if idx < bestIndex {
+		return true
+	}
+	return idx == bestIndex && layerLen > bestLen
 }
 
 func findLayer(path string, config *ArchitectureConfig) string {
+	bestLayer := ""
+	bestIndex := -1
+	bestLen := -1
+
 	for layerName := range config.Layers {
-		if matchesLayer(path, layerName) {
-			return layerName
+		idx := matchesLayer(path, layerName)
+		if idx == -1 {
+			continue
+		}
+		
+		layerLen := len(strings.Split(strings.Trim(filepath.ToSlash(layerName), "/"), "/"))
+		if isBetterLayerMatch(idx, layerLen, bestIndex, bestLen) {
+			bestLayer = layerName
+			bestIndex = idx
+			bestLen = layerLen
 		}
 	}
-	return ""
+	return bestLayer
 }
 
 func getViolation(currentLayer, importedLayer string, allowedMap map[string]bool, imp ImportInfo) *Violation {

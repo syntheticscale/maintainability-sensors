@@ -1,0 +1,14 @@
+[
+  {
+    "file_path": ".cache/go-std-net/src/net/http/server.go",
+    "language": "go",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 70,
+      "cognitive_complexity": 99,
+      "function_length": 268,
+      "argument_count": 4,
+      "max_case_length": 0
+    }
+  }
+]

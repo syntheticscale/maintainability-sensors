@@ -1,0 +1,15 @@
+[
+  {
+    "file_path": ".cache/fastapi/fastapi/dependencies/utils.py",
+    "language": "python",
+    "tooling_detected": true,
+    "metrics": {
+      "complexity": 0,
+      "cognitive_complexity": 0,
+      "function_length": 0,
+      "argument_count": 0,
+      "max_case_length": 0
+    },
+    "message": "Orchestration error (ruff): ruff error: ruff not found in PATH"
+  }
+]

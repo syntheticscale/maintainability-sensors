@@ -89,6 +89,14 @@ maintainability-sensors/
 
 ---
 
+## Next Steps (Sprint 5)
+
+With the core static and structural technical debt resolved, future work can focus on optimizations or integrations.
+pshots, orchestrator & CLI tests
+```
+
+---
+
 ## Next Steps (Sprint 4)
 
 1. **Naive architecture layer matching**

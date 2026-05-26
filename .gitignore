@@ -1,0 +1,19 @@
+# Cache directories
+.cache/
+__pycache__/
+*.pyc
+.venv/
+
+# Worktrees
+.worktrees/
+worktrees/
+.worktrees/
+
+# IDE and local configurations
+.vscode/
+.DS_Store
+
+# Local binary compilation if any
+bin/maintainability-sensors
+.local/
+\n*.skill

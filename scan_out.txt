@@ -1,0 +1,18 @@
+
+=========================================
+ Maintainability Sensors Report Summary
+=========================================
+
+File                                Lang         Complexity CogCmplx   FuncLines  MaxParams  MaxCaseLn 
+----                                ----         ---------- --------   ---------  ---------  --------- 
+architecture_test.go                go           9          12         56         1          0         
+checkdiff_severity_test.go          go           6          5          36         4          0         
+close_leak_test.go                  go           2          1          90         1          18        
+component_test.go                   go           18         18         105        1          0         
+golden_test.go                      go           6          8          115        5          0         
+orchestrator_test.go                go           7          6          52         2          0         
+relaxed_limits_test.go              go           10         10         53         1          0         
+tree_sitter_python_test.go          go           15         14         74         1          0         
+tree_sitter_typescript_test.go      go           6          6          76         6          0         
+maintainability-sensors: error: maintainability violations detected
+exit status 1
