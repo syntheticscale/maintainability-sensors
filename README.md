@@ -48,21 +48,6 @@ chmod +x bin/maintainability-sensors
 mv bin/maintainability-sensors /usr/local/bin/
 ```
 
-### 3. Cross-Compilation (CGO Dependency)
-Because this tool uses `go-tree-sitter` for native AST parsing, it requires `cgo` and a C compiler. To cross-compile for different operating systems or architectures, you must provide the appropriate cross-compiler via the `CC` environment variable and ensure `CGO_ENABLED=1`.
-
-Example (Linux to Windows):
-```bash
-sudo apt-get install mingw-w64
-CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc go build -o bin/maintainability-sensors.exe ./cmd/maintainability-sensors
-```
-
-Example (macOS to Linux):
-```bash
-brew install FiloSottile/musl-cross/musl-cross
-CGO_ENABLED=1 CC=x86_64-linux-musl-gcc go build -o bin/maintainability-sensors-linux ./cmd/maintainability-sensors
-```
-
 ### 2. The AI Skills (Tier 2)
 The repository includes `.skill` files ready for installation into compatible agents (like Gemini CLI).
 ```bash
@@ -132,6 +117,19 @@ If you are auditing a massive legacy file, do **not** relax the global repositor
 ## 🔬 The AI-Trap Matrix (Case Studies)
 
 To prove the necessity of maintainability sensors, we audited six high-profile, production-grade repositories (including FastAPI, NestJS, and the Go Std Lib). We found that when human developers write highly complex, monolithic functions, they inadvertently create **"AI Traps"**—areas of code where coding agents experience reasoning freezes or introduce catastrophic bugs.
+
+👉 **[Read the Architectural Case Studies deep-dive (docs/CASE_STUDIES.md)](docs/CASE_STUDIES.md)**
+
+👉 **[Read the Legacy Audit Guide (docs/LEGACY_AUDIT_GUIDE.md)](docs/LEGACY_AUDIT_GUIDE.md)**
+
+---
+
+## 📄 License
+
+Created by [Paulo Lai](https://github.com/paulolai) for Synthetic Scale.
+
+MIT © 2026 Synthetic Scale & Contributors.  
+*This is an independent open-source community reference implementation and is not affiliated with Thoughtworks or Martin Fowler.*nce implementation and is not affiliated with Thoughtworks or Martin Fowler.*ted six high-profile, production-grade repositories (including FastAPI, NestJS, and the Go Std Lib). We found that when human developers write highly complex, monolithic functions, they inadvertently create **"AI Traps"**—areas of code where coding agents experience reasoning freezes or introduce catastrophic bugs.
 
 👉 **[Read the Architectural Case Studies deep-dive (docs/CASE_STUDIES.md)](docs/CASE_STUDIES.md)**
 
