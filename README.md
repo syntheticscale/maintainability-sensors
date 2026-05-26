@@ -114,6 +114,16 @@ If you are auditing a massive legacy file, do **not** relax the global repositor
 
 ---
 
+## 🏗️ Architecture & Legacy Plugins
+
+To maintain a fast, sub-millisecond execution profile without relying on fragile CGO bindings for foreign ASTs, `maintainability-sensors` utilizes a **Two-Tier Architecture**.
+
+The core Go orchestrator relies on a standalone `legacy-plugin` subprocess to lint non-Go files (like Python, TS, JS, and Ruby) over standard I/O JSON. 
+
+👉 **[Read the Two-Tier Architecture and Plugin Implementation details in docs/IMPLEMENTATION_PLANS.md](docs/IMPLEMENTATION_PLANS.md)**
+
+---
+
 ## 🔬 The AI-Trap Matrix (Case Studies)
 
 To prove the necessity of maintainability sensors, we audited six high-profile, production-grade repositories (including FastAPI, NestJS, and the Go Std Lib). We found that when human developers write highly complex, monolithic functions, they inadvertently create **"AI Traps"**—areas of code where coding agents experience reasoning freezes or introduce catastrophic bugs.
@@ -129,17 +139,4 @@ To prove the necessity of maintainability sensors, we audited six high-profile, 
 Created by [Paulo Lai](https://github.com/paulolai) for Synthetic Scale.
 
 MIT © 2026 Synthetic Scale & Contributors.  
-*This is an independent open-source community reference implementation and is not affiliated with Thoughtworks or Martin Fowler.*nce implementation and is not affiliated with Thoughtworks or Martin Fowler.*ted six high-profile, production-grade repositories (including FastAPI, NestJS, and the Go Std Lib). We found that when human developers write highly complex, monolithic functions, they inadvertently create **"AI Traps"**—areas of code where coding agents experience reasoning freezes or introduce catastrophic bugs.
-
-👉 **[Read the Architectural Case Studies deep-dive (docs/CASE_STUDIES.md)](docs/CASE_STUDIES.md)**
-
-👉 **[Read the Legacy Audit Guide (docs/LEGACY_AUDIT_GUIDE.md)](docs/LEGACY_AUDIT_GUIDE.md)**
-
----
-
-## 📄 License
-
-Created by [Paulo Lai](https://github.com/paulolai) for Synthetic Scale.
-
-MIT © 2026 Synthetic Scale & Contributors.  
-*This is an independent open-source community reference implementation and is not affiliated with Thoughtworks or Martin Fowler.*nce implementation and is not affiliated with Thoughtworks or Martin Fowler.*
+*This is an independent open-source community reference implementation and is not affiliated with Thoughtworks or Martin Fowler.*
